@@ -262,6 +262,56 @@ async function setupProfile(page, name) {
     await page.context().close();
   }
 
+  console.log("\n== e2e: dark mode & mobile layout ==");
+  {
+    const page = await newPage(browser, "theme-test");
+    await page.goto("http://localhost:18899/", { waitUntil: "domcontentloaded" });
+    await setupProfile(page, "Zach");
+    const t0 = await page.evaluate(() => document.documentElement.dataset.theme);
+    await page.click("#themeBtn");
+    const t1 = await page.evaluate(() => ({
+      theme: document.documentElement.dataset.theme,
+      tiles: baseTiles._url,
+      metaColor: document.querySelector('meta[name="theme-color"]').content
+    }));
+    check("toggle flips theme", t1.theme !== t0);
+    check("map tiles follow theme", t1.tiles.includes(t1.theme === "dark" ? "dark_all" : "light_all"));
+    check("meta theme-color follows", t1.theme === "dark" ? t1.metaColor === "#13161d" : t1.metaColor === "#f4f5f2");
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(500);
+    check("theme persists across reload", await page.evaluate(t => document.documentElement.dataset.theme === t, t1.theme));
+    await page.context().close();
+
+    // mobile viewport
+    const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } });
+    const m = await ctx.newPage();
+    m.on("pageerror", e => { fail++; console.log("  FAIL mobile pageerror: " + e.message); });
+    await m.route("**/config.js", r => r.fulfill({ contentType: "application/javascript",
+      body: 'window.MERIDIAN_CONFIG={firebaseUrl:"",tripId:"mob-test"};' }));
+    await m.route("https://open.er-api.com/**", r => r.fulfill({ contentType: "application/json", body: '{"rates":{}}' }));
+    await m.route("https://photon.komoot.io/**", r => r.fulfill({ contentType: "application/json", body: '{"features":[]}' }));
+    await m.goto("http://localhost:18899/", { waitUntil: "domcontentloaded" });
+    await setupProfile(m, "Zach");
+    const mob = await m.evaluate(() => ({
+      noHScroll: document.documentElement.scrollWidth <= window.innerWidth + 1,
+      tripsVisible: !!document.getElementById("tripsBtn").offsetParent,
+      themeVisible: !!document.getElementById("themeBtn").offsetParent,
+      tabsScrollable: (d => d.scrollWidth >= d.clientWidth)(document.getElementById("tabs")),
+      mapHeight: document.getElementById("stageMap").getBoundingClientRect().height
+    }));
+    check("no horizontal overflow on phone", mob.noHScroll);
+    check("Trips + theme buttons visible on phone", mob.tripsVisible && mob.themeVisible);
+    check("map has sensible phone height", mob.mapHeight >= 300);
+    await m.click("#addActivity");
+    await m.waitForTimeout(300);
+    const sheet = await m.evaluate(() => {
+      const r = document.querySelector("#itemScrim .modal").getBoundingClientRect();
+      return { width: r.width, bottom: Math.round(r.bottom), vh: window.innerHeight };
+    });
+    check("modal is a full-width bottom sheet", sheet.width >= 388 && Math.abs(sheet.bottom - sheet.vh) < 3, sheet);
+    await ctx.close();
+  }
+
   console.log("\n== e2e: two-user sync ==");
   {
     const a = await newPage(browser, "sync-test", { shared: true });
