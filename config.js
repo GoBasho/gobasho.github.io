@@ -11,7 +11,7 @@ window.MERIDIAN_CONFIG = {
   // Paste your Firebase Realtime Database URL here to turn on live sharing,
   // e.g. "https://our-japan-trip-default-rtdb.asia-southeast1.firebasedatabase.app"
   // Leave as "" to keep everything local to each person's browser.
-  firebaseUrl: "",
+  firebaseUrl: "https://console.firebase.google.com/project/gojapan-2e7da/database/gojapan-2e7da-default-rtdb/data/~2F",
 
   // A name that keeps your trip's data separate from anything else in the
   // database. Change it if you ever want to start a fresh trip.
