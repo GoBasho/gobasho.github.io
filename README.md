@@ -8,6 +8,17 @@ overlap. Toggle which countries the trip covers on the Checklist tab.
 It's a plain website — one HTML file plus two small scripts. No build tools,
 no server of your own to run.
 
+## Trips and legs
+
+- **Separate trips** — the **Trips** button in the header switches between
+  trips or creates a new one. Friends who type the same trip name land in the
+  same shared trip. Each trip has its own people, plans, dates, currency, and
+  expenses.
+- **Side-trip legs** — on the **Prep** tab, "+ Add leg" marks a date window as
+  another country inside the same trip (say, four Korea days mid-Japan).
+  Those days get flagged across the app and that country's checklist items
+  switch on automatically.
+
 ## Try it right now
 
 Open `index.html` in any browser. That's it. Your plans save automatically in

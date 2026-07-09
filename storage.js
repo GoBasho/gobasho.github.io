@@ -18,7 +18,10 @@
 (function () {
   const cfg = window.MERIDIAN_CONFIG || {};
   const raw = String(cfg.firebaseUrl || "").trim();
-  const tripId = cfg.tripId || "our-japan-trip";
+  const defaultTrip = cfg.tripId || "our-japan-trip";
+  // the active trip is a per-browser choice; config.js only sets the default
+  let tripId = defaultTrip;
+  try { tripId = localStorage.getItem("meridian:active-trip") || defaultTrip; } catch {}
 
   // Firebase paths can't contain . $ # [ ] or /, so keys are URI-encoded
   // (with "." encoded too, since encodeURIComponent leaves it alone).
@@ -122,6 +125,51 @@
 
   window.storage = {
     get mode() { return mode; },
+    get tripId() { return tripId; },
+    /* pick another trip for this browser (takes effect on reload) */
+    switchTrip(id) {
+      try { localStorage.setItem("meridian:active-trip", id); } catch {}
+    },
+    /* every trip id present in the database (or this browser, in local mode) */
+    async listTrips() {
+      await ready;
+      if (mode === "shared") {
+        const res = await fetch(dbUrl + "/trips.json?shallow=true");
+        if (!res.ok) throw new Error("Trip list failed (" + res.status + ")");
+        const obj = (await res.json()) || {};
+        return Object.keys(obj).map(decodeKey);
+      }
+      const ids = new Set();
+      for (let i = 0; i < localStorage.length; i++) {
+        const m = (localStorage.key(i) || "").match(/^meridian:(.+):trip:meta$/);
+        if (m) ids.add(m[1]);
+      }
+      return [...ids];
+    },
+    /* read/write a key in a trip other than the active one */
+    async getFrom(tid, key) {
+      await ready;
+      if (mode === "shared") {
+        const res = await fetch(dbUrl + "/trips/" + encodeKey(tid) + "/" + encodeKey(key) + ".json");
+        if (!res.ok) return null;
+        const value = await res.json();
+        return value === null ? null : { key, value };
+      }
+      const v = localStorage.getItem("meridian:" + tid + ":" + key);
+      return v === null ? null : { key, value: v };
+    },
+    async putIn(tid, key, value) {
+      await ready;
+      if (mode === "shared") {
+        const res = await fetch(dbUrl + "/trips/" + encodeKey(tid) + "/" + encodeKey(key) + ".json", {
+          method: "PUT", body: JSON.stringify(value)
+        });
+        if (!res.ok) throw new Error("Trip write failed (" + res.status + ")");
+        return { key, value };
+      }
+      localStorage.setItem("meridian:" + tid + ":" + key, value);
+      return { key, value };
+    },
     async get(key, shared) {
       await ready;
       return shared && mode === "shared" ? fbGet(key) : localGet(key);

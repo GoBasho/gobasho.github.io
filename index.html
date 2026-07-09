@@ -438,6 +438,30 @@
   .net-pos { color: #3a6b4a; font-weight: 600; }
   .net-neg { color: var(--shu); font-weight: 600; }
 
+  /* trip switcher */
+  .trips-btn { font-size: 11px; padding: 3px 9px; margin-left: 6px; }
+  .trips-menu {
+    position: fixed; z-index: 850; display: none; min-width: 260px; max-width: 320px;
+    background: var(--surface); border: 1px solid var(--line-strong); border-radius: 10px;
+    box-shadow: 0 14px 40px rgba(20,23,31,.18); overflow: hidden;
+  }
+  .trips-menu.show { display: block; }
+  .tm-item { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; width: 100%; text-align: left; border: none; background: transparent; padding: 10px 13px; font-size: 13px; border-bottom: 1px solid var(--line); }
+  .tm-item:hover { background: var(--sky); }
+  .tm-item.on { font-weight: 600; }
+  .tm-item.on::after { content: "✓"; color: var(--indigo); }
+  .tm-item .tm-id { font-size: 10.5px; color: var(--ink-faint); overflow: hidden; text-overflow: ellipsis; }
+  .tm-new { display: flex; gap: 7px; padding: 10px 12px 6px; }
+  .tm-new input { flex: 1; border: 1px solid var(--line-strong); border-radius: 7px; padding: 7px 9px; font-size: 12.5px; }
+
+  /* trip legs */
+  .legs-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 16px; }
+  .leg-chip { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 5px 11px; font-size: 12.5px; }
+  .leg-chip .lx { border: none; background: transparent; color: var(--ink-faint); font-size: 14px; padding: 0 1px; cursor: pointer; }
+  .leg-chip .lx:hover { color: var(--shu); }
+  .leg-form { display: flex; flex-wrap: wrap; gap: 7px; align-items: center; width: 100%; background: var(--sky); border: 1px solid var(--line); border-radius: 9px; padding: 9px 11px; }
+  .leg-form input, .leg-form select { border: 1px solid var(--line-strong); border-radius: 7px; padding: 6px 9px; font-size: 12.5px; }
+
   /* flights */
   .flight-grid { display: grid; grid-template-columns: 54px 1fr 1fr; gap: 6px; align-items: center; }
   .flight-grid input { border: 1px solid var(--line-strong); border-radius: 7px; padding: 7px 9px; font-size: 12.5px; width: 100%; }
@@ -485,8 +509,10 @@
         <input type="date" id="tripStart" aria-label="Trip start">
         <span>&ndash;</span>
         <input type="date" id="tripEnd" aria-label="Trip end">
+        <button class="mini-btn trips-btn" id="tripsBtn" title="Switch or create trips">Trips &#9662;</button>
         <span id="storageWarn"></span>
       </div>
+      <div class="trips-menu" id="tripsMenu"></div>
     </div>
     <nav class="tabs" id="tabs">
       <button class="tab active" data-view="map">Map</button>
@@ -1209,8 +1235,10 @@ function renderDateStrip(){
   for(const d of dates){
     const chip = document.createElement("button");
     chip.className = "datechip" + (state.selectedDate===d ? " active" : "") + (myTrips[d] ? " trip" : "");
+    const leg = legForDate(d);
     if(myTrips[d]) chip.title = "Day trip to " + myTrips[d];
-    chip.innerHTML = `<span class="dow">${dow(d)}</span><span class="dnum">${dnum(d)}</span><span class="dcount">${myTrips[d]?('→ '+myTrips[d].slice(0,4)):(counts[d]?('· '+counts[d]):'')}</span>`;
+    else if(leg) chip.title = leg.name || leg.country;
+    chip.innerHTML = `<span class="dow">${dow(d)}${leg?" "+(FLAGS[leg.country]||""):""}</span><span class="dnum">${dnum(d)}</span><span class="dcount">${myTrips[d]?('→ '+myTrips[d].slice(0,4)):(counts[d]?('· '+counts[d]):'')}</span>`;
     chip.onclick = () => { state.selectedDate = (state.selectedDate===d ? null : d); render(); };
     strip.appendChild(chip);
   }
@@ -1416,7 +1444,8 @@ function renderItinerary(){
       dayHtml += renderPersonDay(p, date, plan);
     }
     if(!dayHtml) continue;
-    body += `<div class="day-block"><div class="day-head"><span class="dh-num">${prettyDate(date)}</span><span class="dh-dow">Day</span></div>${dayHtml}</div>`;
+    const leg = legForDate(date);
+    body += `<div class="day-block"><div class="day-head"><span class="dh-num">${prettyDate(date)}</span><span class="dh-dow">${leg?`${FLAGS[leg.country]||""} ${esc(leg.name||leg.country)}`:"Day"}</span></div>${dayHtml}</div>`;
   }
   wrap.innerHTML = head + (body || '<div class="list-empty">No plans on the selected day(s) yet.</div>');
   wireSuggestions(wrap);
@@ -1922,7 +1951,9 @@ const CHECKLIST = [
 ];
 function activeCountries(){
   const c = state.trip.countries;
-  return Array.isArray(c) && c.length ? c : ["JP"];
+  const set = new Set(Array.isArray(c) && c.length ? c : ["JP"]);
+  for(const l of (state.trip.legs||[])) if(l.country) set.add(l.country);  // legs imply their country
+  return [...set];
 }
 function visibleChecklist(){
   const on = activeCountries();
@@ -1963,10 +1994,13 @@ function renderChecklist(){
   }
   wrap.innerHTML = head + body;
   wrap.querySelectorAll("[data-country]").forEach(b=> b.onclick = async()=>{
+    const code=b.dataset.country;
     let c = [...activeCountries()];
-    if(c.includes(b.dataset.country)) c = c.filter(x=>x!==b.dataset.country);
-    else c.push(b.dataset.country);
-    if(!c.length) c = [b.dataset.country];  // never zero countries
+    if(c.includes(code)){
+      if((state.trip.legs||[]).some(l=>l.country===code)){ toast("That country comes from a trip leg — remove the leg on the Prep board first"); return; }
+      c = c.filter(x=>x!==code);
+    } else c.push(code);
+    if(!c.length) c = [code];  // never zero countries
     state.trip.countries = c;
     await saveTrip(); render();
   });
@@ -1974,6 +2008,56 @@ function renderChecklist(){
     (rec.checklist = rec.checklist||{})[cb.dataset.check] = cb.checked;
     await saveMe(); render();
   });
+}
+
+/* ---------- trips: switch, create, or join by name ---------- */
+function slugTrip(name){ return name.toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-+|-+$/g,"").slice(0,40) || "trip"; }
+function switchTrip(id){
+  window.storage.switchTrip(id);
+  location.reload();
+}
+async function createOrJoinTrip(){
+  const name=document.getElementById("tmName").value.trim();
+  if(!name){ toast("Give the trip a name"); return; }
+  const id=slugTrip(name);
+  try {
+    const existing=await window.storage.getFrom(id, "trip:meta");
+    if(!existing) await window.storage.putIn(id, "trip:meta", JSON.stringify({title:name, start:"", end:""}));
+  } catch { toast("Couldn't reach the shared database"); return; }
+  switchTrip(id);
+}
+async function openTripsMenu(){
+  const menu=document.getElementById("tripsMenu");
+  if(menu.classList.contains("show")){ menu.classList.remove("show"); return; }
+  const r=document.getElementById("tripsBtn").getBoundingClientRect();
+  menu.style.top=(r.bottom+8)+"px";
+  menu.style.left=Math.min(r.left, window.innerWidth-330)+"px";
+  menu.innerHTML='<div class="tm-item" style="color:var(--ink-faint)">Loading trips…</div>';
+  menu.classList.add("show");
+  let ids=[];
+  try { ids=await window.storage.listTrips(); } catch {}
+  const cur=window.storage.tripId;
+  if(!ids.includes(cur)) ids.unshift(cur);
+  const rows=[];
+  for(const id of ids.slice(0,12)){
+    let title=id;
+    try { const m=await window.storage.getFrom(id, "trip:meta");
+      if(m && m.value){ const t=JSON.parse(m.value); if(t.title) title=t.title; } } catch {}
+    rows.push({id, title});
+  }
+  menu.innerHTML = rows.map(x=>`<button class="tm-item ${x.id===cur?"on":""}" data-trip="${esc(x.id)}"><span>${esc(x.title)}</span><span class="tm-id">${esc(x.id)}</span></button>`).join("")
+    + `<div class="tm-new"><input type="text" id="tmName" placeholder="New or friend's trip name…" maxlength="40"><button class="mini-btn" id="tmGo">Go</button></div>
+       <div class="field-hint" style="padding:2px 13px 10px">Friends who enter the same name land in the same trip. Each trip has its own people, plans, dates, currency, and expenses.</div>`;
+  menu.querySelectorAll("[data-trip]").forEach(b=>b.onclick=()=>{ if(b.dataset.trip!==cur) switchTrip(b.dataset.trip); });
+  document.getElementById("tmGo").onclick=createOrJoinTrip;
+  document.getElementById("tmName").addEventListener("keydown", e=>{ if(e.key==="Enter") createOrJoinTrip(); });
+}
+
+/* ---------- trip legs: side-trip windows inside one trip ---------- */
+const FLAGS={JP:"\u{1F1EF}\u{1F1F5}", KR:"\u{1F1F0}\u{1F1F7}", CN:"\u{1F1E8}\u{1F1F3}", TH:"\u{1F1F9}\u{1F1ED}"};
+function legForDate(d){
+  for(const l of (state.trip.legs||[])) if(l.start && l.end && d>=l.start && d<=l.end) return l;
+  return null;
 }
 
 /* ---------- prep board: place flexible plans, move scheduled ones ---------- */
@@ -1985,6 +2069,22 @@ function renderPrep(){
   if(!dates.length){ wrap.innerHTML=head+'<div class="list-empty">Set your trip dates in the header to lay out the board.</div>'; return; }
   const me=state.people[state.me.name];
   const unsched=(me.activities||[]).filter(a=>!a.date);
+
+  // legs: labeled country windows inside the trip ("offshoot" side trips)
+  const legs=state.trip.legs||[];
+  let legsBar=`<div class="eyebrow">Trip legs <span class="count">${legs.length}</span></div><div class="legs-bar">`;
+  for(const l of legs) legsBar+=`<span class="leg-chip">${FLAGS[l.country]||"&#129517;"} <b>${esc(l.name||l.country)}</b>&nbsp;${shortRange(l.start,l.end)}<button class="lx" data-legdel="${l.id}" title="Remove leg">&times;</button></span>`;
+  if(state._legForm){
+    legsBar+=`<div class="leg-form">
+      <select id="legCountry">${COUNTRIES.map(([c,n])=>`<option value="${c}">${n}</option>`).join("")}</select>
+      <input type="text" id="legName" placeholder="Name (optional), e.g. Seoul side trip" maxlength="30">
+      <input type="date" id="legStart"><input type="date" id="legEnd">
+      <button class="mini-btn" id="legSave">Save leg</button>
+      <button class="linkish" id="legCancel">Cancel</button></div>`;
+  } else {
+    legsBar+=`<button class="mini-btn" id="legAdd">+ Add leg</button>`;
+  }
+  legsBar+=`</div>`;
 
   let tray=`<div class="eyebrow">To schedule <span class="count">${unsched.length}</span></div><div class="prep-tray">`;
   if(!unsched.length) tray+='<div class="list-empty">Nothing waiting. Add an activity with "A few options" or "Date range" and it lands here.</div>';
@@ -2002,7 +2102,8 @@ function renderPrep(){
   let grid=`<div class="prep-grid">`;
   for(const d of dates){
     const can = selAct && allowed.includes(d);
-    grid+=`<div class="prep-col ${can?"can":""}" data-pday="${d}"><div class="prep-dh">${dow(d)}<b>${dnum(d)}</b></div>`;
+    const leg = legForDate(d);
+    grid+=`<div class="prep-col ${can?"can":""}" data-pday="${d}"><div class="prep-dh">${dow(d)}<b>${dnum(d)}</b>${leg?` <span title="${esc(leg.name||leg.country)}">${FLAGS[leg.country]||""}</span>`:""}</div>`;
     for(const p of visiblePeople()){
       const mine = p.name===state.me.name;
       for(const a of (p.activities||[])){
@@ -2017,7 +2118,28 @@ function renderPrep(){
   }
   grid+=`</div>`;
 
-  wrap.innerHTML=head+tray+selBar+grid;
+  wrap.innerHTML=head+legsBar+tray+selBar+grid;
+  const la=document.getElementById("legAdd");
+  if(la) la.onclick=()=>{ state._legForm=true; render(); };
+  const lc=document.getElementById("legCancel");
+  if(lc) lc.onclick=()=>{ state._legForm=false; render(); };
+  const ls=document.getElementById("legSave");
+  if(ls) ls.onclick=async()=>{
+    const country=document.getElementById("legCountry").value;
+    const start=document.getElementById("legStart").value, end=document.getElementById("legEnd").value;
+    if(!start||!end){ toast("Set the leg's dates"); return; }
+    if(end<start){ toast("Leg ends before it starts"); return; }
+    const name=document.getElementById("legName").value.trim() || (COUNTRIES.find(c=>c[0]===country)||[,country])[1];
+    (state.trip.legs=state.trip.legs||[]).push({id:uid(), country, name, start, end});
+    if(!activeCountries().includes(country)) (state.trip.countries=activeCountries()).push(country);
+    state._legForm=false;
+    await saveTrip(); render();
+    toast("Leg added — its country's checklist items are now active");
+  };
+  wrap.querySelectorAll("[data-legdel]").forEach(b=>b.onclick=async()=>{
+    state.trip.legs=(state.trip.legs||[]).filter(l=>l.id!==b.dataset.legdel);
+    await saveTrip(); render();
+  });
   const place=async(a, day)=>{
     a.date=day; state.prepSel=null;
     await saveMe(); state._didFit=false; render();
@@ -2309,6 +2431,7 @@ async function saveProfile(){
   if(state.people[name]){ state.people[name].interests=interests; state.people[name].flights=readFlights(); }
   state.me={name, color};
   if(hasStore) await sSet("me", JSON.stringify(state.me), false);  // personal, identifies this browser
+  try { localStorage.setItem("meridian:last-me", JSON.stringify(state.me)); } catch {}  // carried into new trips
   await saveMe();
   document.getElementById("profileScrim").classList.remove("show");
   render();
@@ -2605,9 +2728,11 @@ function wire(){
   document.getElementById("pickOnMap").onclick = startMapPick;
   document.getElementById("pinCancel").onclick = ()=>{ endMapPick(); document.getElementById("itemScrim").classList.add("show"); };
 
-  // dismiss suggestion box on outside click
+  document.getElementById("tripsBtn").onclick = openTripsMenu;
+  // dismiss popovers on outside click
   document.addEventListener("click", e=>{
     if(!e.target.closest(".loc-box")) document.getElementById("locSuggest").classList.remove("show");
+    if(!e.target.closest("#tripsMenu") && !e.target.closest("#tripsBtn")) document.getElementById("tripsMenu").classList.remove("show");
   });
   // scrim backdrop closes profile only (item modal has explicit buttons)
   document.getElementById("profileScrim").addEventListener("click", e=>{
@@ -2632,7 +2757,15 @@ async function boot(){
   if(hasStore){
     const me=await sGet("me", false);
     if(me && me.value){ try{ state.me=JSON.parse(me.value); }catch{} }
+    else {
+      // new trip, known browser: carry the profile over instead of re-asking
+      try {
+        const last=localStorage.getItem("meridian:last-me");
+        if(last){ state.me=JSON.parse(last); await sSet("me", last, false); }
+      } catch {}
+    }
     await loadEveryone();
+    if(state.me && state.people[state.me.name]) await saveMe();  // announce yourself on this trip
   }
   render();
   if(!state.me) openProfile();
