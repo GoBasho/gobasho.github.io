@@ -494,7 +494,10 @@
   ::-webkit-scrollbar-track { background: transparent; }
 
   @media (max-width: 860px) {
-    .wordmark small, .trip-dates { display: none; }
+    .wordmark small { display: none; }
+    .trip-dates input, .trip-dates > span:not(#storageWarn) { display: none; }  /* keep Trips + status visible */
+    .tabs { overflow-x: auto; max-width: 100%; flex-wrap: nowrap; }
+    .tab { white-space: nowrap; padding: 7px 11px; }
     .body { flex-direction: column; }
     aside.rail { width: 100%; height: 46%; border-right: none; border-bottom: 1px solid var(--line); }
     .stage, .panel { min-height: 320px; }
@@ -713,7 +716,8 @@
             <label>Category</label>
             <select id="actCat">
               <option>Sightseeing</option><option>Food &amp; drink</option><option>Culture</option>
-              <option>Nature</option><option>Shopping</option><option>Nightlife</option><option>Travel</option><option>Other</option>
+              <option>Nature</option><option>Shopping</option><option>Nightlife</option>
+              <option>Event / show</option><option>Travel</option><option>Other</option>
             </select>
           </div>
           <div class="field"><label>Hours (optional)</label><input type="text" id="actDur" placeholder="e.g. 2"></div>
@@ -1009,6 +1013,11 @@ function autoTag(p){
   if(/church|cathedral|basilica|abbey|chapel|mosque|monastery/.test(s)){ t.add("culture"); t.add("photo"); }
   if(/palace|fortress|colosseum|roman|ruins|medieval/.test(s)){ t.add("history"); t.add("photo"); }
   if(/beach|island|cliff|gorge|falls/.test(s)){ t.add("nature"); t.add("photo"); }
+  if(/theme park|amusement|disney|universal|legoland/.test(s)) t.add("themepark");
+  if(/concert|opera|theatre|theater|live music|jazz|show/.test(s)) t.add("music");
+  if(/stadium|sumo|baseball|arena|racing/.test(s)) t.add("sports");
+  if(/trail|hike|hiking|canyon|ridgeline|fells/.test(s)) t.add("hike");
+  if(/beach|lagoon|cove|island|bay\b/.test(s)) t.add("beach");
   return [...t];
 }
 PLACES.forEach(p=>{ p.tags = autoTag(p); p.mainstream = true; });
@@ -1169,7 +1178,9 @@ const INTERESTS = [
   ["Art & museums","art"],["Views & skylines","views"],["Shopping","shopping"],
   ["Nightlife","nightlife"],["Traditional culture","culture"],
   ["Onsen & baths","onsen"],["Markets & street food","market"],["Modern architecture","architecture"],
-  ["Cherry blossoms","sakura"],["Traditional crafts","crafts"],["Skiing & snow","ski"]
+  ["Cherry blossoms","sakura"],["Traditional crafts","crafts"],["Skiing & snow","ski"],
+  ["Theme parks","themepark"],["Beaches & islands","beach"],["Hiking & trails","hike"],
+  ["Live shows & music","music"],["Sports & games","sports"]
 ];
 function interestLabel(tag){ const m=INTERESTS.find(i=>i[1]===tag); return m?m[0]:(tag.charAt(0).toUpperCase()+tag.slice(1)); }
 function pointMatches(pt, interests){
@@ -1502,7 +1513,7 @@ function renderMarkers(){
   for(const a of acts){
     if(!a.location) continue;
     const m = L.marker([a.location.lat,a.location.lng], {icon:pinIcon(a.color,false)});
-    m.bindPopup(`<div class="pop"><h4>${esc(a.title)}</h4><div class="pmeta">${a.time?esc(a.time)+' · ':''}${esc(a.category||'Activity')} · ${a.date?esc(shortDate(a.date)):esc(flexLabel(a)||"flexible")}</div>${a.notes?'<div class="pmeta" style="margin-top:4px">'+esc(a.notes)+'</div>':''}<div class="who"><span class="dot" style="background:${a.color}"></span>${esc(a.person)}</div></div>`);
+    m.bindPopup(`<div class="pop"><h4>${esc(a.title)}</h4><div class="pmeta">${a.time?esc(a.time)+' · ':''}${esc(a.category||'Activity')} · ${a.date?esc(shortDate(a.date)):esc(flexLabel(a)||"flexible")}</div>${a.notes?'<div class="pmeta" style="margin-top:4px">'+linkify(esc(a.notes))+'</div>':''}<div class="who"><span class="dot" style="background:${a.color}"></span>${esc(a.person)}</div></div>`);
     markerLayer.addLayer(m); pts.push([a.location.lat,a.location.lng]);
   }
   if(pts.length && !state._didFit){ map.fitBounds(pts, {padding:[60,60], maxZoom:12}); state._didFit=true; }
@@ -1519,7 +1530,7 @@ function flyTo(loc){
 /* typical entry/ticket prices per category, used when no cost was entered.
    These (and the transit fares) are Japan-calibrated yen, so they only apply
    while the trip currency is ¥ — other currencies count entered costs only. */
-const CAT_COST = {"Sightseeing":2000, "Food & drink":2500, "Culture":1500, "Nature":500, "Shopping":0, "Nightlife":4000, "Travel":0, "Other":0};
+const CAT_COST = {"Sightseeing":2000, "Food & drink":2500, "Culture":1500, "Nature":500, "Shopping":0, "Nightlife":4000, "Event / show":6000, "Travel":0, "Other":0};
 const CURRENCIES = ["¥","₩","CN¥","฿","€","£","$","CHF","kr","zł","Kč","₹","₫","S$","HK$","NT$","A$"];
 function curSym(){ return state.trip.currency || "¥"; }
 function fmtYen(n){ return curSym() + Math.round(n).toLocaleString("en-US"); }
@@ -1940,6 +1951,39 @@ async function wikiNearby(loc){
   wikiNearCache.set(key, out);
   return out;
 }
+/* match a Wikipedia description against a traveler's interests */
+const WIKI_INTEREST = [
+  ["photo", /viewpoint|scenic|panorama|observation|landmark|iconic/],
+  ["temple", /temple|shrine|church|cathedral|basilica|monastery|mosque|pagoda/],
+  ["art", /museum|gallery|\bart\b/],
+  ["history", /castle|palace|fort|historic|ruins|monument|memorial|heritage|ancient/],
+  ["nature", /park|garden|mountain|lake|river|forest|botanical|nature/],
+  ["food", /market|food|restaurant|culinary|brewery|distillery/],
+  ["market", /market|bazaar/],
+  ["anime", /anime|manga|video game/],
+  ["music", /concert|music|opera|theatre|theater/],
+  ["themepark", /amusement|theme park|disney|universal|ferris/],
+  ["beach", /beach|island|bay|lagoon|seaside/],
+  ["hike", /trail|hiking|gorge|canyon|waterfall|peak|summit/],
+  ["nightlife", /nightlife|entertainment district/],
+  ["views", /tower|observation|skyscraper|viewpoint|panorama/],
+  ["architecture", /architect|bridge|tower|modernist|brutalist/],
+  ["sports", /sumo|stadium|arena|racecourse/],
+  ["onsen", /hot spring|onsen|spa|thermal bath/],
+  ["sakura", /cherry blossom/],
+  ["crafts", /craft|pottery|ceramic|textile|workshop/],
+  ["ski", /ski|snowboard/]
+];
+function wikiMatches(desc, interests){
+  const d = (desc||"").toLowerCase();
+  const hits = [];
+  for(const it of interests||[]){
+    const m = WIKI_INTEREST.find(w=>w[0]===it);
+    if(m && m[1].test(d)) hits.push(interestLabel(it));
+    else if(it.length>=3 && d.includes(it)) hits.push(it);
+  }
+  return hits;
+}
 function wikiCategory(desc){
   const d = (desc||"").toLowerCase();
   if(/museum|gallery|theatre|theater|opera|shrine|temple|church|cathedral|basilica|monastery|mosque|historic|castle|palace|monument|memorial|ruins/.test(d)) return "Culture";
@@ -1960,13 +2004,18 @@ async function hydrateWikiNear(el, p){
     ...(p.activities||[]).map(a=>a.title.toLowerCase()),
     ...POINTS.map(pt=>pt.name.toLowerCase())
   ]);
-  const items = (await wikiNearby(loc)).filter(x=>!have.has(x.title.toLowerCase())).slice(0,8);
+  const interests = (p.interests||[]);
+  let items = (await wikiNearby(loc)).filter(x=>!have.has(x.title.toLowerCase()));
+  // your interests float to the top, tagged with what matched
+  items.forEach(x=>{ x.hits = wikiMatches(x.desc, interests); });
+  items.sort((a,b)=>(b.hits.length?1:0)-(a.hits.length?1:0));
+  items = items.slice(0,10);
   if(!items.length){ el.innerHTML=""; return; }
   let html = `<div class="eyebrow explore-sec">${esc(el.dataset.wlabel)} <span class="count">${items.length}</span></div><div class="rec-grid">`;
   items.forEach((x,i)=>{
     const km = haversine(loc, x).toFixed(1);
-    html += `<div class="rec-card"><div class="rec-thumb ${x.thumb?"has-img":"no-img"}" ${x.thumb?`style="background-image:url('${x.thumb}')"`:""}>${x.thumb?"":"No preview"}</div>
-      <div class="rec-cat">${esc(wikiCategory(x.desc))}</div><div class="rec-name">${esc(x.title)}</div>
+    html += `<div class="rec-card ${x.hits.length?"foryou":""}"><div class="rec-thumb ${x.thumb?"has-img":"no-img"}" ${x.thumb?`style="background-image:url('${x.thumb}')"`:""}>${x.thumb?"":"No preview"}</div>
+      ${x.hits.length?`<div class="rec-match">${esc(x.hits[0])}</div>`:`<div class="rec-cat">${esc(wikiCategory(x.desc))}</div>`}<div class="rec-name">${esc(x.title)}</div>
       <div class="rec-blurb">${esc(x.desc ? x.desc.charAt(0).toUpperCase()+x.desc.slice(1) : "Notable spot nearby — tap through your map app for details.")}</div>
       <div class="rec-foot"><span class="rec-dist">${km} km away</span>
       <button class="mini-btn" data-waddi="${i}">Add${targetDate?"":"…"}</button></div></div>`;
@@ -2900,6 +2949,9 @@ async function saveItem(){
       flex={type:"range", start:s, end:e};
     }
     const isTransit = kind==="transit";
+    if(!editId && date && rec.activities.some(x=>x.date===date && x.title.toLowerCase()===title.toLowerCase())){
+      if(!confirm('"'+title+'" is already planned that day — add it again?')) return;
+    }
     const a={ id:editId||uid(), title, location:state.pendingLoc, date, flex,
       time, durationH:document.getElementById("actDur").value,
       category:isTransit?"Travel":document.getElementById("actCat").value, notes:document.getElementById("actNotes").value.trim(),
@@ -3056,6 +3108,8 @@ function endMapPick(){
 function uid(){ return Math.random().toString(36).slice(2,9); }
 function parseCost(s){ s=String(s).replace(/[^\d]/g,""); return s ? +s : ""; }
 function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+/* turn URLs inside already-escaped text into safe links (booking pages in notes) */
+function linkify(escaped){ return escaped.replace(/(https?:\/\/[^\s<&]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>'); }
 function shortDate(s){ return parseISO(s).toLocaleDateString("en-US",{month:"short",day:"numeric"}); }
 function shortRange(a,b){ return a&&b ? shortDate(a)+"–"+shortDate(b) : (a?shortDate(a):""); }
 function eyeOn(){ return '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>'; }

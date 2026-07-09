@@ -111,6 +111,13 @@ async function setupProfile(page, name) {
                       B:{name:"B", expenses:[{id:"2",desc:"t",amount:3000,for:["A","B"]}]} };
       const bal = expenseBalances();
       r.settle = bal.transfers.map(t=>t.join("/")).join(";");
+      // interests: tagging and Wikipedia matching
+      r.tagPark = autoTag({name:"Tokyo Disneyland", blurb:"theme park", cat:"Sightseeing"}).includes("themepark");
+      r.tagBeach = autoTag({name:"Kabira Bay", blurb:"turquoise lagoon beach", cat:"Nature"}).includes("beach");
+      r.wikiHit = wikiMatches("buddhist temple in the mountains", ["temple","food"]).join(",");
+      r.wikiMiss = wikiMatches("office tower", ["food"]).length;
+      r.eventCost = CAT_COST["Event / show"] > 0;
+      r.linkified = /<a href="https:\/\/x.jp"/.test(linkify(esc("book https://x.jp now")));
       // merge suggestions: two nearby acts on different days
       state.people = { A:{name:"A", activities:[
         {id:"x", date:"2026-09-08", location:{lat:35.69,lng:139.79}, time:"15:00"},
@@ -132,6 +139,11 @@ async function setupProfile(page, name) {
     check("curated search falls back globally", u.curatedFallback === true);
     check("expense settlement B→A ¥3000", u.settle === "B/A/3000", u.settle);
     check("merge suggestion keeps timed day", u.sugg === true);
+    check("autoTag theme parks & beaches", u.tagPark && u.tagBeach);
+    check("wikiMatches finds interest in description", u.wikiHit === "Temples & shrines", u.wikiHit);
+    check("wikiMatches ignores non-matches", u.wikiMiss === 0);
+    check("Event category has a default cost", u.eventCost === true);
+    check("notes linkify is safe", u.linkified === true);
     await page.context().close();
   }
 
