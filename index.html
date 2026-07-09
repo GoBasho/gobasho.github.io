@@ -4,6 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Meridian — Japan Trip Planner</title>
+<meta name="description" content="A shared Japan trip planner — plan stays and activities with friends on one map, find points of interest and photo spots, and see where your paths cross.">
+<meta name="theme-color" content="#f4f5f2">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%E2%9B%A9%EF%B8%8F%3C/text%3E%3C/svg%3E">
 <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
 <script src="vendor/leaflet/leaflet.js"></script>
 <script src="config.js"></script>
@@ -41,7 +44,7 @@
   input, select, textarea { font-family: inherit; font-size: 14px; }
 
   /* ---------- layout shell ---------- */
-  .app { display: flex; flex-direction: column; height: 100vh; }
+  .app { display: flex; flex-direction: column; height: 100vh; height: 100dvh; }
 
   header.bar {
     display: flex; align-items: center; gap: 20px;
@@ -569,8 +572,9 @@
 <script>
 /* ============================================================
    Meridian — Japan trip planner
-   Data is kept in shared artifact storage, one key per traveler,
-   so anyone opening the shared link reads and writes the same trip.
+   Data is kept in a shared key/value store (storage.js), one key
+   per traveler, so anyone opening the site reads and writes the
+   same trip. See config.js to hook up live sharing.
    ============================================================ */
 
 const PALETTE = ["#c8483c","#2e5e7e","#4e7a5e","#8a6d3b","#6e4b7a","#3f6e73","#a85c4a","#566173"];
@@ -802,7 +806,7 @@ let map, markerLayer, pickHandler=null;
 /* ---------- storage helpers (shared across all viewers) ---------- */
 const hasStore = typeof window.storage !== "undefined";
 async function sGet(k, shared){ try { return await window.storage.get(k, shared); } catch { return null; } }
-async function sSet(k, v, shared){ try { return await window.storage.set(k, v, shared); } catch(e){ state.sharedOK=false; return null; } }
+async function sSet(k, v, shared){ try { const r = await window.storage.set(k, v, shared); state.sharedOK=true; return r; } catch(e){ state.sharedOK=false; return null; } }
 async function sList(prefix, shared){ try { return await window.storage.list(prefix, shared); } catch { return {keys:[]}; } }
 
 async function saveMe(){
@@ -866,7 +870,8 @@ function tripDates(){
   while(d <= end && guard < 120){ out.push(iso(d)); d.setDate(d.getDate()+1); guard++; }
   return out;
 }
-function iso(d){ return d.toISOString().slice(0,10); }
+/* local-time ISO date — toISOString() would shift days for anyone east of UTC (e.g. in Japan) */
+function iso(d){ return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
 function parseISO(s){ return new Date(s+"T00:00:00"); }
 function dow(s){ return ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][parseISO(s).getDay()]; }
 function dnum(s){ return parseISO(s).getDate(); }
@@ -916,9 +921,11 @@ function renderMeChip(){
 }
 
 function renderTripHeader(){
-  document.getElementById("tripTitle").value = state.trip.title || "";
-  document.getElementById("tripStart").value = state.trip.start || "";
-  document.getElementById("tripEnd").value = state.trip.end || "";
+  // don't clobber a field someone is currently typing in (background refresh re-renders)
+  const set = (id, val) => { const el = document.getElementById(id); if(document.activeElement !== el) el.value = val; };
+  set("tripTitle", state.trip.title || "");
+  set("tripStart", state.trip.start || "");
+  set("tripEnd", state.trip.end || "");
 }
 
 function renderPeople(){
@@ -1460,6 +1467,7 @@ function canEdit(person){ return state.me && person === state.me.name; }
 
 async function removeItem(kind, person, id){
   if(!canEdit(person)) return;
+  if(!confirm(kind==="activity" ? "Remove this activity?" : "Remove this stay?")) return;
   const rec = state.people[person];
   if(kind==="activity") rec.activities = rec.activities.filter(a=>a.id!==id);
   else rec.stays = rec.stays.filter(s=>s.id!==id);
@@ -1644,6 +1652,7 @@ function renderSuggest(items, partial){
     row.className="loc-opt";
     row.innerHTML=`<span>${esc(it.label)}</span>${it.city?`<span class="lo-city">${esc(it.city)}</span>`:`<span class="lo-src">${it.src==='list'?'List':'Map'}</span>`}`;
     row.onclick=()=>{
+      clearTimeout(searchTimer);  // stop a pending geocode from reopening the box
       state.pendingLoc={lat:it.lat, lng:it.lng, label:it.label};
       if(!document.getElementById("itemName").value) document.getElementById("itemName").value=it.label;
       if(state.editing.kind==="stay" && !document.getElementById("stayCity").value)
@@ -1738,8 +1747,10 @@ function wire(){
 async function boot(){
   initMap();
   wire();
-  // default trip window if unset (spring, a common season) — user can change in header
-  state.trip.start = "2026-04-06"; state.trip.end = "2026-04-19";
+  // default trip window if unset — two months out, two weeks long; change it in the header
+  const ds = new Date(); ds.setDate(ds.getDate()+60);
+  const de = new Date(ds); de.setDate(de.getDate()+13);
+  state.trip.start = iso(ds); state.trip.end = iso(de);
   if(hasStore){
     const me=await sGet("me", false);
     if(me && me.value){ try{ state.me=JSON.parse(me.value); }catch{} }
@@ -1749,6 +1760,7 @@ async function boot(){
   if(!state.me) openProfile();
   // gentle background refresh so collaborators' changes appear
   if(hasStore) setInterval(async()=>{
+    if(document.hidden) return;  // no point syncing a tab nobody is looking at
     if(document.getElementById("itemScrim").classList.contains("show")) return;
     if(document.getElementById("profileScrim").classList.contains("show")) return;
     await loadEveryone(); render();
