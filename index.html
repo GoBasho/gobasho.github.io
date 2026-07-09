@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Meridian — Asia Trip Planner</title>
-<meta name="description" content="A shared trip planner for Japan, Korea, China, and Thailand — plan stays and activities with friends on one map, find points of interest and photo spots, and see where your paths cross.">
+<title>Meridian — Trip Planner</title>
+<meta name="description" content="A shared trip planner — plan stays and activities with friends on one map anywhere in the world, find points of interest and photo spots, and see where your paths cross.">
 <meta name="theme-color" content="#f4f5f2">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%E2%9B%A9%EF%B8%8F%3C/text%3E%3C/svg%3E">
 <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
@@ -502,7 +502,7 @@
 <body>
 <div class="app">
   <header class="bar">
-    <div class="wordmark">Meridian<small>Asia · Trip Planner</small></div>
+    <div class="wordmark">Meridian<small>Trip Planner</small></div>
     <div class="trip-head">
       <input class="trip-title" id="tripTitle" value="Our Japan Trip" maxlength="48" aria-label="Trip name">
       <div class="trip-dates">
@@ -747,7 +747,34 @@ const CITIES = [
   // Thailand
   ["Bangkok",13.7563,100.5018],["Chiang Mai",18.7883,98.9853],["Chiang Rai",19.9105,99.8406],
   ["Ayutthaya",14.3532,100.5689],["Phuket",7.8804,98.3923],["Krabi",8.0863,98.9063],
-  ["Pattaya",12.9236,100.8825],["Ko Samui",9.5120,100.0136]
+  ["Pattaya",12.9236,100.8825],["Ko Samui",9.5120,100.0136],
+  // rest of Asia
+  ["Singapore",1.3521,103.8198],["Kuala Lumpur",3.1390,101.6869],["Hanoi",21.0285,105.8542],
+  ["Ho Chi Minh City",10.8231,106.6297],["Da Nang",16.0544,108.2022],["Siem Reap",13.3671,103.8448],
+  ["Bali (Ubud)",-8.5069,115.2625],["Taipei",25.0330,121.5654],["Manila",14.5995,120.9842],
+  ["Delhi",28.6139,77.2090],["Agra",27.1767,78.0081],["Jaipur",26.9124,75.7873],
+  ["Mumbai",19.0760,72.8777],["Kathmandu",27.7172,85.3240],["Dubai",25.2048,55.2708],["Istanbul",41.0082,28.9784],
+  // United Kingdom & Ireland
+  ["London",51.5074,-0.1278],["Edinburgh",55.9533,-3.1883],["Manchester",53.4808,-2.2426],
+  ["York",53.9600,-1.0873],["Bath",51.3811,-2.3590],["Oxford",51.7520,-1.2577],
+  ["Cambridge",52.2053,0.1218],["Liverpool",53.4084,-2.9916],["Dublin",53.3498,-6.2603],
+  // France
+  ["Paris",48.8566,2.3522],["Nice",43.7102,7.2620],["Lyon",45.7640,4.8357],
+  ["Marseille",43.2965,5.3698],["Strasbourg",48.5734,7.7521],
+  // Italy
+  ["Rome",41.9028,12.4964],["Florence",43.7696,11.2558],["Venice",45.4408,12.3155],
+  ["Milan",45.4642,9.1900],["Naples",40.8518,14.2681],
+  // Spain & Portugal
+  ["Barcelona",41.3874,2.1686],["Madrid",40.4168,-3.7038],["Seville",37.3891,-5.9845],
+  ["Granada",37.1773,-3.5986],["Lisbon",38.7223,-9.1393],["Porto",41.1579,-8.6291],
+  // Germany, Alps & central Europe
+  ["Berlin",52.5200,13.4050],["Munich",48.1351,11.5820],["Cologne",50.9375,6.9603],
+  ["Frankfurt",50.1109,8.6821],["Hamburg",53.5511,9.9937],["Amsterdam",52.3676,4.9041],
+  ["Brussels",50.8503,4.3517],["Vienna",48.2082,16.3738],["Salzburg",47.8095,13.0550],
+  ["Prague",50.0755,14.4378],["Budapest",47.4979,19.0402],["Zurich",47.3769,8.5417],
+  ["Geneva",46.2044,6.1432],["Interlaken",46.6863,7.8632],["Kraków",50.0647,19.9450],
+  ["Warsaw",52.2297,21.0122],["Copenhagen",55.6761,12.5683],["Stockholm",59.3293,18.0686],
+  ["Oslo",59.9139,10.7522],["Athens",37.9838,23.7275],["Santorini",36.3932,25.4615]
 ];
 
 /* curated well-known destinations with a category and short description, used for recommendations */
@@ -847,7 +874,101 @@ const PLACES = [
   P("Chiang Mai Night Bazaar",18.7860,99.0000,"Chiang Mai","Shopping","Nightly sprawl of crafts, clothes, and street eats."),
   P("Wat Rong Khun (White Temple)",19.8243,99.7583,"Chiang Rai","Culture","Blinding-white contemporary temple, utterly surreal."),
   P("Railay Beach",8.0119,98.8372,"Krabi","Nature","Cliff-ringed peninsula reachable only by longtail boat."),
-  P("Phuket Big Buddha",7.8276,98.3128,"Phuket","Sightseeing","45 m marble Buddha with island-wide views.")
+  P("Phuket Big Buddha",7.8276,98.3128,"Phuket","Sightseeing","45 m marble Buddha with island-wide views."),
+  // ----- Korea, round two -----
+  P("Starfield Library (COEX)",37.5101,127.0603,"Seoul","Sightseeing","Two-story book cathedral inside the COEX mall — free and very photogenic."),
+  P("Insadong",37.5744,126.9856,"Seoul","Shopping","Traditional crafts, tea houses, and calligraphy shops on one strollable street."),
+  P("Ihwa Mural Village",37.5806,127.0060,"Seoul","Sightseeing","Hillside stairs and alleys painted by artists, below the old city wall."),
+  P("Namdaemun Market",37.5594,126.9776,"Seoul","Food & drink","Korea's oldest market — hotteok, dumplings, and everything else."),
+  P("Lotte World",37.5111,127.0980,"Seoul","Sightseeing","Giant indoor-outdoor theme park around a lake, easy on a rainy day."),
+  P("Imjingak (DMZ)",37.8892,126.7405,"Seoul","Culture","Gateway to DMZ tours — book a tour to visit the Joint Security Area."),
+  P("Gwangalli Beach",35.1532,129.1188,"Busan","Nature","City beach facing the lit-up Gwangan Bridge — drone shows most weekends."),
+  P("Songdo Cable Car",35.0764,129.0170,"Busan","Sightseeing","Glass-floor cabins across the bay to a coastal walk."),
+  P("Jeonju Hanok Village",35.8150,127.1530,"Jeonju","Culture","Seven hundred hanok houses, hanbok rentals, and the home of bibimbap."),
+  P("Cheomseongdae & Tumuli Park",35.8347,129.2190,"Gyeongju","Culture","Ancient star tower among grassy royal burial mounds — magical at dusk."),
+  // ----- China, round two -----
+  P("798 Art District",39.9847,116.4972,"Beijing","Culture","Bauhaus factory complex turned gallery quarter — Beijing's art heart."),
+  P("Jingshan Park viewpoint",39.9254,116.3958,"Beijing","Nature","The classic overhead view down the Forbidden City's golden roofs."),
+  P("Tianzifang",31.2103,121.4664,"Shanghai","Shopping","Shikumen alley maze of studios, bars, and craft shops."),
+  P("Shanghai Disneyland",31.1434,121.6570,"Shanghai","Sightseeing","Home of the biggest Disney castle; book on the official app."),
+  P("West Lake",30.2489,120.1445,"Hangzhou","Nature","Willow-lined lake of pagodas and causeways that defined Chinese landscape art."),
+  P("Humble Administrator's Garden",31.3239,120.6299,"Suzhou","Culture","The masterpiece of Suzhou's UNESCO classical gardens."),
+  P("Jinli Ancient Street",30.6427,104.0480,"Chengdu","Food & drink","Lantern-lit lanes of Sichuan snacks next to the Wuhou Shrine."),
+  P("Leshan Giant Buddha",29.5446,103.7731,"Leshan","Culture","71 m Buddha carved into a river cliff — a day trip from Chengdu."),
+  P("Hongya Cave",29.5628,106.5786,"Chongqing","Sightseeing","Stacked riverside towers that glow gold at night — pure Spirited Away."),
+  P("Canton Tower",23.1066,113.3245,"Guangzhou","Sightseeing","600 m tower with a bubble-tram ride around the rim."),
+  P("Star Ferry & TST Promenade",22.2937,114.1694,"Hong Kong","Sightseeing","The world's best-value harbour crossing; skyline light show at 8pm."),
+  P("Temple Street Night Market",22.3049,114.1700,"Hong Kong","Food & drink","Fortune tellers, clay-pot rice, and neon after dark."),
+  // ----- England & the UK -----
+  P("Tower of London",51.5081,-0.0759,"London","Culture","A thousand years of history, the Crown Jewels, and the ravens."),
+  P("British Museum",51.5194,-0.1270,"London","Culture","The Rosetta Stone and world history under a great glass roof — free entry."),
+  P("Westminster & Big Ben",51.5007,-0.1246,"London","Sightseeing","Parliament, the Abbey, and the bell tower, all in one riverside sweep."),
+  P("Buckingham Palace",51.5014,-0.1419,"London","Sightseeing","Changing of the Guard most mornings — check the schedule, arrive early."),
+  P("London Eye",51.5033,-0.1196,"London","Sightseeing","Slow-turning wheel with the best all-round view of the Thames."),
+  P("Borough Market",51.5055,-0.0910,"London","Food & drink","London's great food market under the railway arches — closed Sundays."),
+  P("Camden Market",51.5416,-0.1466,"London","Shopping","Canal-side maze of street food, vintage, and subculture."),
+  P("Sky Garden",51.5112,-0.0836,"London","Sightseeing","Free indoor garden atop the 'Walkie-Talkie' — book a slot online."),
+  P("Notting Hill & Portobello Road",51.5173,-0.2050,"London","Shopping","Pastel terraces and the Saturday antiques market."),
+  P("Greenwich",51.4826,-0.0077,"London","Culture","The Cutty Sark, the meridian line, and a park view over Docklands."),
+  P("Windsor Castle",51.4839,-0.6044,"London","Culture","The world's oldest occupied castle, an easy train from Paddington."),
+  P("Stonehenge",51.1789,-1.8262,"Bath","Culture","The neolithic circle on Salisbury Plain — pairs with Bath on a day tour."),
+  P("Roman Baths & Bath",51.3810,-2.3595,"Bath","Culture","Steaming Roman spa in a honey-stone Georgian town."),
+  P("Oxford colleges",51.7548,-1.2544,"Oxford","Culture","Bodleian, Christ Church, and dreaming spires — climb a tower for the view."),
+  P("Cambridge & punting",52.2043,0.1149,"Cambridge","Culture","Pole a punt along the Backs past King's College Chapel."),
+  P("York Minster & Shambles",53.9623,-1.0819,"York","Culture","Gothic cathedral and a crooked medieval shopping lane."),
+  P("Beatles' Liverpool",53.4058,-2.9895,"Liverpool","Culture","Cavern Club, Penny Lane, and the waterfront museums."),
+  P("Edinburgh Castle & Royal Mile",55.9486,-3.1999,"Edinburgh","Culture","Fortress on the crag with the old town tumbling down from it."),
+  P("Arthur's Seat",55.9441,-3.1618,"Edinburgh","Nature","Extinct volcano with a short climb to the whole-city panorama."),
+  // ----- France -----
+  P("Eiffel Tower",48.8584,2.2945,"Paris","Sightseeing","Book the summit weeks ahead, or picnic below at Champ de Mars."),
+  P("Louvre",48.8606,2.3376,"Paris","Culture","The world's biggest museum — pick three wings, not all of it."),
+  P("Musée d'Orsay",48.8600,2.3266,"Paris","Culture","Impressionists in a grand Beaux-Arts railway station."),
+  P("Notre-Dame & Île de la Cité",48.8530,2.3499,"Paris","Culture","The restored cathedral at the island heart of Paris."),
+  P("Sainte-Chapelle",48.8554,2.3450,"Paris","Culture","A jewel box of 13th-century stained glass — go on a sunny day."),
+  P("Montmartre & Sacré-Cœur",48.8867,2.3431,"Paris","Sightseeing","Artists' square, winding stairs, and the white basilica over the city."),
+  P("Le Marais",48.8575,2.3622,"Paris","Shopping","Falafel, galleries, and boutiques in the old aristocratic quarter."),
+  P("Seine at dusk",48.8583,2.3200,"Paris","Sightseeing","Bridge-to-bridge riverside walk or a bateau cruise at golden hour."),
+  P("Palais Garnier",48.8720,2.3316,"Paris","Culture","The opera house of Phantom fame — the grand foyer drips gold."),
+  P("Versailles",48.8049,2.1204,"Paris","Culture","Hall of Mirrors plus gardens that need a whole afternoon — RER C out."),
+  P("Vieux Nice & Promenade",43.6961,7.2756,"Nice","Sightseeing","Ochre old town, market at Cours Saleya, and the curving bay walk."),
+  P("Vieux Lyon & traboules",45.7622,4.8277,"Lyon","Food & drink","Renaissance passageways and bouchon dining in France's food capital."),
+  // ----- Italy -----
+  P("Colosseum & Forum",41.8902,12.4922,"Rome","Culture","Book a timed slot; the Forum ticket is included — wear real shoes."),
+  P("Vatican & St Peter's",41.9022,12.4539,"Rome","Culture","Sistine Chapel via the museums, then climb the dome for the view."),
+  P("Trevi Fountain",41.9009,12.4833,"Rome","Sightseeing","Coin over the shoulder — quietest before 8am."),
+  P("Pantheon",41.8986,12.4769,"Rome","Culture","Two thousand years old and still the world's finest concrete dome."),
+  P("Trastevere",41.8897,12.4694,"Rome","Food & drink","Ivy-hung lanes for carbonara and evening passeggiata."),
+  P("Duomo & Brunelleschi's Dome",43.7731,11.2560,"Florence","Culture","Climb between the dome's two shells — book the slot early."),
+  P("Uffizi Gallery",43.7678,11.2553,"Florence","Culture","Botticelli's Venus and the Renaissance A-list — reserve ahead."),
+  P("Ponte Vecchio & Oltrarno",43.7679,11.2531,"Florence","Sightseeing","The goldsmiths' bridge, then artisan workshops across the river."),
+  P("Piazzale Michelangelo",43.7629,11.2650,"Florence","Sightseeing","The sunset postcard of the whole city — bring a drink up."),
+  P("St Mark's & Doge's Palace",45.4340,12.3390,"Venice","Culture","Golden mosaics and the palace's Bridge of Sighs — book both."),
+  P("Rialto & Grand Canal",45.4380,12.3359,"Venice","Sightseeing","Market by morning; ride vaporetto line 1 end-to-end at dusk."),
+  P("Milan Duomo & Galleria",45.4642,9.1917,"Milan","Culture","Walk the cathedral roof among the spires, then espresso in the Galleria."),
+  P("Pompeii",40.7489,14.4989,"Naples","Culture","The Roman city frozen by Vesuvius — Circumvesuviana train from Naples."),
+  P("Naples pizza crawl",40.8467,14.2559,"Naples","Food & drink","Da Michele and rivals — margherita where it was invented."),
+  // ----- Spain -----
+  P("Sagrada Família",41.4036,2.1744,"Barcelona","Culture","Gaudí's unfinished basilica — timed tickets sell out days ahead."),
+  P("Park Güell",41.4145,2.1527,"Barcelona","Nature","Mosaic terraces over the city; the monumental zone needs a ticket."),
+  P("Gothic Quarter & La Boqueria",41.3818,2.1729,"Barcelona","Food & drink","Medieval lanes off La Rambla and the great iron market hall."),
+  P("Casa Batlló & Passeig de Gràcia",41.3917,2.1650,"Barcelona","Sightseeing","Gaudí's dragon-scaled house on the showcase boulevard."),
+  P("Prado Museum",40.4138,-3.6922,"Madrid","Culture","Velázquez and Goya wall to wall — free entry the last two hours."),
+  P("Retiro Park",40.4153,-3.6845,"Madrid","Nature","Row the lake, find the Crystal Palace, siesta on the grass."),
+  P("Plaza Mayor & San Miguel",40.4155,-3.7074,"Madrid","Food & drink","The grand square and its iron tapas market next door."),
+  P("Royal Palace of Madrid",40.4179,-3.7143,"Madrid","Culture","Twice the rooms of Versailles; changing of the guard Wednesdays."),
+  P("Alhambra",37.1761,-3.5881,"Granada","Culture","The Moorish palace-city — Nasrid Palace slots sell out weeks ahead."),
+  P("Real Alcázar of Seville",37.3831,-5.9902,"Seville","Culture","Mudéjar courtyards of Game-of-Thrones fame — book the earliest slot."),
+  P("Plaza de España (Seville)",37.3772,-5.9869,"Seville","Sightseeing","Half-moon of bridges, tiles, and rowboats from the 1929 fair."),
+  // ----- Germany -----
+  P("Brandenburg Gate",52.5163,13.3777,"Berlin","Sightseeing","The city's symbol — walk on to the Reichstag and Unter den Linden."),
+  P("East Side Gallery",52.5050,13.4399,"Berlin","Culture","The longest surviving Wall stretch, painted by a hundred artists."),
+  P("Museum Island",52.5169,13.4010,"Berlin","Culture","Five museums on one island — Nefertiti and the Pergamon panorama."),
+  P("Reichstag Dome",52.5186,13.3762,"Berlin","Sightseeing","Free spiral-glass dome over parliament — register online in advance."),
+  P("Marienplatz & Glockenspiel",48.1374,11.5755,"Munich","Sightseeing","The chiming clock tower square at Munich's heart — 11am show."),
+  P("English Garden surfers",48.1435,11.5878,"Munich","Nature","River surfers on the Eisbach wave, then a beer garden by the lake."),
+  P("Cologne Cathedral",50.9413,6.9583,"Cologne","Culture","Twin black spires by the station; climb the tower's 533 steps."),
+  P("Heidelberg Castle",49.4106,8.7153,"Heidelberg","Culture","Romantic ruin above the old town and the Philosophers' Walk."),
+  P("Rothenburg ob der Tauber",49.3779,10.1866,"Rothenburg","Culture","The walled medieval town of the Romantic Road — stay past the day-trippers.")
 ];
 /* derive interest tags from each place's category, name, and description */
 function autoTag(p){
@@ -870,6 +991,9 @@ function autoTag(p){
   if(/craft|pottery|lacquer|gold[ -]?leaf|textile|ceramic|kiln|glasswork/.test(s)){ t.add("crafts"); t.add("culture"); }
   if(/onsen|hot spring|bathhouse|ryokan/.test(s)) t.add("onsen");
   if(/\bski\b|powder|slope|snowboard|piste/.test(s)){ t.add("ski"); t.add("nature"); }
+  if(/church|cathedral|basilica|abbey|chapel|mosque|monastery/.test(s)){ t.add("culture"); t.add("photo"); }
+  if(/palace|fortress|colosseum|roman|ruins|medieval/.test(s)){ t.add("history"); t.add("photo"); }
+  if(/beach|island|cliff|gorge|falls/.test(s)){ t.add("nature"); t.add("photo"); }
   return [...t];
 }
 PLACES.forEach(p=>{ p.tags = autoTag(p); p.mainstream = true; });
@@ -989,7 +1113,23 @@ const MORE = [
   M("Longji Rice Terraces",25.7580,110.1130,"Guilin","Nature","Dragon's-backbone terraces, best after rain or at golden harvest.",["photo","nature"],"Longsheng_Rice_Terrace","China"),
   M("Jiufen-style Fenghuang Ancient Town",27.9481,109.5996,"Zhangjiajie","Culture","Stilted riverside houses lit by lanterns after dark.",["photo","culture"],"Fenghuang_County","China"),
   M("Maya Bay (Ko Phi Phi)",7.6786,98.7654,"Krabi","Nature","'The Beach' cove, restored and visitor-capped — check the open season.",["photo","nature"],"Maya_Bay","Thailand"),
-  M("Wat Pha Lat jungle temple",18.8020,98.9320,"Chiang Mai","Culture","Mossy temple hidden on the monk's trail up Doi Suthep.",["photo","temple","nature"],"Wat_Pha_Lat","Thailand")
+  M("Wat Pha Lat jungle temple",18.8020,98.9320,"Chiang Mai","Culture","Mossy temple hidden on the monk's trail up Doi Suthep.",["photo","temple","nature"],"Wat_Pha_Lat","Thailand"),
+  // Europe: the trips people fly for
+  M("Mont Saint-Michel",48.6361,-1.5115,"Paris","Culture","Abbey-topped tidal island — stay overnight for the empty morning lanes.",["photo","history"],"Mont-Saint-Michel","France"),
+  M("Loire Valley châteaux",47.3486,0.9857,"Paris","Culture","Chambord and Chenonceau, fairy-tale castles along one lazy river.",["photo","history"],"Châteaux_of_the_Loire_Valley","France"),
+  M("Cinque Terre",44.1269,9.7115,"Florence","Nature","Five cliff villages linked by coastal trails and trains — Vernazza at sunset.",["photo","nature"],"Cinque_Terre","Italy"),
+  M("Amalfi Coast (Positano)",40.6281,14.4849,"Naples","Nature","Vertical pastel villages over the sea; buses are wild, boats are better.",["photo","nature"],"Positano","Italy"),
+  M("Dolomites (Tre Cime)",46.6187,12.3025,"Venice","Nature","Jagged peaks and rifugio hikes — the Tre Cime loop is the icon.",["photo","nature","ski"],"Tre_Cime_di_Lavaredo","Italy"),
+  M("Ronda",36.7462,-5.1612,"Seville","Sightseeing","White town split by a gorge and the vertiginous Puente Nuevo.",["photo","history"],"Ronda","Spain"),
+  M("Neuschwanstein Castle",47.5576,10.7498,"Munich","Sightseeing","The Disney-castle original in the Alps — Marienbrücke has the shot.",["photo","history"],"Neuschwanstein_Castle","Germany"),
+  M("Zugspitze & Eibsee",47.4212,10.9863,"Munich","Nature","Germany's highest peak above an absurdly turquoise lake.",["photo","nature","ski"],"Zugspitze","Germany"),
+  M("Hallstatt",47.5622,13.6493,"Salzburg","Sightseeing","The lakeside village of a thousand postcards — sleep there to beat the buses.",["photo","nature"],"Hallstatt","Europe"),
+  M("Matterhorn (Zermatt)",45.9766,7.6585,"Zurich","Nature","The pyramid peak from car-free Zermatt; Gornergrat railway for the classic view.",["photo","nature","ski"],"Matterhorn","Europe"),
+  M("Oia, Santorini",36.4618,25.3753,"Santorini","Sightseeing","Blue domes and the caldera sunset that launched a million photos.",["photo","nature"],"Oia,_Greece","Europe"),
+  M("Plitvice Lakes",44.8654,15.5820,"Vienna","Nature","Sixteen terraced lakes threaded by boardwalks over turquoise water.",["photo","nature"],"Plitvice_Lakes_National_Park","Europe"),
+  M("Isle of Skye",57.4090,-6.2026,"Edinburgh","Nature","Old Man of Storr, fairy pools, and moody Highland light.",["photo","nature"],"Isle_of_Skye","United Kingdom"),
+  M("Lake District",54.4609,-3.0886,"Manchester","Nature","England's fells and lakes — Windermere cruises to Catbells scrambles.",["photo","nature"],"Lake_District","United Kingdom"),
+  M("Seven Sisters cliffs",50.7522,0.1517,"London","Nature","Chalk cliffs marching to the sea, an easy day out from London.",["photo","nature"],"Seven_Sisters,_Sussex","United Kingdom")
 ];
 
 const POINTS = [...PLACES, ...SPECIAL, ...MORE];
@@ -1316,7 +1456,7 @@ function openEdit(kind, person, id){
 
 /* ---------- map ---------- */
 function initMap(){
-  map = L.map("map", { zoomControl:true, attributionControl:true }).setView([28.5,118.0], 4);
+  map = L.map("map", { zoomControl:true, attributionControl:true, worldCopyJump:true }).setView([34,55], 3);
   L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
     attribution:'&copy; OpenStreetMap &copy; CARTO', subdomains:"abcd", maxZoom:19
   }).addTo(map);
@@ -1364,7 +1504,7 @@ function flyTo(loc){
    These (and the transit fares) are Japan-calibrated yen, so they only apply
    while the trip currency is ¥ — other currencies count entered costs only. */
 const CAT_COST = {"Sightseeing":2000, "Food & drink":2500, "Culture":1500, "Nature":500, "Shopping":0, "Nightlife":4000, "Travel":0, "Other":0};
-const CURRENCIES = ["¥","₩","CN¥","฿","$","€","£"];
+const CURRENCIES = ["¥","₩","CN¥","฿","€","£","$","CHF","kr","zł","Kč","₹","₫","S$","HK$","NT$","A$"];
 function curSym(){ return state.trip.currency || "¥"; }
 function fmtYen(n){ return curSym() + Math.round(n).toLocaleString("en-US"); }
 function hasCost(x){ return x.cost !== undefined && x.cost !== null && x.cost !== "" && !isNaN(+x.cost); }
@@ -1560,6 +1700,7 @@ function forYouSection(title, city, targetDate, p){
 }
 
 function recSection(title, city, targetDate, p){
+  if(!POINTS.some(pt=>pt.mainstream && pt.city===city)) return "";  // uncurated city: the Wikipedia section covers it
   const recs=recsForCity(city, p, targetDate);
   if(!recs.length) return `<div class="eyebrow explore-sec">${esc(title)}</div><div class="list-empty">Everything here is already on your list.</div>`;
   const hotel=targetDate?hotelLocForDate(p,targetDate):null;
@@ -1584,7 +1725,7 @@ function acrossJapanSection(p){
   if(!chosen.length) return "";
   const byRegion = {};
   for(const pt of chosen){ (byRegion[pt.region] = byRegion[pt.region]||[]).push(pt); }
-  const order = ["Hokkaido","Tohoku","Kanto","Chubu","Kansai","Chugoku","Shikoku","Kyushu","Okinawa","Korea","China","Thailand"];
+  const order = ["Hokkaido","Tohoku","Kanto","Chubu","Kansai","Chugoku","Shikoku","Kyushu","Okinawa","Korea","China","Thailand","United Kingdom","France","Italy","Spain","Germany","Europe"];
   const regions = Object.keys(byRegion).sort((a,b)=>order.indexOf(a)-order.indexOf(b));
   const label = interests.length ? "Farther afield, matched to your interests" : "Photo spots farther afield";
   let html = `<div class="eyebrow explore-sec">${esc(label)}</div><p class="across-note">Farther-flung spots worth a dedicated trip. Each shows an example photo so you can judge whether it earns the journey. Adding one drops it on your start date to slot in later.</p>`;
@@ -1627,6 +1768,8 @@ function renderExplore(){
       for(const city of bases){
         body+=forYouSection("For your interests in "+city, city, firstDateInCity(me,city), me);
         body+=recSection("Popular in "+city, city, firstDateInCity(me,city), me);
+        const sLoc=((me.stays||[]).find(s=>s.city===city)||{}).location || cityCentroid(city);
+        body+=wikiSection("Near your stay in "+city+" — live from Wikipedia", sLoc, firstDateInCity(me,city));
       }
     }
     body+=acrossJapanSection(me);
@@ -1658,6 +1801,8 @@ function renderExplore(){
   if(base) body+=forYouSection("For your interests in "+base, base, date, me);
   if(trip) body+=recSection("Popular in "+trip, trip, date, me);
   if(base) body+=recSection("Popular in "+base, base, date, me);
+  if(trip) body+=wikiSection("Near "+trip+" — live from Wikipedia", cityCentroid(trip), date);
+  if(base) body+=wikiSection("Near your stay — live from Wikipedia", hotelLocForDate(me,date)||cityCentroid(base), date);
 
   wrap.innerHTML=head+body;
   wireExplore(wrap);
@@ -1717,8 +1862,74 @@ function hydrateThumbs(wrap){
   els.forEach(el=>io.observe(el));
 }
 
+/* ---------- worldwide nearby sights via Wikipedia geosearch ---------- */
+function cityCentroid(name){ const c=CITIES.find(x=>x[0]===name); return c?{lat:c[1],lng:c[2]}:null; }
+const wikiNearCache = new Map();
+const WIKI_SKIP = /footballer|politician|company|organization|corporation|school|university|college|hospital|radio|television|conference|album|film|band|newspaper|magazine|constituency|ward\b|electoral|municipality|prefecture|province|county|district of|neighbourhood|neighborhood|suburb|railway station|metro station|subway station|train station|bus station|airport|airline|embassy|office building|headquarters/i;
+async function wikiNearby(loc){
+  const key = loc.lat.toFixed(2)+","+loc.lng.toFixed(2);
+  if(wikiNearCache.has(key)) return wikiNearCache.get(key);
+  const url = "https://en.wikipedia.org/w/api.php?action=query&format=json&origin=*"
+    + "&generator=geosearch&ggscoord=" + loc.lat + "%7C" + loc.lng
+    + "&ggsradius=10000&ggslimit=30&prop=pageimages%7Cdescription%7Ccoordinates&piprop=thumbnail&pithumbsize=400";
+  let out = [];
+  try {
+    const res = await fetch(url);
+    const data = await res.json();
+    const pages = Object.values((data.query||{}).pages||{});
+    out = pages
+      .filter(pg => pg.coordinates && pg.coordinates[0])
+      .filter(pg => !WIKI_SKIP.test(pg.description||""))
+      .filter(pg => pg.thumbnail || pg.description)
+      .map(pg => ({ title: pg.title, desc: pg.description||"", thumb: pg.thumbnail && pg.thumbnail.source,
+                    lat: pg.coordinates[0].lat, lng: pg.coordinates[0].lon }));
+  } catch {}
+  wikiNearCache.set(key, out);
+  return out;
+}
+function wikiCategory(desc){
+  const d = (desc||"").toLowerCase();
+  if(/museum|gallery|theatre|theater|opera|shrine|temple|church|cathedral|basilica|monastery|mosque|historic|castle|palace|monument|memorial|ruins/.test(d)) return "Culture";
+  if(/park|garden|mountain|lake|river|beach|forest|zoo|aquarium|botanical/.test(d)) return "Nature";
+  if(/market|restaurant|food|brewery|winery/.test(d)) return "Food & drink";
+  if(/shopping|mall|department store/.test(d)) return "Shopping";
+  return "Sightseeing";
+}
+function wikiSection(label, loc, targetDate){
+  if(!loc) return "";
+  return `<div class="wiki-near" data-wlat="${loc.lat}" data-wlng="${loc.lng}" data-wdate="${targetDate||""}" data-wlabel="${esc(label)}"></div>`;
+}
+async function hydrateWikiNear(el, p){
+  const loc = { lat:+el.dataset.wlat, lng:+el.dataset.wlng };
+  const targetDate = el.dataset.wdate;
+  el.innerHTML = `<div class="eyebrow explore-sec">${esc(el.dataset.wlabel)}</div><div class="list-empty">Looking around&hellip;</div>`;
+  const have = new Set([
+    ...(p.activities||[]).map(a=>a.title.toLowerCase()),
+    ...POINTS.map(pt=>pt.name.toLowerCase())
+  ]);
+  const items = (await wikiNearby(loc)).filter(x=>!have.has(x.title.toLowerCase())).slice(0,8);
+  if(!items.length){ el.innerHTML=""; return; }
+  let html = `<div class="eyebrow explore-sec">${esc(el.dataset.wlabel)} <span class="count">${items.length}</span></div><div class="rec-grid">`;
+  items.forEach((x,i)=>{
+    const km = haversine(loc, x).toFixed(1);
+    html += `<div class="rec-card"><div class="rec-thumb ${x.thumb?"has-img":"no-img"}" ${x.thumb?`style="background-image:url('${x.thumb}')"`:""}>${x.thumb?"":"No preview"}</div>
+      <div class="rec-cat">${esc(wikiCategory(x.desc))}</div><div class="rec-name">${esc(x.title)}</div>
+      <div class="rec-blurb">${esc(x.desc ? x.desc.charAt(0).toUpperCase()+x.desc.slice(1) : "Notable spot nearby — tap through your map app for details.")}</div>
+      <div class="rec-foot"><span class="rec-dist">${km} km away</span>
+      <button class="mini-btn" data-waddi="${i}">Add${targetDate?"":"…"}</button></div></div>`;
+  });
+  el.innerHTML = html + `</div>`;
+  el.querySelectorAll("[data-waddi]").forEach(b=>b.onclick=()=>{
+    const x = items[+b.dataset.waddi];
+    const d = targetDate || state.selectedDate || state.trip.start;
+    addRecommendation({ name:x.title, lat:x.lat, lng:x.lng, cat:wikiCategory(x.desc) }, d);
+  });
+}
+
 function wireExplore(wrap){
   hydrateThumbs(wrap);
+  const me = state.me && state.people[state.me.name];
+  if(me) wrap.querySelectorAll(".wiki-near").forEach(el=>hydrateWikiNear(el, me));
   wrap.querySelectorAll(".edit-interests").forEach(b=> b.onclick=openProfile);
   wrap.querySelectorAll("[data-settrip]").forEach(b=> b.onclick=()=>setDayTrip(state.selectedDate, b.dataset.settrip));
   wrap.querySelectorAll("[data-cleartrip]").forEach(b=> b.onclick=()=>clearDayTrip(state.selectedDate));
@@ -1908,7 +2119,9 @@ function consecutive(a,b){ const da=parseISO(a); da.setDate(da.getDate()+1); ret
 /* ---------- before-you-go checklist ----------
    Groups tagged with a country code only appear when that country is toggled
    on for the trip (stored in the shared trip meta). */
-const COUNTRIES = [["JP","Japan"],["KR","Korea"],["CN","China"],["TH","Thailand"]];
+const COUNTRIES = [["JP","Japan"],["KR","Korea"],["CN","China"],["TH","Thailand"],
+  ["GB","UK"],["FR","France"],["IT","Italy"],["ES","Spain"],["DE","Germany"],["EU","Other Europe"]];
+const SCHENGEN = ["FR","IT","ES","DE","EU"];
 const CHECKLIST = [
   ["Documents", null, [
     ["passport","Passport is valid","Valid for your whole stay — renew now if it expires soon after the trip. Some countries also want 6 months' validity."],
@@ -1947,6 +2160,36 @@ const CHECKLIST = [
     ["thvisa","Thailand entry + arrival card checked","Many nationalities get visa-exempt stays; everyone needs the online Thailand Digital Arrival Card (TDAC) before landing.","https://tdac.immigration.go.th"],
     ["grab","Grab installed","The ride-hailing app that spares you taxi haggling; it does food delivery too."],
     ["thdress","Temple dress code planned","Shoulders and knees covered for temples and the Grand Palace — pack a light cover-up; some rentals exist but queues are long."]
+  ]],
+  ["United Kingdom", "GB", [
+    ["uketa","UK ETA / entry rules checked","Visa-free visitors (US, EU, and more) now need an Electronic Travel Authorisation before flying — apply via the official app.","https://www.gov.uk/guidance/apply-for-an-electronic-travel-authorisation-eta"],
+    ["ukpay","Contactless everywhere","Your phone or card taps you through the Tube, buses, and nearly every shop — no Oyster card needed, but cap awareness helps."],
+    ["ukrail","Trains booked in advance","UK walk-up fares sting — Advance tickets on Trainline or the operators' apps are often a third of the price."]
+  ]],
+  ["Europe (Schengen)", SCHENGEN, [
+    ["etias","ETIAS / Schengen rules checked","Visa-free visitors will need the ETIAS online authorisation once it launches — check whether it's live before you fly.","https://travel-europe.europa.eu/etias_en"],
+    ["schengen90","90/180-day math done","Time in ALL Schengen countries counts against one shared 90-day allowance — long multi-country trips need the calculator."],
+    ["eupick","Pickpocket plan","Tourist hubs and metro lines are prime territory — zips forward, phone off the café table, nothing in back pockets."],
+    ["eurail","Trains & seat reservations sorted","High-speed trains (TGV, Frecciarossa, AVE) sell out and need seat reservations even with a Eurail pass — book the long legs."],
+    ["citytax","City tourist taxes expected","Most European cities charge a few euros per person per night at check-in/out, sometimes cash only."]
+  ]],
+  ["France", "FR", [
+    ["frbook","Paris big-hitters pre-booked","The Louvre, Eiffel summit, and Sainte-Chapelle run on timed slots — book the week before, minimum."],
+    ["frcafe","Café rhythm understood","Sitting costs more than standing at the bar, and lunch is 12–2 sharp — many kitchens simply close outside meal hours."]
+  ]],
+  ["Italy", "IT", [
+    ["itbook","Uffizi / Colosseum / Last Supper booked","Italy's headliners sell out days to weeks ahead — the Last Supper in Milan often a month."],
+    ["itvalidate","Regional train tickets validated","Paper regional tickets must be stamped in the little machines before boarding or it's a fine — high-speed e-tickets are fine as-is."],
+    ["itdress","Church dress code planned","Shoulders and knees covered at St Peter's, the Duomo, and most churches — carry a scarf."]
+  ]],
+  ["Spain", "ES", [
+    ["esbook","Alhambra & Sagrada Família booked","The two hardest tickets in Spain — Alhambra's Nasrid Palaces can sell out a month ahead."],
+    ["eshours","Spanish hours embraced","Lunch at 2–3pm, dinner from 9pm, and an afternoon lull when shops shut — fight it and you'll eat alone in tourist traps."]
+  ]],
+  ["Germany", "DE", [
+    ["decash","Some euro cash carried","Germany still loves cash — plenty of bakeries, kiosks, and even restaurants don't take cards."],
+    ["desunday","Sunday closures planned","Nearly all shops close Sundays (bahnhof stores excepted) — do the shopping Saturday."],
+    ["deticket","Local transit ticket sorted","City day tickets or the Deutschlandticket beat single fares fast; validate where machines exist."]
   ]]
 ];
 function activeCountries(){
@@ -1957,7 +2200,9 @@ function activeCountries(){
 }
 function visibleChecklist(){
   const on = activeCountries();
-  return CHECKLIST.filter(([,country])=>!country || on.includes(country));
+  // a group's country tag can be a single code or a list (e.g. Schengen)
+  return CHECKLIST.filter(([,country])=>!country ||
+    (Array.isArray(country) ? country.some(c=>on.includes(c)) : on.includes(country)));
 }
 function checklistDone(p){
   const c = p.checklist||{};
@@ -2054,7 +2299,8 @@ async function openTripsMenu(){
 }
 
 /* ---------- trip legs: side-trip windows inside one trip ---------- */
-const FLAGS={JP:"\u{1F1EF}\u{1F1F5}", KR:"\u{1F1F0}\u{1F1F7}", CN:"\u{1F1E8}\u{1F1F3}", TH:"\u{1F1F9}\u{1F1ED}"};
+const FLAGS={JP:"\u{1F1EF}\u{1F1F5}", KR:"\u{1F1F0}\u{1F1F7}", CN:"\u{1F1E8}\u{1F1F3}", TH:"\u{1F1F9}\u{1F1ED}",
+  GB:"\u{1F1EC}\u{1F1E7}", FR:"\u{1F1EB}\u{1F1F7}", IT:"\u{1F1EE}\u{1F1F9}", ES:"\u{1F1EA}\u{1F1F8}", DE:"\u{1F1E9}\u{1F1EA}", EU:"\u{1F1EA}\u{1F1FA}"};
 function legForDate(d){
   for(const l of (state.trip.legs||[])) if(l.start && l.end && d>=l.start && d<=l.end) return l;
   return null;
@@ -2603,14 +2849,12 @@ function osmCategory(key, value){
 }
 /* Photon: typo-tolerant OSM autocomplete that understands POIs (resorts,
    restaurants, shrines); bbox keeps results inside Japan */
-const SEARCH_COUNTRIES = ["JP","KR","CN","HK","MO","TH"];
 async function photonSearch(q){
-  const url="https://photon.komoot.io/api/?limit=6&lang=en&bbox=73,5,147,54&q="+encodeURIComponent(q);
+  const url="https://photon.komoot.io/api/?limit=7&lang=en&q="+encodeURIComponent(q);
   const res=await fetch(url);
   if(!res.ok) throw 0;
   const data=await res.json();
   return (data.features||[])
-    .filter(f=>!f.properties.countrycode || SEARCH_COUNTRIES.includes(f.properties.countrycode))
     .map(f=>{
       const p=f.properties, [lng,lat]=f.geometry.coordinates;
       const place=p.city||p.town||p.village||p.county||p.state||"";
@@ -2625,7 +2869,7 @@ async function geocode(q, curated){
     if(items.length){ renderSuggest([...curated, ...items], false); return; }
   }catch{ /* fall through to Nominatim */ }
   try{
-    const url="https://nominatim.openstreetmap.org/search?format=json&limit=5&countrycodes=jp,kr,cn,hk,mo,th&q="+encodeURIComponent(q);
+    const url="https://nominatim.openstreetmap.org/search?format=json&limit=5&q="+encodeURIComponent(q);
     const res=await fetch(url,{headers:{"Accept":"application/json"}});
     if(!res.ok) throw 0;
     const data=await res.json();

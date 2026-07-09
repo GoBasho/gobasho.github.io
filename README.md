@@ -1,9 +1,12 @@
-# Meridian — Asia Trip Planner
+# Meridian — Trip Planner
 
-A shared trip planner for Japan, Korea, China, and Thailand. Everyone on the
-trip adds themselves, plans their hotels and stays, pins activities and photo
-spots on the map, and sees each other's plans side by side to find days that
-overlap. Toggle which countries the trip covers on the Checklist tab.
+A shared trip planner that works anywhere in the world. Everyone on the trip
+adds themselves, plans their hotels and stays, pins activities and photo spots
+on the map, and sees each other's plans side by side to find days that overlap.
+Deep hand-curated recommendations cover Japan, Korea, China, Thailand, the UK,
+France, Italy, Spain, and Germany; everywhere else, the Explore tab pulls
+nearby sights live from Wikipedia around wherever you're staying. Toggle which
+countries the trip covers on the Checklist tab.
 
 It's a plain website — one HTML file plus two small scripts. No build tools,
 no server of your own to run.
