@@ -126,6 +126,25 @@
       await ready;
       return shared && mode === "shared" ? fbGet(key) : localGet(key);
     },
+    /* fetch every key under the trip in ONE request — the sync poll uses this
+       instead of a list call followed by a get per traveler */
+    async getAll(prefix, shared) {
+      await ready;
+      if (shared && mode === "shared") {
+        const res = await fetch(base() + ".json");
+        if (!res.ok) throw new Error("Sync read failed (" + res.status + ")");
+        const obj = (await res.json()) || {};
+        const out = {};
+        for (const k of Object.keys(obj)) {
+          const dk = decodeKey(k);
+          if (dk.startsWith(prefix)) out[dk] = obj[k];
+        }
+        return out;
+      }
+      const out = {};
+      for (const k of localList(prefix).keys) out[k] = localStorage.getItem(LS_PREFIX + k);
+      return out;
+    },
     async set(key, value, shared) {
       await ready;
       return shared && mode === "shared" ? fbSet(key, value) : localSet(key, value);

@@ -875,7 +875,6 @@ let map, markerLayer, pickHandler=null;
 const hasStore = typeof window.storage !== "undefined";
 async function sGet(k, shared){ try { return await window.storage.get(k, shared); } catch { return null; } }
 async function sSet(k, v, shared){ try { const r = await window.storage.set(k, v, shared); state.sharedOK=true; return r; } catch(e){ state.sharedOK=false; return null; } }
-async function sList(prefix, shared){ try { return await window.storage.list(prefix, shared); } catch { return {keys:[]}; } }
 
 async function saveMe(){
   if(!state.me) return;
@@ -889,14 +888,15 @@ async function saveTrip(){
 }
 async function loadEveryone(){
   if(!hasStore) return;
-  const meta = await sGet("trip:meta", true);
-  if(meta && meta.value){ try { Object.assign(state.trip, JSON.parse(meta.value)); } catch {} }
-  const listed = await sList("person:", true);
-  const keys = (listed && listed.keys) || [];
+  // one request for the whole trip; on a network blip keep what we already have
+  let all;
+  try { all = await window.storage.getAll("", true); state.sharedOK = true; }
+  catch { state.sharedOK = false; return; }
+  if(all["trip:meta"]){ try { Object.assign(state.trip, JSON.parse(all["trip:meta"])); } catch {} }
   const fresh = {};
-  for(const k of keys){
-    const r = await sGet(k, true);
-    if(r && r.value){ try { const p = JSON.parse(r.value); if(!p.deleted) fresh[p.name] = p; } catch {} }
+  for(const k of Object.keys(all)){
+    if(!k.startsWith("person:")) continue;
+    try { const p = JSON.parse(all[k]); if(!p.deleted) fresh[p.name] = p; } catch {}
   }
   // repair reversed stay dates (older records could be saved with depart before arrive)
   for(const p of Object.values(fresh)) for(const s of (p.stays||[]))
@@ -1457,8 +1457,19 @@ function renderExplore(){
   wireExplore(wrap);
 }
 
-/* example photos: pulled lazily from Wikipedia's page-image API (freely licensed, CORS-enabled) */
+/* example photos: pulled lazily from Wikipedia's page-image API (freely licensed, CORS-enabled).
+   Resolved URLs persist in localStorage so revisits don't refetch. */
 const thumbCache = new Map();
+const thumbLS = (()=>{ try { return JSON.parse(localStorage.getItem("meridian:thumbs")) || {}; } catch { return {}; } })();
+function rememberThumb(title, src){
+  thumbCache.set(title, src);
+  try {
+    thumbLS[title] = src;
+    const keys = Object.keys(thumbLS);
+    while(keys.length > 250) delete thumbLS[keys.shift()];
+    localStorage.setItem("meridian:thumbs", JSON.stringify(thumbLS));
+  } catch {}
+}
 function firstThumb(d){
   const pages = d && d.query && d.query.pages;
   if(!pages) return null;
@@ -1467,6 +1478,7 @@ function firstThumb(d){
 }
 async function resolveThumb(title){
   if(thumbCache.has(title)) return thumbCache.get(title);
+  if(title in thumbLS){ thumbCache.set(title, thumbLS[title]); return thumbLS[title]; }
   const clean = title.replace(/\s*\(.*?\)\s*/g," ").trim();
   const base = "https://en.wikipedia.org/w/api.php?action=query&format=json&origin=*&prop=pageimages&piprop=thumbnail&pithumbsize=480&redirects=1";
   let src = null;
@@ -1478,7 +1490,7 @@ async function resolveThumb(title){
       src = firstThumb(await r2.json());
     }
   } catch { src = null; }
-  thumbCache.set(title, src);
+  rememberThumb(title, src);
   return src;
 }
 async function loadThumb(el){
@@ -2109,7 +2121,10 @@ async function boot(){
     if(document.hidden) return;  // no point syncing a tab nobody is looking at
     if(document.getElementById("itemScrim").classList.contains("show")) return;
     if(document.getElementById("profileScrim").classList.contains("show")) return;
-    await loadEveryone(); render();
+    const before = JSON.stringify([state.people, state.trip, state.sharedOK]);
+    await loadEveryone();
+    // skip the re-render (map markers, panels, thumbnails) when nothing changed
+    if(JSON.stringify([state.people, state.trip, state.sharedOK]) !== before) render();
   }, 20000);
 }
 boot();
