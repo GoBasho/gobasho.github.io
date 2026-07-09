@@ -175,9 +175,11 @@
   .item .ibody { flex: 1; min-width: 0; }
   .item .ititle { font-size: 13px; font-weight: 500; }
   .item .isub { font-size: 11.5px; color: var(--ink-faint); margin-top: 1px; }
-  .item .idel { opacity: 0; border: none; background: transparent; color: var(--ink-faint); padding: 2px 4px; border-radius: 4px; font-size: 15px; line-height: 1; }
-  .item:hover .idel { opacity: 1; }
+  .item .idel, .item .iedit { opacity: 0; border: none; background: transparent; color: var(--ink-faint); padding: 2px 4px; border-radius: 4px; font-size: 15px; line-height: 1; }
+  .item:hover .idel, .item:hover .iedit { opacity: 1; }
   .item .idel:hover { background: var(--shu-dim); color: var(--shu); }
+  .item .iedit { font-size: 13px; padding-top: 3px; }
+  .item .iedit:hover { background: var(--sky); color: var(--indigo); }
 
   /* ---------- map ---------- */
   .stage { flex: 1; position: relative; min-width: 0; }
@@ -628,7 +630,8 @@ const CITIES = [
   ["Kyoto",35.0116,135.7681],["Osaka",34.6937,135.5023],["Nara",34.6851,135.8048],
   ["Kobe",34.6901,135.1955],["Nagoya",35.1815,136.9066],["Kanazawa",36.5613,136.6562],
   ["Hiroshima",34.3853,132.4553],["Miyajima",34.2960,132.3199],["Fukuoka",33.5904,130.4017],
-  ["Sapporo",43.0618,141.3545],["Himeji",34.8394,134.6939],["Uji",34.8844,135.7998],["Otaru",43.1907,140.9947]
+  ["Sapporo",43.0618,141.3545],["Himeji",34.8394,134.6939],["Uji",34.8844,135.7998],["Otaru",43.1907,140.9947],
+  ["Niseko",42.8048,140.6874],["Hakuba",36.6980,137.8320],["Furano",43.3420,142.3830]
 ];
 
 /* curated well-known destinations with a category and short description, used for recommendations */
@@ -703,6 +706,7 @@ function autoTag(p){
   if(/cherry|blossom|sakura/.test(s)){ t.add("sakura"); t.add("photo"); }
   if(/craft|pottery|lacquer|gold[ -]?leaf|textile|ceramic|kiln|glasswork/.test(s)){ t.add("crafts"); t.add("culture"); }
   if(/onsen|hot spring|bathhouse|ryokan/.test(s)) t.add("onsen");
+  if(/\bski\b|powder|slope|snowboard|piste/.test(s)){ t.add("ski"); t.add("nature"); }
   return [...t];
 }
 PLACES.forEach(p=>{ p.tags = autoTag(p); p.mainstream = true; });
@@ -792,7 +796,29 @@ const MORE = [
   M("Chidorigafuchi",35.6913,139.7503,"Tokyo","Nature","Moat lined with cherry trees; rowboats drift under the blossoms.",["sakura","photo","nature"],"Chidorigafuchi"),
   M("Maruyama Park",35.0035,135.7810,"Kyoto","Nature","Kyoto's classic hanami spot, centred on a giant weeping cherry.",["sakura","photo","nature"],"Maruyama_Park_(Kyoto)"),
   M("Sannenzaka & Ninenzaka",34.9967,135.7808,"Kyoto","Culture","Stone-paved slopes of craft shops and teahouses below Kiyomizu.",["crafts","photo","culture"],"Sannen-zaka"),
-  M("Kiyomizu-zaka craft shops",34.9948,135.7830,"Kyoto","Shopping","Kiyomizu-yaki pottery, fans, and sweets on the temple approach.",["crafts","shopping"],"Kiyomizu-dera")
+  M("Kiyomizu-zaka craft shops",34.9948,135.7830,"Kyoto","Shopping","Kiyomizu-yaki pottery, fans, and sweets on the temple approach.",["crafts","shopping"],"Kiyomizu-dera"),
+  // ski resorts
+  M("Niseko United",42.8048,140.6874,"Niseko","Nature","Japan's most famous powder — four linked resorts on Mt. Annupuri, Yotei views.",["ski","nature","photo"],"Niseko","Hokkaido"),
+  M("Rusutsu Resort",42.7480,140.8990,"Rusutsu","Nature","Uncrowded powder and tree runs across three peaks, near Niseko.",["ski","nature"],"Rusutsu,_Hokkaido","Hokkaido"),
+  M("Sapporo Teine",43.0902,141.2126,"Sapporo","Nature","Olympic slopes 40 minutes from downtown Sapporo — city-and-sea views from the top.",["ski","nature","views"],"Sapporo_Teine"),
+  M("Kiroro Resort",43.0656,140.9880,"Kiroro","Nature","Deep, reliable snow and short lift lines between Otaru and Niseko.",["ski","nature"],"Kiroro","Hokkaido"),
+  M("Furano Ski Resort",43.3242,142.3597,"Furano","Nature","Cold central-Hokkaido powder above a laid-back onsen town.",["ski","nature","onsen"],"Furano_Ski_Resort","Hokkaido"),
+  M("Hakuba Valley",36.6980,137.8320,"Hakuba","Nature","Ten resorts under the Japan Alps — 1998 Olympic terrain, big verticals.",["ski","nature","photo"],"Hakuba,_Nagano","Chubu"),
+  M("Nozawa Onsen",36.9200,138.4410,"Nozawa","Nature","Ski village with free public onsen baths and a famous fire festival.",["ski","onsen","culture"],"Nozawa_Onsen,_Nagano","Chubu"),
+  M("Shiga Kogen",36.7420,138.5080,"Shiga Kogen","Nature","Japan's largest linked ski area, near the snow-monkey park.",["ski","nature"],"Shiga_Kōgen","Chubu"),
+  M("GALA Yuzawa",36.9640,138.7990,"Yuzawa","Nature","Ski hill with its own shinkansen station — 75 minutes from Tokyo.",["ski","nature"],"Gala_Yuzawa_Ski_Resort","Chubu"),
+  M("Zao Onsen",38.1600,140.4030,"Zao","Nature","Slopes through the frozen 'snow monster' trees, plus sulfur hot springs.",["ski","onsen","photo"],"Zaō_Onsen","Tohoku"),
+  // Pokémon Centers (flagship stores by city)
+  M("Pokémon Center Mega Tokyo",35.7295,139.7177,"Tokyo","Shopping","The biggest one — inside Sunshine City, Ikebukuro, next to a Pikachu horde.",["pokemon","anime","shopping"],"Pokémon_Center"),
+  M("Pokémon Center Tokyo DX",35.6828,139.7745,"Tokyo","Shopping","Nihonbashi flagship with an attached Pokémon Café — book the café ahead.",["pokemon","anime","shopping"],"Pokémon_Center"),
+  M("Pokémon Center Skytree Town",35.7101,139.8107,"Tokyo","Shopping","In Solamachi mall at the foot of the Skytree — pair with the observation deck.",["pokemon","anime","shopping"],"Pokémon_Center"),
+  M("Pokémon Center Yokohama",35.4530,139.6317,"Yokohama","Shopping","Harbor-side store near Sakuragicho, close to the Pikachu manhole covers.",["pokemon","anime","shopping"],"Pokémon_Center"),
+  M("Pokémon Center Kyoto",34.9858,135.7588,"Kyoto","Shopping","In the Takashimaya annex downtown — exclusive Ho-Oh goods for the region.",["pokemon","anime","shopping"],"Pokémon_Center"),
+  M("Pokémon Center Osaka",34.7025,135.4959,"Osaka","Shopping","In Daimaru Umeda by the station; there's also a DX store in Shinsaibashi.",["pokemon","anime","shopping"],"Pokémon_Center"),
+  M("Pokémon Center Sapporo",43.0686,141.3508,"Sapporo","Shopping","In Daimaru by Sapporo Station — Alolan Vulpix is the regional mascot.",["pokemon","anime","shopping"],"Pokémon_Center"),
+  M("Pokémon Center Nagoya",35.1709,136.8815,"Nagoya","Shopping","In the Matsuzakaya Sakae complex in central Nagoya.",["pokemon","anime","shopping"],"Pokémon_Center"),
+  M("Pokémon Center Fukuoka",33.5902,130.4207,"Fukuoka","Shopping","Inside JR Hakata City mall, right at the station.",["pokemon","anime","shopping"],"Pokémon_Center"),
+  M("Pokémon Center Hiroshima",34.3930,132.4596,"Hiroshima","Shopping","In the Sogo department store — regional Magikarp goods.",["pokemon","anime","shopping"],"Pokémon_Center")
 ];
 
 const POINTS = [...PLACES, ...SPECIAL, ...MORE];
@@ -817,7 +843,7 @@ const INTERESTS = [
   ["Art & museums","art"],["Views & skylines","views"],["Shopping","shopping"],
   ["Nightlife","nightlife"],["Traditional culture","culture"],
   ["Onsen & baths","onsen"],["Markets & street food","market"],["Modern architecture","architecture"],
-  ["Cherry blossoms","sakura"],["Traditional crafts","crafts"]
+  ["Cherry blossoms","sakura"],["Traditional crafts","crafts"],["Skiing & snow","ski"]
 ];
 function interestLabel(tag){ const m=INTERESTS.find(i=>i[1]===tag); return m?m[0]:(tag.charAt(0).toUpperCase()+tag.slice(1)); }
 function pointMatches(pt, interests){
@@ -1055,6 +1081,7 @@ function renderRailList(){
       color: s.color, title: s.hotelName || s.city, tick: s.color,
       sub: `Stay · ${s.city} · ${shortRange(s.start,s.end)} · ${s.person}`,
       onDel: canEdit(s.person) ? () => removeItem("stay", s.person, s.id) : null,
+      onEdit: canEdit(s.person) ? () => openEdit("stay", s.person, s.id) : null,
       onClick: () => flyTo(s.location)
     }));
   }
@@ -1063,20 +1090,30 @@ function renderRailList(){
       color: a.color, title: a.title, tick: a.color,
       sub: `${a.time?a.time+' · ':''}${a.category||'Activity'}${state.selectedDate?'':' · '+shortDate(a.date)} · ${a.person}`,
       onDel: canEdit(a.person) ? () => removeItem("activity", a.person, a.id) : null,
+      onEdit: canEdit(a.person) ? () => openEdit("activity", a.person, a.id) : null,
       onClick: () => flyTo(a.location)
     }));
   }
 }
 
-function itemRow({color,title,sub,tick,onDel,onClick}){
+function itemRow({color,title,sub,tick,onDel,onClick,onEdit}){
   const el = document.createElement("div");
   el.className = "item";
   el.innerHTML = `<span class="tick" style="background:${tick}"></span>
     <div class="ibody"><div class="ititle">${esc(title)}</div><div class="isub">${esc(sub)}</div></div>
+    ${onEdit?'<button class="iedit" title="Edit">&#9998;</button>':''}
     ${onDel?'<button class="idel" title="Remove">&times;</button>':''}`;
   if(onClick) el.querySelector(".ibody").onclick = onClick;
+  if(onEdit) el.querySelector(".iedit").onclick = (e)=>{ e.stopPropagation(); onEdit(); };
   if(onDel) el.querySelector(".idel").onclick = (e)=>{ e.stopPropagation(); onDel(); };
   return el;
+}
+
+function openEdit(kind, person, id){
+  if(!canEdit(person)) return;
+  const rec = state.people[person];
+  const item = kind==="stay" ? (rec.stays||[]).find(s=>s.id===id) : (rec.activities||[]).find(a=>a.id===id);
+  if(item) openItem(kind, item);
 }
 
 /* ---------- map ---------- */
@@ -1800,12 +1837,14 @@ async function saveProfile(){
 }
 
 /* ---------- item modal ---------- */
-function openItem(kind){
+function openItem(kind, existing){
   if(!state.me){ openProfile(); return; }
-  state.editing = {kind};
-  state.pendingLoc = null;
+  state.editing = {kind, id: existing ? existing.id : null};
+  state.pendingLoc = existing ? existing.location : null;
   const isStay = kind==="stay";
-  document.getElementById("itemTitle").textContent = isStay?"Add a stay":"Add an activity";
+  document.getElementById("itemTitle").textContent = existing
+    ? (isStay?"Edit stay":"Edit activity")
+    : (isStay?"Add a stay":"Add an activity");
   document.getElementById("itemSubtitle").textContent = isStay
     ? "Where you're based, and for which dates. It becomes a hotel marker."
     : "A place you'd like to visit, on a given day.";
@@ -1813,19 +1852,19 @@ function openItem(kind){
   document.getElementById("actFields").style.display = isStay?"none":"block";
   document.getElementById("fldTitle").style.display = isStay?"none":"block";
   document.getElementById("lblTitle").textContent = "What is it";
-  // reset fields
-  document.getElementById("itemName").value="";
-  document.getElementById("locInput").value="";
-  document.getElementById("stayCity").value="";
-  document.getElementById("stayStart").value = state.trip.start||"";
-  document.getElementById("stayEnd").value = state.trip.end||"";
-  document.getElementById("actDate").value = state.selectedDate || state.trip.start || "";
-  document.getElementById("actTime").value="";
-  document.getElementById("actDur").value="";
-  document.getElementById("actCost").value="";
-  document.getElementById("stayCost").value="";
-  document.getElementById("actNotes").value="";
-  document.getElementById("actCat").value="Sightseeing";
+  // reset fields, or prefill when editing
+  document.getElementById("itemName").value = existing && !isStay ? existing.title : "";
+  document.getElementById("locInput").value = existing ? (isStay ? (existing.hotelName||"") : ((existing.location||{}).label||"")) : "";
+  document.getElementById("stayCity").value = existing && isStay ? (existing.city||"") : "";
+  document.getElementById("stayStart").value = existing && isStay ? (existing.start||"") : (state.trip.start||"");
+  document.getElementById("stayEnd").value = existing && isStay ? (existing.end||"") : (state.trip.end||"");
+  document.getElementById("stayCost").value = existing && isStay && existing.cost!=="" && existing.cost!=null ? existing.cost : "";
+  document.getElementById("actDate").value = existing && !isStay ? (existing.date||"") : (state.selectedDate || state.trip.start || "");
+  document.getElementById("actTime").value = existing && !isStay ? (existing.time||"") : "";
+  document.getElementById("actDur").value = existing && !isStay ? (existing.durationH||"") : "";
+  document.getElementById("actCost").value = existing && !isStay && existing.cost!=="" && existing.cost!=null ? existing.cost : "";
+  document.getElementById("actNotes").value = existing && !isStay ? (existing.notes||"") : "";
+  document.getElementById("actCat").value = existing && !isStay ? (existing.category||"Sightseeing") : "Sightseeing";
   updatePickedLabel();
   document.getElementById("itemScrim").classList.add("show");
 }
@@ -1840,56 +1879,112 @@ function updatePickedLabel(){
 }
 async function saveItem(){
   const kind = state.editing.kind;
+  const editId = state.editing.id;
   const rec = state.people[state.me.name];
   if(!state.pendingLoc){ toast("Set a location first"); return; }
   if(kind==="stay"){
     const city=document.getElementById("stayCity").value.trim() || nearestCity(state.pendingLoc);
-    const s={ id:uid(), city, hotelName:(document.getElementById("locInput").value.trim()||city),
+    const s={ id:editId||uid(), city, hotelName:(document.getElementById("locInput").value.trim()||city),
       location:state.pendingLoc, start:document.getElementById("stayStart").value, end:document.getElementById("stayEnd").value,
       cost: parseCost(document.getElementById("stayCost").value) };
     if(!s.start||!s.end){ toast("Set arrive and depart dates"); return; }
     if(s.end < s.start){ toast("Depart is before arrive — check the dates"); return; }
-    rec.stays.push(s);
+    if(editId){ const i=rec.stays.findIndex(x=>x.id===editId); if(i>=0) rec.stays[i]=s; else rec.stays.push(s); }
+    else rec.stays.push(s);
   } else {
     const title=document.getElementById("itemName").value.trim() || state.pendingLoc.label || "Untitled";
     const date=document.getElementById("actDate").value;
     if(!date){ toast("Pick a day"); return; }
-    rec.activities.push({ id:uid(), title, location:state.pendingLoc, date,
+    const a={ id:editId||uid(), title, location:state.pendingLoc, date,
       time:document.getElementById("actTime").value, durationH:document.getElementById("actDur").value,
       category:document.getElementById("actCat").value, notes:document.getElementById("actNotes").value.trim(),
-      cost: parseCost(document.getElementById("actCost").value) });
+      cost: parseCost(document.getElementById("actCost").value) };
+    if(editId){ const i=rec.activities.findIndex(x=>x.id===editId); if(i>=0) rec.activities[i]=a; else rec.activities.push(a); }
+    else rec.activities.push(a);
   }
   await saveMe();
   document.getElementById("itemScrim").classList.remove("show");
   state._didFit=false;
   render();
-  toast(kind==="stay"?"Stay added":"Activity added");
+  toast(editId ? "Saved" : (kind==="stay"?"Stay added":"Activity added"));
 }
 
-/* ---------- location search (curated + OSM geocoder + map click) ---------- */
+/* ---------- location search (curated + OSM geocoders + map click) ---------- */
 let searchTimer=null;
+/* multi-word matching over name, city, category, and tags — "skiing sapporo"
+   finds Sapporo Teine, "pokemon kyoto" finds that city's Pokémon Center */
+function curatedMatches(q){
+  const terms=q.toLowerCase().split(/\s+/).map(t=>t.replace(/(ing|s)$/,"")).filter(t=>t.length>=2);
+  if(!terms.length) return [];
+  return POINTS.filter(p=>{
+    const hay=(p.name+" "+p.city+" "+p.cat+" "+(p.tags||[]).join(" ")).toLowerCase();
+    return terms.every(t=>hay.includes(t));
+  }).slice(0,6).map(p=>({label:p.name, lat:p.lat, lng:p.lng, city:p.city, kind:p.cat, cat:p.cat==="Pokémon"||p.cat==="Photography"?"Sightseeing":p.cat, src:"list"}));
+}
 function onLocInput(){
   const q=document.getElementById("locInput").value.trim();
   const box=document.getElementById("locSuggest");
   if(q.length<2){ box.classList.remove("show"); return; }
-  // instant curated matches
-  const ql=q.toLowerCase();
-  const curated = POINTS.filter(p=>p.name.toLowerCase().includes(ql)).slice(0,6)
-    .map(p=>({label:p.name, lat:p.lat, lng:p.lng, city:p.city, src:"list"}));
+  const curated = curatedMatches(q);
   renderSuggest(curated, true);
   // debounced geocoder for anything else
   clearTimeout(searchTimer);
   searchTimer=setTimeout(()=>geocode(q, curated), 450);
 }
+/* map OSM tags to a readable type and one of the app's categories */
+const OSM_KIND = { restaurant:"Restaurant", cafe:"Café", fast_food:"Quick eats", bar:"Bar", pub:"Pub", food_court:"Food court",
+  place_of_worship:"Shrine / temple", attraction:"Attraction", viewpoint:"Viewpoint", museum:"Museum", gallery:"Gallery",
+  park:"Park", garden:"Garden", nature_reserve:"Nature reserve", castle:"Castle", peak:"Mountain", station:"Station",
+  hotel:"Hotel", hostel:"Hostel", guest_house:"Guesthouse", ryokan:"Ryokan", apartment:"Apartment",
+  aquarium:"Aquarium", zoo:"Zoo", theme_park:"Theme park", mall:"Mall", department_store:"Dept. store",
+  winter_sports:"Ski area", public_bath:"Onsen / sento", beach:"Beach", waterfall:"Waterfall", memorial:"Memorial", monument:"Monument" };
+function osmKind(key, value){
+  return OSM_KIND[value] || (value ? value.replace(/_/g," ").replace(/^./,c=>c.toUpperCase()) : "");
+}
+function osmCategory(key, value){
+  if(key==="amenity" && ["restaurant","cafe","fast_food","bar","pub","food_court","ice_cream"].includes(value)) return "Food & drink";
+  if(key==="amenity" && value==="place_of_worship") return "Culture";
+  if(key==="amenity" && ["nightclub","karaoke_box"].includes(value)) return "Nightlife";
+  if(key==="tourism" && ["museum","gallery","artwork"].includes(value)) return "Culture";
+  if(key==="tourism" && ["attraction","viewpoint","theme_park","zoo","aquarium"].includes(value)) return "Sightseeing";
+  if(key==="historic") return "Culture";
+  if(key==="leisure" && ["park","garden","nature_reserve"].includes(value)) return "Nature";
+  if(key==="natural") return "Nature";
+  if(key==="landuse" && value==="winter_sports") return "Nature";
+  if(key==="shop") return "Shopping";
+  if(key==="railway" || key==="aeroway") return "Travel";
+  return null;
+}
+/* Photon: typo-tolerant OSM autocomplete that understands POIs (resorts,
+   restaurants, shrines); bbox keeps results inside Japan */
+async function photonSearch(q){
+  const url="https://photon.komoot.io/api/?limit=6&lang=en&bbox=122.5,24.0,146.5,45.8&q="+encodeURIComponent(q);
+  const res=await fetch(url);
+  if(!res.ok) throw 0;
+  const data=await res.json();
+  return (data.features||[])
+    .filter(f=>!f.properties.countrycode || f.properties.countrycode==="JP")
+    .map(f=>{
+      const p=f.properties, [lng,lat]=f.geometry.coordinates;
+      const place=p.city||p.town||p.village||p.county||p.state||"";
+      return { label:p.name||q, lat, lng, sub:place, kind:osmKind(p.osm_key,p.osm_value),
+               cat:osmCategory(p.osm_key,p.osm_value), src:"map" };
+    })
+    .filter(x=>x.label && isFinite(x.lat) && isFinite(x.lng));
+}
 async function geocode(q, curated){
+  try{
+    const items=await photonSearch(q);
+    if(items.length){ renderSuggest([...curated, ...items], false); return; }
+  }catch{ /* fall through to Nominatim */ }
   try{
     const url="https://nominatim.openstreetmap.org/search?format=json&limit=5&countrycodes=jp&q="+encodeURIComponent(q);
     const res=await fetch(url,{headers:{"Accept":"application/json"}});
     if(!res.ok) throw 0;
     const data=await res.json();
-    const geo=data.map(d=>({label:d.display_name.split(",")[0], sub:d.display_name, lat:+d.lat, lng:+d.lon, src:"map"}));
+    const geo=data.map(d=>({label:d.display_name.split(",")[0], sub:d.display_name.split(",").slice(1,3).join(","), lat:+d.lat, lng:+d.lon, src:"map"}));
     renderSuggest([...curated, ...geo], false);
-  }catch{ /* keep curated results; geocoder may be rate-limited */ }
+  }catch{ /* keep curated results; geocoders may be rate-limited */ }
 }
 function renderSuggest(items, partial){
   const box=document.getElementById("locSuggest");
@@ -1898,13 +1993,15 @@ function renderSuggest(items, partial){
   items.forEach(it=>{
     const row=document.createElement("div");
     row.className="loc-opt";
-    row.innerHTML=`<span>${esc(it.label)}</span>${it.city?`<span class="lo-city">${esc(it.city)}</span>`:`<span class="lo-src">${it.src==='list'?'List':'Map'}</span>`}`;
+    const right=[it.kind, it.city||it.sub].filter(Boolean).join(" · ") || (it.src==="list"?"List":"Map");
+    row.innerHTML=`<span>${esc(it.label)}</span><span class="lo-city">${esc(right)}</span>`;
     row.onclick=()=>{
       clearTimeout(searchTimer);  // stop a pending geocode from reopening the box
       state.pendingLoc={lat:it.lat, lng:it.lng, label:it.label};
       if(!document.getElementById("itemName").value) document.getElementById("itemName").value=it.label;
+      if(state.editing.kind==="activity" && it.cat) document.getElementById("actCat").value=it.cat;
       if(state.editing.kind==="stay" && !document.getElementById("stayCity").value)
-        document.getElementById("stayCity").value = it.city || nearestCity(state.pendingLoc);
+        document.getElementById("stayCity").value = it.city || it.sub || nearestCity(state.pendingLoc);
       document.getElementById("locInput").value=it.label;
       box.classList.remove("show");
       updatePickedLabel();
