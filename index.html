@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Meridian — Japan Trip Planner</title>
-<meta name="description" content="A shared Japan trip planner — plan stays and activities with friends on one map, find points of interest and photo spots, and see where your paths cross.">
+<title>Meridian — Asia Trip Planner</title>
+<meta name="description" content="A shared trip planner for Japan, Korea, China, and Thailand — plan stays and activities with friends on one map, find points of interest and photo spots, and see where your paths cross.">
 <meta name="theme-color" content="#f4f5f2">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%E2%9B%A9%EF%B8%8F%3C/text%3E%3C/svg%3E">
 <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
@@ -478,7 +478,7 @@
 <body>
 <div class="app">
   <header class="bar">
-    <div class="wordmark">Meridian<small>Japan · Trip Planner</small></div>
+    <div class="wordmark">Meridian<small>Asia · Trip Planner</small></div>
     <div class="trip-head">
       <input class="trip-title" id="tripTitle" value="Our Japan Trip" maxlength="48" aria-label="Trip name">
       <div class="trip-dates">
@@ -637,7 +637,7 @@
           <div class="field"><label>Arrive</label><input type="date" id="stayStart"></div>
           <div class="field"><label>Depart</label><input type="date" id="stayEnd"></div>
         </div>
-        <div class="field"><label>Cost per night &yen; (optional)</label><input type="text" id="stayCost" inputmode="numeric" placeholder="e.g. 12000"></div>
+        <div class="field"><label id="lblStayCost">Cost per night (optional)</label><input type="text" id="stayCost" inputmode="numeric" placeholder="e.g. 12000"></div>
       </div>
 
       <div id="actFields">
@@ -676,7 +676,7 @@
             </select>
           </div>
           <div class="field"><label>Hours (optional)</label><input type="text" id="actDur" placeholder="e.g. 2"></div>
-          <div class="field"><label>Est. cost &yen; (optional)</label><input type="text" id="actCost" inputmode="numeric" placeholder="e.g. 2000"></div>
+          <div class="field"><label id="lblActCost">Est. cost (optional)</label><input type="text" id="actCost" inputmode="numeric" placeholder="e.g. 2000"></div>
         </div>
         <div class="field"><label>Notes (optional)</label><textarea id="actNotes" placeholder="Reservations, who's keen, alternatives..."></textarea></div>
       </div>
@@ -692,7 +692,7 @@
 
 <script>
 /* ============================================================
-   Meridian — Japan trip planner
+   Meridian — Asia trip planner (Japan · Korea · China · Thailand)
    Data is kept in a shared key/value store (storage.js), one key
    per traveler, so anyone opening the site reads and writes the
    same trip. See config.js to hook up live sharing.
@@ -708,7 +708,20 @@ const CITIES = [
   ["Kobe",34.6901,135.1955],["Nagoya",35.1815,136.9066],["Kanazawa",36.5613,136.6562],
   ["Hiroshima",34.3853,132.4553],["Miyajima",34.2960,132.3199],["Fukuoka",33.5904,130.4017],
   ["Sapporo",43.0618,141.3545],["Himeji",34.8394,134.6939],["Uji",34.8844,135.7998],["Otaru",43.1907,140.9947],
-  ["Niseko",42.8048,140.6874],["Hakuba",36.6980,137.8320],["Furano",43.3420,142.3830]
+  ["Niseko",42.8048,140.6874],["Hakuba",36.6980,137.8320],["Furano",43.3420,142.3830],
+  // Korea
+  ["Seoul",37.5665,126.9780],["Busan",35.1796,129.0756],["Incheon",37.4563,126.7052],
+  ["Gyeongju",35.8562,129.2247],["Jeju",33.4996,126.5312],["Sokcho",38.2070,128.5918],
+  // China
+  ["Beijing",39.9042,116.4074],["Shanghai",31.2304,121.4737],["Xi'an",34.3416,108.9398],
+  ["Chengdu",30.5728,104.0668],["Guangzhou",23.1291,113.2644],["Shenzhen",22.5431,114.0579],
+  ["Hangzhou",30.2741,120.1551],["Suzhou",31.2989,120.5853],["Guilin",25.2342,110.1800],
+  ["Yangshuo",24.7786,110.4966],["Zhangjiajie",29.1170,110.4794],["Chongqing",29.5630,106.5516],
+  ["Hong Kong",22.3193,114.1694],["Macau",22.1987,113.5439],
+  // Thailand
+  ["Bangkok",13.7563,100.5018],["Chiang Mai",18.7883,98.9853],["Chiang Rai",19.9105,99.8406],
+  ["Ayutthaya",14.3532,100.5689],["Phuket",7.8804,98.3923],["Krabi",8.0863,98.9063],
+  ["Pattaya",12.9236,100.8825],["Ko Samui",9.5120,100.0136]
 ];
 
 /* curated well-known destinations with a category and short description, used for recommendations */
@@ -761,7 +774,54 @@ const PLACES = [
   P("Kitano Ijinkan",34.7010,135.1897,"Kobe","Culture","Hillside district of preserved Western merchant houses."),
   P("Nunobiki Herb Garden",34.7078,135.1830,"Kobe","Nature","Ropeway garden with harbor views above the city."),
   P("Byodo-in",34.8894,135.8078,"Uji","Culture","Phoenix Hall temple from the 10-yen coin; matcha nearby."),
-  P("Otaru Canal",43.1979,140.9942,"Otaru","Sightseeing","Gas-lit canal walk and glassworks; easy from Sapporo.")
+  P("Otaru Canal",43.1979,140.9942,"Otaru","Sightseeing","Gas-lit canal walk and glassworks; easy from Sapporo."),
+  // ----- Korea -----
+  P("Gyeongbokgung Palace",37.5796,126.9770,"Seoul","Culture","The Joseon dynasty's grand main palace; catch the changing of the guard."),
+  P("Bukchon Hanok Village",37.5826,126.9831,"Seoul","Culture","Hillside lanes of traditional hanok houses between the palaces."),
+  P("Changdeokgung Secret Garden",37.5794,126.9910,"Seoul","Culture","UNESCO palace whose wooded rear-garden tour is the highlight."),
+  P("N Seoul Tower",37.5512,126.9882,"Seoul","Sightseeing","Namsan hilltop tower with the classic city panorama."),
+  P("Myeongdong",37.5637,126.9838,"Seoul","Shopping","Street-food alleys and cosmetics flagships, elbow to elbow."),
+  P("Gwangjang Market",37.5701,126.9998,"Seoul","Food & drink","Century-old covered market for bindaetteok and mayak gimbap."),
+  P("Hongdae",37.5563,126.9220,"Seoul","Nightlife","Student quarter of buskers, bars, and late-night clubs."),
+  P("Lotte World Tower Seoul Sky",37.5126,127.1025,"Seoul","Sightseeing","123-floor observation deck, the country's tallest view."),
+  P("Gamcheon Culture Village",35.0975,129.0106,"Busan","Sightseeing","Rainbow hillside of stacked houses and art-filled alleys."),
+  P("Haeundae Beach",35.1587,129.1604,"Busan","Nature","Busan's big city beach, backed by seafood restaurants."),
+  P("Haedong Yonggungsa",35.1884,129.2233,"Busan","Culture","Rare seaside temple built into the rocks northeast of the city."),
+  P("Jagalchi Fish Market",35.0966,129.0306,"Busan","Food & drink","Korea's largest fish market — pick it downstairs, eat it upstairs."),
+  P("Bulguksa Temple",35.7900,129.3320,"Gyeongju","Culture","Silla-era UNESCO temple of stone terraces and twin pagodas."),
+  P("Seongsan Ilchulbong",33.4587,126.9426,"Jeju","Nature","Volcanic 'Sunrise Peak' crater rising straight from the sea."),
+  // ----- China -----
+  P("Great Wall at Mutianyu",40.4319,116.5704,"Beijing","Sightseeing","Restored, less-crowded wall section — with a toboggan ride down."),
+  P("Forbidden City",39.9163,116.3972,"Beijing","Culture","The vast Ming–Qing palace complex; book ahead, bring your passport."),
+  P("Temple of Heaven",39.8822,116.4066,"Beijing","Culture","Round prayer hall in a park full of morning tai chi."),
+  P("Summer Palace",39.9990,116.2755,"Beijing","Nature","Lakeside imperial retreat of bridges and covered walkways."),
+  P("Nanluoguxiang Hutongs",39.9366,116.4030,"Beijing","Culture","Old alley neighborhoods best wandered slowly or by bike."),
+  P("The Bund",31.2400,121.4900,"Shanghai","Sightseeing","Colonial riverfront facing the Pudong skyline — go at dusk."),
+  P("Yu Garden",31.2272,121.4921,"Shanghai","Culture","Classical Ming garden and bazaar in the old town."),
+  P("Shanghai Tower (Lujiazui)",31.2336,121.5055,"Shanghai","Sightseeing","Up the world's second-tallest building for the megacity view."),
+  P("Zhujiajiao Water Town",31.1109,121.0537,"Shanghai","Culture","Canals and stone bridges about an hour from downtown."),
+  P("Terracotta Army",34.3841,109.2785,"Xi'an","Culture","Thousands of life-size warriors guarding the first emperor."),
+  P("Xi'an City Wall",34.2658,108.9542,"Xi'an","Sightseeing","Rent a bike and ride the full 14 km loop atop the Ming wall."),
+  P("Muslim Quarter",34.2632,108.9380,"Xi'an","Food & drink","Biang biang noodles and lamb skewers in packed lanes."),
+  P("Chengdu Panda Base",30.7333,104.1500,"Chengdu","Nature","Go at morning feeding time — the cubs steal the show."),
+  P("Li River (Yangshuo)",24.7786,110.4966,"Yangshuo","Nature","Karst peaks over the river — the scene on the ¥20 note."),
+  P("Victoria Peak",22.2758,114.1455,"Hong Kong","Sightseeing","Tram up to the classic harbour panorama."),
+  P("Tian Tan Big Buddha",22.2540,113.9050,"Hong Kong","Culture","Giant bronze Buddha reached by the Ngong Ping cable car."),
+  // ----- Thailand -----
+  P("Grand Palace & Wat Phra Kaew",13.7500,100.4913,"Bangkok","Culture","Thailand's holiest temple and the glittering royal compound; dress modestly."),
+  P("Wat Pho",13.7465,100.4930,"Bangkok","Culture","The 46 m Reclining Buddha and a famous massage school."),
+  P("Wat Arun",13.7437,100.4889,"Bangkok","Culture","Riverside 'Temple of Dawn', prettiest lit up from across the water."),
+  P("Chatuchak Weekend Market",13.7999,100.5502,"Bangkok","Shopping","Fifteen thousand stalls — go early and follow the section map."),
+  P("Yaowarat (Chinatown)",13.7398,100.5090,"Bangkok","Food & drink","Neon street-food strip that wakes up after dark."),
+  P("Khao San Road",13.7588,100.4973,"Bangkok","Nightlife","The backpacker party street — love it or flee it."),
+  P("Jim Thompson House",13.7492,100.5283,"Bangkok","Culture","Teak houses and Thai silk, a calm oasis mid-city."),
+  P("Ayutthaya Historical Park",14.3560,100.5590,"Ayutthaya","Culture","Ruined temples of the old capital; the Buddha head wrapped in tree roots."),
+  P("Wat Phra That Doi Suthep",18.8048,98.9217,"Chiang Mai","Culture","Golden mountaintop temple overlooking the city."),
+  P("Chiang Mai Old City",18.7880,98.9860,"Chiang Mai","Culture","Wat Chedi Luang and dozens more temples inside the moat square."),
+  P("Chiang Mai Night Bazaar",18.7860,99.0000,"Chiang Mai","Shopping","Nightly sprawl of crafts, clothes, and street eats."),
+  P("Wat Rong Khun (White Temple)",19.8243,99.7583,"Chiang Rai","Culture","Blinding-white contemporary temple, utterly surreal."),
+  P("Railay Beach",8.0119,98.8372,"Krabi","Nature","Cliff-ringed peninsula reachable only by longtail boat."),
+  P("Phuket Big Buddha",7.8276,98.3128,"Phuket","Sightseeing","45 m marble Buddha with island-wide views.")
 ];
 /* derive interest tags from each place's category, name, and description */
 function autoTag(p){
@@ -895,7 +955,15 @@ const MORE = [
   M("Pokémon Center Sapporo",43.0686,141.3508,"Sapporo","Shopping","In Daimaru by Sapporo Station — Alolan Vulpix is the regional mascot.",["pokemon","anime","shopping"],"Pokémon_Center"),
   M("Pokémon Center Nagoya",35.1709,136.8815,"Nagoya","Shopping","In the Matsuzakaya Sakae complex in central Nagoya.",["pokemon","anime","shopping"],"Pokémon_Center"),
   M("Pokémon Center Fukuoka",33.5902,130.4207,"Fukuoka","Shopping","Inside JR Hakata City mall, right at the station.",["pokemon","anime","shopping"],"Pokémon_Center"),
-  M("Pokémon Center Hiroshima",34.3930,132.4596,"Hiroshima","Shopping","In the Sogo department store — regional Magikarp goods.",["pokemon","anime","shopping"],"Pokémon_Center")
+  M("Pokémon Center Hiroshima",34.3930,132.4596,"Hiroshima","Shopping","In the Sogo department store — regional Magikarp goods.",["pokemon","anime","shopping"],"Pokémon_Center"),
+  // beyond Japan: headline photo trips
+  M("Nami Island",37.7900,127.5250,"Seoul","Nature","Tree-lined lanes of K-drama fame, an easy day trip from Seoul.",["photo","nature"],"Namiseom","Korea"),
+  M("Seoraksan National Park",38.1194,128.4656,"Sokcho","Nature","Granite ridgelines and temples — Korea's most dramatic autumn colors.",["photo","nature"],"Seoraksan","Korea"),
+  M("Zhangjiajie National Forest Park",29.3155,110.4344,"Zhangjiajie","Nature","The 'Avatar' sandstone pillars, with cable cars and a glass bridge.",["photo","nature"],"Zhangjiajie_National_Forest_Park","China"),
+  M("Longji Rice Terraces",25.7580,110.1130,"Guilin","Nature","Dragon's-backbone terraces, best after rain or at golden harvest.",["photo","nature"],"Longsheng_Rice_Terrace","China"),
+  M("Jiufen-style Fenghuang Ancient Town",27.9481,109.5996,"Zhangjiajie","Culture","Stilted riverside houses lit by lanterns after dark.",["photo","culture"],"Fenghuang_County","China"),
+  M("Maya Bay (Ko Phi Phi)",7.6786,98.7654,"Krabi","Nature","'The Beach' cove, restored and visitor-capped — check the open season.",["photo","nature"],"Maya_Bay","Thailand"),
+  M("Wat Pha Lat jungle temple",18.8020,98.9320,"Chiang Mai","Culture","Mossy temple hidden on the monk's trail up Doi Suthep.",["photo","temple","nature"],"Wat_Pha_Lat","Thailand")
 ];
 
 const POINTS = [...PLACES, ...SPECIAL, ...MORE];
@@ -1005,7 +1073,7 @@ function classifyLeg(km){
   if(km <= 1.5) return { mode:"walk", label:"Walk", cls:"mode-walk", min: Math.max(4, Math.round(km/4.8*60)), cost: 0 };
   if(km <= 12) return { mode:"local", label:"Local transit", cls:"mode-local", min: Math.round(km/18*60 + 8), cost: 250 };
   if(km <= 120) return { mode:"regional", label:"Regional train", cls:"mode-regional", min: Math.round(km/70*60 + 20), cost: Math.round(km*18/10)*10 };
-  return { mode:"shink", label:"Shinkansen / long haul", cls:"mode-shink", min: Math.round(km/180*60 + 45), cost: Math.round(km*24/100)*100 };
+  return { mode:"shink", label:"High-speed rail / flight", cls:"mode-shink", min: Math.round(km/180*60 + 45), cost: Math.round(km*24/100)*100 };
 }
 function fmtMin(m){ return m >= 60 ? `${Math.floor(m/60)}h ${m%60}m` : `${m}m`; }
 
@@ -1220,7 +1288,7 @@ function openEdit(kind, person, id){
 
 /* ---------- map ---------- */
 function initMap(){
-  map = L.map("map", { zoomControl:true, attributionControl:true }).setView([35.4,137.0], 6);
+  map = L.map("map", { zoomControl:true, attributionControl:true }).setView([28.5,118.0], 4);
   L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
     attribution:'&copy; OpenStreetMap &copy; CARTO', subdomains:"abcd", maxZoom:19
   }).addTo(map);
@@ -1264,18 +1332,23 @@ function flyTo(loc){
 
 /* ---------- itinerary view (feasibility per person-day) ---------- */
 /* ---------- daily cost estimates ---------- */
-/* typical entry/ticket prices per category, used when no cost was entered */
+/* typical entry/ticket prices per category, used when no cost was entered.
+   These (and the transit fares) are Japan-calibrated yen, so they only apply
+   while the trip currency is ¥ — other currencies count entered costs only. */
 const CAT_COST = {"Sightseeing":2000, "Food & drink":2500, "Culture":1500, "Nature":500, "Shopping":0, "Nightlife":4000, "Travel":0, "Other":0};
-function fmtYen(n){ return "¥" + Math.round(n).toLocaleString("en-US"); }
+const CURRENCIES = ["¥","₩","CN¥","฿","$","€","£"];
+function curSym(){ return state.trip.currency || "¥"; }
+function fmtYen(n){ return curSym() + Math.round(n).toLocaleString("en-US"); }
 function hasCost(x){ return x.cost !== undefined && x.cost !== null && x.cost !== "" && !isNaN(+x.cost); }
 function dayCost(p, date, plan){
   plan = plan || dayPlan(p, date);
+  const jpy = curSym()==="¥";
   let v = 0, est = false;
   for(const a of plan.acts){
     if(hasCost(a)) v += +a.cost;
-    else { const d = CAT_COST[a.category] || 0; v += d; if(d) est = true; }
+    else if(jpy){ const d = CAT_COST[a.category] || 0; v += d; if(d) est = true; }
   }
-  for(const lg of plan.legs){ v += lg.cost; if(lg.cost) est = true; }
+  if(jpy) for(const lg of plan.legs){ v += lg.cost; if(lg.cost) est = true; }
   if(plan.stay && hasCost(plan.stay)) v += +plan.stay.cost;   // nightly rate, per covered day
   return { v, est };
 }
@@ -1327,7 +1400,7 @@ function renderItinerary(){
   if(totals.length){
     head += `<div class="cost-line">Estimated trip cost: ${totals.map(x=>
       `<span class="cost-chip"><span class="dot" style="background:${x.p.color}"></span>${esc(x.p.name)} <b>${x.t.est?"~":""}${fmtYen(x.t.v)}</b></span>`).join("")}
-      <span class="cost-note" title="Activity costs use the amount you entered, or a typical price for the category when blank. Transit legs use rough fares. Hotels count only when a nightly cost is set on the stay.">what's counted?</span></div>`;
+      <span class="cost-note" title="Activity costs use the amount you entered. With the trip currency set to ¥, blanks get typical Japan prices and transit legs get rough fares; in other currencies only entered costs count. Hotels count only when a nightly cost is set on the stay.">what's counted?</span></div>`;
   }
   if(state.me && state.people[state.me.name]) head += suggestionCards(state.people[state.me.name]);
   if(!dates.length){ wrap.innerHTML = head + '<div class="list-empty">Set your trip dates in the header to build the day-by-day itinerary.</div>'; wireSuggestions(wrap); return; }
@@ -1381,7 +1454,7 @@ function renderPersonDay(p, date, plan){
       <div class="stop"><div class="sname">${esc(s.name)}${s.anchor?' <span style="color:var(--ink-faint);font-weight:400">· base</span>':''}</div>${s.time?`<div class="stime">${esc(s.time)}</div>`:''}</div></div>`;
     if(!last){
       const lg = legs[i];
-      html += `<div class="leg-travel"><span class="mode-tag ${lg.cls}">${lg.label}</span>${lg.km.toFixed(1)} km · ~${fmtMin(lg.min)}${lg.cost?` · ~${fmtYen(lg.cost)}`:""}</div>`;
+      html += `<div class="leg-travel"><span class="mode-tag ${lg.cls}">${lg.label}</span>${lg.km.toFixed(1)} km · ~${fmtMin(lg.min)}${lg.cost&&curSym()==="¥"?` · ~${fmtYen(lg.cost)}`:""}</div>`;
     }
   });
   html += `</div></div>`;
@@ -1482,9 +1555,9 @@ function acrossJapanSection(p){
   if(!chosen.length) return "";
   const byRegion = {};
   for(const pt of chosen){ (byRegion[pt.region] = byRegion[pt.region]||[]).push(pt); }
-  const order = ["Hokkaido","Tohoku","Kanto","Chubu","Kansai","Chugoku","Shikoku","Kyushu","Okinawa"];
+  const order = ["Hokkaido","Tohoku","Kanto","Chubu","Kansai","Chugoku","Shikoku","Kyushu","Okinawa","Korea","China","Thailand"];
   const regions = Object.keys(byRegion).sort((a,b)=>order.indexOf(a)-order.indexOf(b));
-  const label = interests.length ? "Across Japan, matched to your interests" : "Photo spots across Japan";
+  const label = interests.length ? "Farther afield, matched to your interests" : "Photo spots farther afield";
   let html = `<div class="eyebrow explore-sec">${esc(label)}</div><p class="across-note">Farther-flung spots worth a dedicated trip. Each shows an example photo so you can judge whether it earns the journey. Adding one drops it on your start date to slot in later.</p>`;
   for(const region of regions){
     html += `<div class="region-label">${esc(region)}</div><div class="rec-grid">`;
@@ -1803,65 +1876,101 @@ function groupRanges(days){
 }
 function consecutive(a,b){ const da=parseISO(a); da.setDate(da.getDate()+1); return iso(da)===b; }
 
-/* ---------- before-you-go checklist ---------- */
+/* ---------- before-you-go checklist ----------
+   Groups tagged with a country code only appear when that country is toggled
+   on for the trip (stored in the shared trip meta). */
+const COUNTRIES = [["JP","Japan"],["KR","Korea"],["CN","China"],["TH","Thailand"]];
 const CHECKLIST = [
-  ["Documents", [
-    ["passport","Passport is valid","Valid for your whole stay — renew now if it expires soon after the trip."],
-    ["visa","Visa rules checked","Many nationalities (US, UK, EU, CA, AU…) get 90 visa-free days for tourism — confirm yours on the official list.","https://www.mofa.go.jp/j_info/visit/visa/short/novisa.html"],
-    ["vjw","Visit Japan Web filled in","Pre-register immigration and customs online to get QR codes that skip the paper forms on arrival.","https://services.digital.go.jp/en/visit-japan-web/"],
-    ["insurance","Travel insurance sorted","Japanese healthcare is excellent but not free for visitors — check what your policy covers abroad."]
+  ["Documents", null, [
+    ["passport","Passport is valid","Valid for your whole stay — renew now if it expires soon after the trip. Some countries also want 6 months' validity."],
+    ["insurance","Travel insurance sorted","Care abroad is rarely free for visitors — check what your policy covers, including any islands and adventure days."]
   ]],
-  ["Money", [
-    ["bank","Bank knows you're traveling","So your card isn't frozen on the first konbini run; check foreign transaction fees while you're at it."],
-    ["cash","Some yen in cash","Smaller restaurants, shrines, and markets are often cash-only. 7-Eleven and post-office ATMs take foreign cards."],
-    ["ic","IC card ready (Suica / PASMO)","Add one to Apple or Google Wallet before you land — it pays for trains, buses, vending machines, and konbini."]
+  ["Money & phone", null, [
+    ["bank","Bank knows you're traveling","So your card isn't frozen on the first purchase; check foreign transaction fees while you're at it."],
+    ["cash","Some local cash arranged","Markets, small eateries, shrines, and temples across Asia often run cash-only. Airport ATMs beat airport exchange desks."],
+    ["esim","eSIM or roaming plan arranged","Buy before you fly so you have data the moment you land in each country."],
+    ["offline","Offline maps & translation downloaded","Download offline map areas and language packs for everywhere you're going before the flight."]
   ]],
-  ["Phone & apps", [
-    ["esim","eSIM or pocket WiFi arranged","Buy a Japan eSIM before flying so you have data the moment you land."],
-    ["offline","Offline maps & translation downloaded","Grab the Japan area in Google Maps and the Japanese pack in Google Translate for tunnels and dead zones."]
+  ["Packing & health", null, [
+    ["meds","Medications checked per country","Rules differ by country and Japan is notably strict (pseudoephedrine, ADHD stimulants) — check each stop and carry prescriptions.","https://www.mhlw.go.jp/english/policy/health-medical/pharmaceuticals/01.html"],
+    ["plug","Plug adapters packed","Japan uses Type A at 100V, Korea Type C/F at 220V, China Type A/C/I at 220V, Thailand mixed A/C at 220V — one universal adapter covers the lot."],
+    ["extras","Little extras packed","A coin pouch and a small hand towel go a long way — change piles up and plenty of restrooms have no dryers."]
   ]],
-  ["Getting around", [
-    ["railpass","Rail passes compared","The nationwide JR Pass only pays off with lots of long-haul travel — regional passes are often better value. Do the math against your itinerary."],
+  ["Japan", "JP", [
+    ["visa","Japan entry rules checked","Many nationalities (US, UK, EU, CA, AU…) get 90 visa-free days for tourism — confirm yours on the official list.","https://www.mofa.go.jp/j_info/visit/visa/short/novisa.html"],
+    ["vjw","Visit Japan Web filled in","Pre-register immigration and customs online for QR codes that skip the paper forms on arrival.","https://services.digital.go.jp/en/visit-japan-web/"],
+    ["ic","IC card ready (Suica / PASMO)","Add one to Apple or Google Wallet before you land — it pays for trains, buses, vending machines, and konbini."],
+    ["railpass","Rail passes compared","The nationwide JR Pass only pays off with lots of long-haul travel — regional passes are often better value."],
     ["shink","Shinkansen luggage rule checked","Suitcases over 160&thinsp;cm combined (H+W+D) need a reserved oversized-baggage seat on Tokaido/Sanyo/Kyushu shinkansen."]
   ]],
-  ["Health & extras", [
-    ["meds","Medications checked","Some common medicines (e.g. pseudoephedrine, ADHD stimulants) are restricted in Japan — check the rules and carry prescriptions.","https://www.mhlw.go.jp/english/policy/health-medical/pharmaceuticals/01.html"],
-    ["plug","Plug adapter packed","Japan uses flat two-prong Type A plugs at 100V — US plugs fit; most others need an adapter."],
-    ["extras","Little extras packed","A coin pouch and a small hand towel go a long way — change piles up fast and many restrooms have no dryers."]
+  ["Korea", "KR", [
+    ["keta","K-ETA / entry rules checked","Some nationalities need a K-ETA authorization before flying, others are temporarily exempt — check the official site for yours.","https://www.k-eta.go.kr/portal/apply/index.do"],
+    ["tmoney","T-money card planned","The tap card for subways, buses, taxis, and convenience stores — buy one at any airport or CU/GS25."],
+    ["navermap","Naver Map or Kakao Map installed","Google Maps barely routes in Korea — locals use Naver Map (English UI available) or KakaoMap."]
+  ]],
+  ["China", "CN", [
+    ["cnvisa","China visa / transit rules checked","Visa-free entry has been expanding but rules vary a lot by nationality — check your embassy, or the 240-hour visa-free transit option."],
+    ["alipay","Alipay or WeChat Pay set up","China is nearly cashless and foreign cards rarely work directly — link your card in Alipay (easiest for visitors) before you go."],
+    ["cnnet","Internet plan sorted","Many apps (Google, WhatsApp, Instagram) are blocked on local networks — a foreign roaming eSIM sidesteps that; set it up before arrival."],
+    ["cnrail","High-speed rail booking understood","Book trains on Trip.com or the official 12306 app — you'll need your passport, and it doubles as your ticket."]
+  ]],
+  ["Thailand", "TH", [
+    ["thvisa","Thailand entry + arrival card checked","Many nationalities get visa-exempt stays; everyone needs the online Thailand Digital Arrival Card (TDAC) before landing.","https://tdac.immigration.go.th"],
+    ["grab","Grab installed","The ride-hailing app that spares you taxi haggling; it does food delivery too."],
+    ["thdress","Temple dress code planned","Shoulders and knees covered for temples and the Grand Palace — pack a light cover-up; some rentals exist but queues are long."]
   ]]
 ];
-const CHECKLIST_TOTAL = CHECKLIST.reduce((n,[,items])=>n+items.length, 0);
+function activeCountries(){
+  const c = state.trip.countries;
+  return Array.isArray(c) && c.length ? c : ["JP"];
+}
+function visibleChecklist(){
+  const on = activeCountries();
+  return CHECKLIST.filter(([,country])=>!country || on.includes(country));
+}
 function checklistDone(p){
   const c = p.checklist||{};
-  return CHECKLIST.reduce((n,[,items])=>n+items.filter(([id])=>c[id]).length, 0);
+  return visibleChecklist().reduce((n,[,,items])=>n+items.filter(([id])=>c[id]).length, 0);
 }
 function renderChecklist(){
   const wrap = document.getElementById("checkInner");
+  const on = activeCountries();
   let head = `<h2>Before you go</h2><p class="lede">The boring-but-important stuff, so nobody hits the airport unprepared. Tick things off as you sort them — everyone on the trip can see each other's progress.</p>`;
+  head += `<div class="chip-pick" style="margin-bottom:16px">${COUNTRIES.map(([code,name])=>
+    `<button type="button" class="chip ${on.includes(code)?'on':''}" data-country="${code}">${name}</button>`).join("")}</div>`;
+  const total = visibleChecklist().reduce((n,[,,items])=>n+items.length, 0);
   const people = Object.values(state.people);
   if(people.length){
     head += `<div class="ck-progress">` + people.map(p=>{
       const done = checklistDone(p);
-      const pct = Math.round(done/CHECKLIST_TOTAL*100);
-      return `<div class="ck-person"><span class="dot" style="background:${p.color}"></span>${esc(p.name)} <span class="ck-count">${done}/${CHECKLIST_TOTAL}</span><div class="ck-bar"><div style="width:${pct}%"></div></div></div>`;
+      const pct = Math.round(done/total*100);
+      return `<div class="ck-person"><span class="dot" style="background:${p.color}"></span>${esc(p.name)} <span class="ck-count">${done}/${total}</span><div class="ck-bar"><div style="width:${pct}%"></div></div></div>`;
     }).join("") + `</div>`;
   }
-  if(!state.me || !state.people[state.me.name]){
-    wrap.innerHTML = head + '<div class="list-empty">Add yourself to the trip to start ticking things off.</div>';
-    return;
-  }
-  const mine = state.people[state.me.name].checklist || {};
+  const rec = state.me && state.people[state.me.name];
   let body = "";
-  for(const [group, items] of CHECKLIST){
-    body += `<div class="eyebrow explore-sec">${esc(group)}</div>`;
-    for(const [id, title, sub, link] of items){
-      body += `<label class="ck-row ${mine[id]?'done':''}"><input type="checkbox" data-check="${id}" ${mine[id]?'checked':''}>
-        <div><div class="ck-title">${esc(title)}</div><div class="ck-sub">${sub}${link?` <a href="${link}" target="_blank" rel="noopener">Official info</a>`:''}</div></div></label>`;
+  if(!rec){
+    body = '<div class="list-empty">Add yourself to the trip to start ticking things off.</div>';
+  } else {
+    const mine = rec.checklist || {};
+    for(const [group, country, items] of visibleChecklist()){
+      body += `<div class="eyebrow explore-sec">${esc(group)}</div>`;
+      for(const [id, title, sub, link] of items){
+        body += `<label class="ck-row ${mine[id]?'done':''}"><input type="checkbox" data-check="${id}" ${mine[id]?'checked':''}>
+          <div><div class="ck-title">${esc(title)}</div><div class="ck-sub">${sub}${link?` <a href="${link}" target="_blank" rel="noopener">Official info</a>`:''}</div></div></label>`;
+      }
     }
   }
   wrap.innerHTML = head + body;
+  wrap.querySelectorAll("[data-country]").forEach(b=> b.onclick = async()=>{
+    let c = [...activeCountries()];
+    if(c.includes(b.dataset.country)) c = c.filter(x=>x!==b.dataset.country);
+    else c.push(b.dataset.country);
+    if(!c.length) c = [b.dataset.country];  // never zero countries
+    state.trip.countries = c;
+    await saveTrip(); render();
+  });
   wrap.querySelectorAll("[data-check]").forEach(cb=> cb.onchange = async()=>{
-    const rec = state.people[state.me.name];
     (rec.checklist = rec.checklist||{})[cb.dataset.check] = cb.checked;
     await saveMe(); render();
   });
@@ -1974,14 +2083,15 @@ function renderExpenses(){
   const wrap=document.getElementById("expInner");
   // don't rebuild the form under someone's cursor mid-entry
   if(wrap.contains(document.activeElement) && document.activeElement.tagName==="INPUT") return;
-  let head=`<h2>Expenses</h2><p class="lede">Log what you paid for and who it covered — balances and the simplest way to settle up work themselves out. Amounts are yen.</p>`;
+  let head=`<h2>Expenses</h2><p class="lede">Log what you paid for and who it covered — balances and the simplest way to settle up work themselves out. Everything is in one trip currency (${esc(curSym())}); change it below if you're not splitting in yen.</p>`;
   if(!state.me || !state.people[state.me.name]){ wrap.innerHTML=head+'<div class="list-empty">Add yourself to the trip first.</div>'; return; }
   const names=Object.keys(state.people);
   let form=`<div class="exp-form" id="expForm">
     <div class="field-row">
       <div class="field" style="flex:2"><label>What</label><input type="text" id="expDesc" placeholder="e.g. Dinner in Dotonbori" maxlength="60"></div>
-      <div class="field"><label>Amount &yen;</label><input type="text" id="expAmt" inputmode="numeric" placeholder="e.g. 8400"></div>
+      <div class="field"><label>Amount ${esc(curSym())}</label><input type="text" id="expAmt" inputmode="numeric" placeholder="e.g. 8400"></div>
       <div class="field"><label>Day</label><input type="date" id="expDate" value="${iso(new Date())}"></div>
+      <div class="field" style="flex:0 0 92px"><label>Currency</label><select id="expCur">${CURRENCIES.map(c=>`<option ${curSym()===c?"selected":""}>${c}</option>`).join("")}</select></div>
     </div>
     <div class="field"><label>Split between</label><div class="chip-pick" id="expWho">${names.map(n=>`<button type="button" class="chip on" data-expwho="${esc(n)}">${esc(n)}</button>`).join("")}</div></div>
     <button class="btn primary" id="expAdd" style="flex:0">Add expense</button>
@@ -2013,6 +2123,7 @@ function renderExpenses(){
   }
   wrap.innerHTML=head+form+bal+list;
   wrap.querySelectorAll("[data-expwho]").forEach(b=>b.onclick=()=>b.classList.toggle("on"));
+  document.getElementById("expCur").onchange=async(e)=>{ state.trip.currency=e.target.value; await saveTrip(); render(); };
   document.getElementById("expAdd").onclick=async()=>{
     const desc=document.getElementById("expDesc").value.trim();
     const amount=parseCost(document.getElementById("expAmt").value);
@@ -2262,6 +2373,8 @@ function openItem(kind, existing){
     setFlexMode(existing && !existing.date && f ? (f.type==="options"?"options":"range") : "fixed");
     renderOptDays();
   }
+  document.getElementById("lblActCost").textContent = "Est. cost "+curSym()+" (optional)";
+  document.getElementById("lblStayCost").textContent = "Cost per night "+curSym()+" (optional)";
   updatePickedLabel();
   document.getElementById("itemScrim").classList.add("show");
 }
@@ -2367,13 +2480,14 @@ function osmCategory(key, value){
 }
 /* Photon: typo-tolerant OSM autocomplete that understands POIs (resorts,
    restaurants, shrines); bbox keeps results inside Japan */
+const SEARCH_COUNTRIES = ["JP","KR","CN","HK","MO","TH"];
 async function photonSearch(q){
-  const url="https://photon.komoot.io/api/?limit=6&lang=en&bbox=122.5,24.0,146.5,45.8&q="+encodeURIComponent(q);
+  const url="https://photon.komoot.io/api/?limit=6&lang=en&bbox=73,5,147,54&q="+encodeURIComponent(q);
   const res=await fetch(url);
   if(!res.ok) throw 0;
   const data=await res.json();
   return (data.features||[])
-    .filter(f=>!f.properties.countrycode || f.properties.countrycode==="JP")
+    .filter(f=>!f.properties.countrycode || SEARCH_COUNTRIES.includes(f.properties.countrycode))
     .map(f=>{
       const p=f.properties, [lng,lat]=f.geometry.coordinates;
       const place=p.city||p.town||p.village||p.county||p.state||"";
@@ -2388,7 +2502,7 @@ async function geocode(q, curated){
     if(items.length){ renderSuggest([...curated, ...items], false); return; }
   }catch{ /* fall through to Nominatim */ }
   try{
-    const url="https://nominatim.openstreetmap.org/search?format=json&limit=5&countrycodes=jp&q="+encodeURIComponent(q);
+    const url="https://nominatim.openstreetmap.org/search?format=json&limit=5&countrycodes=jp,kr,cn,hk,mo,th&q="+encodeURIComponent(q);
     const res=await fetch(url,{headers:{"Accept":"application/json"}});
     if(!res.ok) throw 0;
     const data=await res.json();
