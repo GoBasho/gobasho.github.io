@@ -83,6 +83,13 @@ read and edit the trip data. For a trip planner shared among friends that's
 usually fine, but don't put anything sensitive in it (passport numbers,
 booking references, etc.).
 
+## Running the tests
+
+`node tests/run.js` runs unit tests on the app's core functions plus
+end-to-end flows (adding plans, transit, currency display, two-user sync) in
+headless Chromium, with all external services mocked. It needs Playwright:
+`npm i playwright && npx playwright install chromium`.
+
 ## The files
 
 | File | What it is |

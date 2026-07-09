@@ -249,6 +249,7 @@
   .leg .rail-dot { display: flex; flex-direction: column; align-items: center; flex-shrink: 0; padding-top: 3px; }
   .leg .rail-dot .rd { width: 9px; height: 9px; border-radius: 50%; border: 2px solid var(--ink-faint); background: #fff; }
   .leg .rail-dot .rd.anchor { background: var(--ink-faint); }
+  .leg .rail-dot .rd.transit { border-color: var(--indigo); background: #e4ecf2; border-radius: 3px; }
   .leg .rail-dot .rline { width: 2px; flex: 1; background: var(--line-strong); min-height: 18px; }
   .leg .stop { padding-bottom: 4px; }
   .leg .stop .sname { font-size: 13px; font-weight: 500; }
@@ -391,6 +392,7 @@
   .cost-chip { display: inline-flex; align-items: center; gap: 6px; }
   .cost-chip b { color: var(--ink); font-weight: 600; }
   .cost-note { font-size: 11px; color: var(--ink-faint); border-bottom: 1px dotted var(--ink-faint); cursor: help; }
+  .fx { color: var(--ink-faint); font-weight: 400; font-size: .92em; white-space: nowrap; }
 
   /* before-you-go checklist */
   .ck-progress { display: flex; flex-wrap: wrap; gap: 12px 26px; margin-bottom: 10px; }
@@ -542,6 +544,10 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21V8l9-5 9 5v13"/><path d="M9 21v-6h6v6"/></svg>
             Stay
           </button>
+          <button class="btn" id="addTransit">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="3" width="14" height="14" rx="3"/><path d="M5 11h14M9 17l-2 4M15 17l2 4"/><circle cx="9" cy="14" r=".5"/><circle cx="15" cy="14" r=".5"/></svg>
+            Transit
+          </button>
         </div>
       </div>
 
@@ -656,6 +662,13 @@
         <div class="loc-picked none" id="locPicked">No location set</div>
       </div>
 
+      <div id="transitFields" style="display:none;">
+        <div class="field-row">
+          <div class="field"><label>From (optional)</label><input type="text" id="transFrom" placeholder="e.g. Tokyo Station" maxlength="40"></div>
+          <div class="field"><label>To (optional)</label><input type="text" id="transTo" placeholder="e.g. Kyoto Station" maxlength="40"></div>
+        </div>
+      </div>
+
       <div id="stayFields" style="display:none;">
         <div class="field">
           <label>City</label>
@@ -696,7 +709,7 @@
           <div class="field-hint">Happens once somewhere in this window — place it on the Prep board when you're ready.</div>
         </div>
         <div class="field-row">
-          <div class="field">
+          <div class="field" id="fldCat">
             <label>Category</label>
             <select id="actCat">
               <option>Sightseeing</option><option>Food &amp; drink</option><option>Culture</option>
@@ -1218,6 +1231,7 @@ async function loadEveryone(){
   state.people = fresh;
   if(state.me && !state.people[state.me.name]){
     state.people[state.me.name] = { name: state.me.name, color: state.me.color, stays: [], activities: [], dayTrips: {}, interests: [], updated: Date.now() };
+    state._justJoined = true;
   }
 }
 
@@ -1427,7 +1441,7 @@ function renderRailList(){
     wrap.appendChild(itemRow({
       color: a.color, title: a.title, tick: a.color,
       sub: a.date
-        ? `${a.time?a.time+' · ':''}${a.category||'Activity'}${state.selectedDate?'':' · '+shortDate(a.date)} · ${a.person}`
+        ? `${a.time?a.time+' · ':''}${a.transit?('Transit'+(a.from||a.to?` · ${a.from||'…'} → ${a.to||'…'}`:'')):(a.category||'Activity')}${state.selectedDate?'':' · '+shortDate(a.date)} · ${a.person}`
         : `Flexible · ${flexLabel(a)} · ${a.person}`,
       onDel: canEdit(a.person) ? () => removeItem("activity", a.person, a.id) : null,
       onEdit: canEdit(a.person) ? () => openEdit("activity", a.person, a.id) : null,
@@ -1453,7 +1467,7 @@ function openEdit(kind, person, id){
   if(!canEdit(person)) return;
   const rec = state.people[person];
   const item = kind==="stay" ? (rec.stays||[]).find(s=>s.id===id) : (rec.activities||[]).find(a=>a.id===id);
-  if(item) openItem(kind, item);
+  if(item) openItem(kind==="activity" && item.transit ? "transit" : kind, item);
 }
 
 /* ---------- map ---------- */
@@ -1509,6 +1523,39 @@ const CAT_COST = {"Sightseeing":2000, "Food & drink":2500, "Culture":1500, "Natu
 const CURRENCIES = ["¥","₩","CN¥","฿","€","£","$","CHF","kr","zł","Kč","₹","₫","S$","HK$","NT$","A$"];
 function curSym(){ return state.trip.currency || "¥"; }
 function fmtYen(n){ return curSym() + Math.round(n).toLocaleString("en-US"); }
+
+/* ---------- second-currency display (default USD) ----------
+   Costs stay in the trip's local currency; a per-browser preference adds an
+   approximate conversion next to them. Rates come from open.er-api.com,
+   cached for a day. */
+const CUR_ISO={"¥":"JPY","₩":"KRW","CN¥":"CNY","฿":"THB","€":"EUR","£":"GBP","$":"USD","CHF":"CHF","kr":"SEK","zł":"PLN","Kč":"CZK","₹":"INR","₫":"VND","S$":"SGD","HK$":"HKD","NT$":"TWD","A$":"AUD"};
+const ISO_SYM={USD:"$",EUR:"€",GBP:"£",JPY:"¥",KRW:"₩",CNY:"CN¥",THB:"฿",AUD:"A$",CAD:"C$",SGD:"S$",HKD:"HK$",TWD:"NT$",INR:"₹",CHF:"CHF",SEK:"kr",PLN:"zł",CZK:"Kč",VND:"₫"};
+const DISPLAY_CURS=["USD","EUR","GBP","JPY","KRW","CNY","THB","AUD","CAD","SGD","CHF","INR"];
+function displayCur(){ try { return localStorage.getItem("meridian:display-currency") || "USD"; } catch { return "USD"; } }
+let fxRates=null, fxBase=null;
+async function loadFx(){
+  const base=CUR_ISO[curSym()]||"USD";
+  if(fxBase===base && fxRates) return;
+  try {
+    const cached=JSON.parse(localStorage.getItem("meridian:fx:"+base)||"null");
+    if(cached && Date.now()-cached.ts < 864e5){ fxRates=cached.rates; fxBase=base; return; }
+  } catch {}
+  try {
+    const res=await fetch("https://open.er-api.com/v6/latest/"+base);
+    const data=await res.json();
+    if(data && data.rates){
+      fxRates=data.rates; fxBase=base;
+      try { localStorage.setItem("meridian:fx:"+base, JSON.stringify({ts:Date.now(), rates:data.rates})); } catch {}
+    }
+  } catch { /* offline: skip conversions this session */ }
+}
+function approxDisp(n){
+  const d=displayCur(), base=CUR_ISO[curSym()]||"USD";
+  if(d===base || !fxRates || fxBase!==base || !fxRates[d]) return "";
+  const v=n*fxRates[d];
+  const shown=v>=100 ? Math.round(v) : Math.round(v*10)/10;
+  return ` <span class="fx">&approx;&thinsp;${ISO_SYM[d]||d}${shown.toLocaleString("en-US")}</span>`;
+}
 function hasCost(x){ return x.cost !== undefined && x.cost !== null && x.cost !== "" && !isNaN(+x.cost); }
 function dayCost(p, date, plan){
   plan = plan || dayPlan(p, date);
@@ -1518,7 +1565,9 @@ function dayCost(p, date, plan){
     if(hasCost(a)) v += +a.cost;
     else if(jpy){ const d = CAT_COST[a.category] || 0; v += d; if(d) est = true; }
   }
-  if(jpy) for(const lg of plan.legs){ v += lg.cost; if(lg.cost) est = true; }
+  // once someone logs real transit with a cost that day, drop the auto fare guesses
+  const manualTransit = plan.acts.some(a=>a.transit && hasCost(a));
+  if(jpy && !manualTransit) for(const lg of plan.legs){ v += lg.cost; if(lg.cost) est = true; }
   if(plan.stay && hasCost(plan.stay)) v += +plan.stay.cost;   // nightly rate, per covered day
   return { v, est };
 }
@@ -1537,7 +1586,7 @@ function dayPlan(p, date){
   const stay = (p.stays||[]).find(s=>stayCoversDate(s,date) && s.location);
   // order the day: by explicit time when given, otherwise nearest-neighbour from the hotel
   const anchor = stay ? {name: stay.hotelName||stay.city, loc: stay.location, anchor:true} : null;
-  let stops = acts.map(a=>({name:a.title, loc:a.location, time:a.time}));
+  let stops = acts.map(a=>({name:a.title, loc:a.location, time:a.time, act:a}));
   const timed = stops.filter(s=>s.time).sort((a,b)=>a.time.localeCompare(b.time));
   const untimed = stops.filter(s=>!s.time);
   if(anchor && untimed.length){
@@ -1569,7 +1618,7 @@ function renderItinerary(){
   const totals = visiblePeople().map(p=>({p, t:tripTotalCost(p)})).filter(x=>x.t.v>0);
   if(totals.length){
     head += `<div class="cost-line">Estimated trip cost: ${totals.map(x=>
-      `<span class="cost-chip"><span class="dot" style="background:${x.p.color}"></span>${esc(x.p.name)} <b>${x.t.est?"~":""}${fmtYen(x.t.v)}</b></span>`).join("")}
+      `<span class="cost-chip"><span class="dot" style="background:${x.p.color}"></span>${esc(x.p.name)} <b>${x.t.est?"~":""}${fmtYen(x.t.v)}</b>${approxDisp(x.t.v)}</span>`).join("")}
       <span class="cost-note" title="Activity costs use the amount you entered. With the trip currency set to ¥, blanks get typical Japan prices and transit legs get rough fares; in other currencies only entered costs count. Hotels count only when a nightly cost is set on the stay.">what's counted?</span></div>`;
   }
   if(state.me && state.people[state.me.name]) head += suggestionCards(state.people[state.me.name]);
@@ -1609,7 +1658,7 @@ function renderPersonDay(p, date, plan){
   const stopCount = sequence.filter(s=>!s.anchor).length;
   const verdict = trip ? {cls:"trip", text:"Day trip to "+trip} : dayVerdict(stopCount, cities.size, maxLeg);
   const cost = dayCost(p, date, plan);
-  const costChip = cost.v > 0 ? `<span class="daycost" title="Entered costs plus typical prices for the rest; hotel counts when its nightly cost is set">${cost.est?"~":""}${fmtYen(cost.v)}</span>` : "";
+  const costChip = cost.v > 0 ? `<span class="daycost" title="Entered costs plus typical prices for the rest; hotel counts when its nightly cost is set">${cost.est?"~":""}${fmtYen(cost.v)}${approxDisp(cost.v)}</span>` : "";
 
   let html = `<div class="person-day"><div class="pd-head"><span class="swatch" style="background:${p.color}"></span><span class="pdn">${esc(p.name)}</span><span class="verdict ${verdict.cls}">${esc(verdict.text)}</span>${costChip}</div>`;
   if(stopCount === 0){
@@ -1621,8 +1670,10 @@ function renderPersonDay(p, date, plan){
   html += `<div class="route">`;
   sequence.forEach((s,i)=>{
     const last = i===sequence.length-1;
-    html += `<div class="leg"><div class="rail-dot"><span class="rd ${s.anchor?'anchor':''}"></span>${last?'':'<span class="rline"></span>'}</div>
-      <div class="stop"><div class="sname">${esc(s.name)}${s.anchor?' <span style="color:var(--ink-faint);font-weight:400">· base</span>':''}</div>${s.time?`<div class="stime">${esc(s.time)}</div>`:''}</div></div>`;
+    const tr = s.act && s.act.transit;
+    const trMeta = tr ? [ [s.act.from,s.act.to].filter(Boolean).join(" → "), s.time, hasCost(s.act)?fmtYen(+s.act.cost):"" ].filter(Boolean).join(" · ") : "";
+    html += `<div class="leg"><div class="rail-dot"><span class="rd ${s.anchor?'anchor':''} ${tr?'transit':''}"></span>${last?'':'<span class="rline"></span>'}</div>
+      <div class="stop"><div class="sname">${tr?'<span class="mode-tag mode-local">Transit</span> ':''}${esc(s.name)}${s.anchor?' <span style="color:var(--ink-faint);font-weight:400">· base</span>':''}</div>${tr?(trMeta?`<div class="stime">${esc(trMeta)}</div>`:''):(s.time?`<div class="stime">${esc(s.time)}</div>`:'')}</div></div>`;
     if(!last){
       const lg = legs[i];
       html += `<div class="leg-travel"><span class="mode-tag ${lg.cls}">${lg.label}</span>${lg.km.toFixed(1)} km · ~${fmtMin(lg.min)}${lg.cost&&curSym()==="¥"?` · ~${fmtYen(lg.cost)}`:""}</div>`;
@@ -2428,7 +2479,7 @@ function renderPrep(){
     if(end<start){ toast("Leg ends before it starts"); return; }
     const name=document.getElementById("legName").value.trim() || (COUNTRIES.find(c=>c[0]===country)||[,country])[1];
     (state.trip.legs=state.trip.legs||[]).push({id:uid(), country, name, start, end});
-    if(!activeCountries().includes(country)) (state.trip.countries=activeCountries()).push(country);
+    state.trip.countries=[...new Set([...(state.trip.countries||["JP"]), country])];
     state._legForm=false;
     await saveTrip(); render();
     toast("Leg added — its country's checklist items are now active");
@@ -2511,6 +2562,7 @@ function renderExpenses(){
       <div class="field"><label>Amount ${esc(curSym())}</label><input type="text" id="expAmt" inputmode="numeric" placeholder="e.g. 8400"></div>
       <div class="field"><label>Day</label><input type="date" id="expDate" value="${iso(new Date())}"></div>
       <div class="field" style="flex:0 0 92px"><label>Currency</label><select id="expCur">${CURRENCIES.map(c=>`<option ${curSym()===c?"selected":""}>${c}</option>`).join("")}</select></div>
+      <div class="field" style="flex:0 0 110px"><label>Show also in</label><select id="dispCur">${DISPLAY_CURS.map(c=>`<option ${displayCur()===c?"selected":""}>${c}</option>`).join("")}</select></div>
     </div>
     <div class="field"><label>Split between</label><div class="chip-pick" id="expWho">${names.map(n=>`<button type="button" class="chip on" data-expwho="${esc(n)}">${esc(n)}</button>`).join("")}</div></div>
     <button class="btn primary" id="expAdd" style="flex:0">Add expense</button>
@@ -2522,9 +2574,9 @@ function renderExpenses(){
     bal=`<div class="eyebrow explore-sec">Where things stand</div><div class="coord-card">
       <div style="margin-bottom:8px">${names.map(n=>{
         const v=Math.round(net[n]);
-        return `<span class="net-chip"><span class="dot" style="background:${state.people[n].color}"></span>${esc(n)} <span class="${v>=0?"net-pos":"net-neg"}">${v>=0?"+":"−"}${fmtYen(Math.abs(v))}</span></span>`;
+        return `<span class="net-chip"><span class="dot" style="background:${state.people[n].color}"></span>${esc(n)} <span class="${v>=0?"net-pos":"net-neg"}">${v>=0?"+":"−"}${fmtYen(Math.abs(v))}</span>${approxDisp(Math.abs(v))}</span>`;
       }).join("")}</div>
-      ${transfers.length ? transfers.map(([f,t,x])=>`<div class="settle-line"><span class="dot" style="background:${state.people[f].color}"></span><b>${esc(f)}</b> pays <b>${esc(t)}</b> ${fmtYen(x)}</div>`).join("") : '<div class="settle-line">All square — nobody owes anything.</div>'}
+      ${transfers.length ? transfers.map(([f,t,x])=>`<div class="settle-line"><span class="dot" style="background:${state.people[f].color}"></span><b>${esc(f)}</b> pays <b>${esc(t)}</b> ${fmtYen(x)}${approxDisp(x)}</div>`).join("") : '<div class="settle-line">All square — nobody owes anything.</div>'}
     </div>`;
   }
   let list=`<div class="eyebrow explore-sec">Everything logged <span class="count">${exps.length}</span></div>`;
@@ -2535,14 +2587,15 @@ function renderExpenses(){
       const who=(e.for&&e.for.length&&e.for.length<names.length)?` · for ${e.for.map(esc).join(", ")}`:"";
       list+=`<div class="exp-row"><span class="dot" style="background:${e.color}"></span>
         <div class="xdesc">${esc(e.desc||"Expense")}<div class="xmeta">${e.date?shortDate(e.date)+" · ":""}paid by ${esc(e.by)}${who}</div></div>
-        <span class="xamt">${fmtYen(+e.amount||0)}</span>
+        <span class="xamt">${fmtYen(+e.amount||0)}${approxDisp(+e.amount||0)}</span>
         ${canEdit(e.by)?`<button class="idel" style="opacity:1" title="Remove" data-expdel="${e.id}">&times;</button>`:""}</div>`;
     }
     list+=`</div>`;
   }
   wrap.innerHTML=head+form+bal+list;
   wrap.querySelectorAll("[data-expwho]").forEach(b=>b.onclick=()=>b.classList.toggle("on"));
-  document.getElementById("expCur").onchange=async(e)=>{ state.trip.currency=e.target.value; await saveTrip(); render(); };
+  document.getElementById("expCur").onchange=async(e)=>{ state.trip.currency=e.target.value; await saveTrip(); await loadFx(); render(); };
+  document.getElementById("dispCur").onchange=async(e)=>{ try{ localStorage.setItem("meridian:display-currency", e.target.value); }catch{} await loadFx(); render(); };
   document.getElementById("expAdd").onclick=async()=>{
     const desc=document.getElementById("expDesc").value.trim();
     const amount=parseCost(document.getElementById("expAmt").value);
@@ -2760,16 +2813,25 @@ function openItem(kind, existing){
   state.editing = {kind, id: existing ? existing.id : null};
   state.pendingLoc = existing ? existing.location : null;
   const isStay = kind==="stay";
+  const isTransit = kind==="transit";
   document.getElementById("itemTitle").textContent = existing
-    ? (isStay?"Edit stay":"Edit activity")
-    : (isStay?"Add a stay":"Add an activity");
+    ? (isStay?"Edit stay":isTransit?"Edit transit":"Edit activity")
+    : (isStay?"Add a stay":isTransit?"Add transit":"Add an activity");
   document.getElementById("itemSubtitle").textContent = isStay
     ? "Where you're based, and for which dates. It becomes a hotel marker."
+    : isTransit
+    ? "A train, bus, or ferry leg — the location pin is where it takes you."
     : "A place you'd like to visit, on a given day.";
   document.getElementById("stayFields").style.display = isStay?"block":"none";
   document.getElementById("actFields").style.display = isStay?"none":"block";
+  document.getElementById("transitFields").style.display = isTransit?"block":"none";
+  document.getElementById("fldCat").style.display = isTransit?"none":"block";
   document.getElementById("fldTitle").style.display = isStay?"none":"block";
-  document.getElementById("lblTitle").textContent = "What is it";
+  document.getElementById("lblTitle").textContent = isTransit?"Line / train / bus":"What is it";
+  document.getElementById("itemName").placeholder = isTransit?"e.g. Nozomi 24, JR Yamanote, Airport Limousine":"e.g. Fushimi Inari Shrine";
+  document.getElementById("locInput").placeholder = isTransit?"Arrival station or stop":"Search a place, or click the map";
+  document.getElementById("transFrom").value = existing && existing.from ? existing.from : "";
+  document.getElementById("transTo").value = existing && existing.to ? existing.to : "";
   // reset fields, or prefill when editing
   document.getElementById("itemName").value = existing && !isStay ? existing.title : "";
   document.getElementById("locInput").value = existing ? (isStay ? (existing.hotelName||"") : ((existing.location||{}).label||"")) : "";
@@ -2837,10 +2899,16 @@ async function saveItem(){
       if(e<s){ toast("Window ends before it starts"); return; }
       flex={type:"range", start:s, end:e};
     }
+    const isTransit = kind==="transit";
     const a={ id:editId||uid(), title, location:state.pendingLoc, date, flex,
       time, durationH:document.getElementById("actDur").value,
-      category:document.getElementById("actCat").value, notes:document.getElementById("actNotes").value.trim(),
+      category:isTransit?"Travel":document.getElementById("actCat").value, notes:document.getElementById("actNotes").value.trim(),
       cost: parseCost(document.getElementById("actCost").value) };
+    if(isTransit){
+      a.transit=true;
+      a.from=document.getElementById("transFrom").value.trim();
+      a.to=document.getElementById("transTo").value.trim();
+    }
     if(editId){ const i=rec.activities.findIndex(x=>x.id===editId); if(i>=0) rec.activities[i]=a; else rec.activities.push(a); }
     else rec.activities.push(a);
     if(!date){ await saveMe(); document.getElementById("itemScrim").classList.remove("show"); state._didFit=false; render(); toast("Added — pick its day on the Prep board"); return; }
@@ -3010,6 +3078,7 @@ function wire(){
   document.getElementById("meChip").onclick = openProfile;
   document.getElementById("addActivity").onclick = ()=>openItem("activity");
   document.getElementById("addStay").onclick = ()=>openItem("stay");
+  document.getElementById("addTransit").onclick = ()=>openItem("transit");
   document.getElementById("clearDay").onclick = ()=>{ state.selectedDate=null; render(); };
 
   document.getElementById("profileSave").onclick = saveProfile;
@@ -3068,8 +3137,10 @@ async function boot(){
       } catch {}
     }
     await loadEveryone();
-    if(state.me && state.people[state.me.name]) await saveMe();  // announce yourself on this trip
+    // announce yourself only when this trip didn't know you yet
+    if(state._justJoined){ state._justJoined=false; await saveMe(); }
   }
+  loadFx().then(()=>{ if(fxRates) render(); });  // second-currency rates, async
   render();
   // frame the trip's home region unless existing pins already framed the map
   if(!state._didFit) applyHomeView();
