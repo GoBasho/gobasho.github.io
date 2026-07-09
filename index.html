@@ -451,8 +451,10 @@
   .tm-item.on { font-weight: 600; }
   .tm-item.on::after { content: "✓"; color: var(--indigo); }
   .tm-item .tm-id { font-size: 10.5px; color: var(--ink-faint); overflow: hidden; text-overflow: ellipsis; }
-  .tm-new { display: flex; gap: 7px; padding: 10px 12px 6px; }
-  .tm-new input { flex: 1; border: 1px solid var(--line-strong); border-radius: 7px; padding: 7px 9px; font-size: 12.5px; }
+  .tm-new { display: flex; flex-wrap: wrap; gap: 7px; padding: 10px 12px 6px; }
+  .tm-new input { flex: 1 1 130px; border: 1px solid var(--line-strong); border-radius: 7px; padding: 7px 9px; font-size: 12.5px; }
+  .tm-new select, .tm-home select { border: 1px solid var(--line-strong); border-radius: 7px; padding: 6px 8px; font-size: 12px; background: var(--surface); }
+  .tm-home { display: flex; align-items: center; gap: 8px; padding: 10px 13px; font-size: 12.5px; color: var(--ink-soft); border-bottom: 1px solid var(--line); background: var(--sky); }
 
   /* trip legs */
   .legs-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 16px; }
@@ -2265,9 +2267,14 @@ async function createOrJoinTrip(){
   const name=document.getElementById("tmName").value.trim();
   if(!name){ toast("Give the trip a name"); return; }
   const id=slugTrip(name);
+  const home=document.getElementById("tmNewHome").value;
   try {
     const existing=await window.storage.getFrom(id, "trip:meta");
-    if(!existing) await window.storage.putIn(id, "trip:meta", JSON.stringify({title:name, start:"", end:""}));
+    if(!existing){
+      const meta={title:name, start:"", end:"", home};
+      if(COUNTRIES.some(c=>c[0]===home)) meta.countries=[home];
+      await window.storage.putIn(id, "trip:meta", JSON.stringify(meta));
+    }
   } catch { toast("Couldn't reach the shared database"); return; }
   switchTrip(id);
 }
@@ -2290,10 +2297,19 @@ async function openTripsMenu(){
       if(m && m.value){ const t=JSON.parse(m.value); if(t.title) title=t.title; } } catch {}
     rows.push({id, title});
   }
+  const homeOpts=sel=>HOMES.map(h=>`<option value="${h[0]}" ${sel===h[0]?"selected":""}>${h[1]}</option>`).join("");
   menu.innerHTML = rows.map(x=>`<button class="tm-item ${x.id===cur?"on":""}" data-trip="${esc(x.id)}"><span>${esc(x.title)}</span><span class="tm-id">${esc(x.id)}</span></button>`).join("")
-    + `<div class="tm-new"><input type="text" id="tmName" placeholder="New or friend's trip name…" maxlength="40"><button class="mini-btn" id="tmGo">Go</button></div>
-       <div class="field-hint" style="padding:2px 13px 10px">Friends who enter the same name land in the same trip. Each trip has its own people, plans, dates, currency, and expenses.</div>`;
+    + `<div class="tm-home">This trip explores <select id="tmHome">${homeOpts(tripHome())}</select></div>
+       <div class="tm-new"><input type="text" id="tmName" placeholder="New or friend's trip name…" maxlength="40"><select id="tmNewHome" title="Where the new trip goes">${homeOpts("WORLD")}</select><button class="mini-btn" id="tmGo">Go</button></div>
+       <div class="field-hint" style="padding:2px 13px 10px">Friends who enter the same name land in the same trip. Each trip has its own destination, people, plans, dates, currency, and expenses — Europe belongs in its own trip.</div>`;
   menu.querySelectorAll("[data-trip]").forEach(b=>b.onclick=()=>{ if(b.dataset.trip!==cur) switchTrip(b.dataset.trip); });
+  document.getElementById("tmHome").onchange=async(e)=>{
+    state.trip.home=e.target.value;
+    await saveTrip();
+    applyHomeView(); render();
+    menu.classList.remove("show");
+    toast("Trip focused on "+(homeDef(e.target.value)||[])[1]);
+  };
   document.getElementById("tmGo").onclick=createOrJoinTrip;
   document.getElementById("tmName").addEventListener("keydown", e=>{ if(e.key==="Enter") createOrJoinTrip(); });
 }
@@ -2301,6 +2317,41 @@ async function openTripsMenu(){
 /* ---------- trip legs: side-trip windows inside one trip ---------- */
 const FLAGS={JP:"\u{1F1EF}\u{1F1F5}", KR:"\u{1F1F0}\u{1F1F7}", CN:"\u{1F1E8}\u{1F1F3}", TH:"\u{1F1F9}\u{1F1ED}",
   GB:"\u{1F1EC}\u{1F1E7}", FR:"\u{1F1EB}\u{1F1F7}", IT:"\u{1F1EE}\u{1F1F9}", ES:"\u{1F1EA}\u{1F1F8}", DE:"\u{1F1E9}\u{1F1EA}", EU:"\u{1F1EA}\u{1F1FA}"};
+
+/* ---------- trip home region: where this trip lives on the map ----------
+   [code, label, mapCenter, mapZoom, searchBbox(minLon,minLat,maxLon,maxLat)]
+   The bbox is generous on purpose — a Japan trip still sees Korea and the
+   Chinese coast; a France trip still sees its neighbors. */
+const HOMES = [
+  ["JP","Japan",[36.5,138.0],5,[122,24,150,46]],
+  ["KR","Korea",[36.3,127.8],6,[122,32,133,44]],
+  ["CN","China",[34.0,105.0],4,[73,18,135,54]],
+  ["TH","Thailand",[13.5,101.0],5,[92,5,110,21]],
+  ["SEA","Southeast Asia",[8.0,105.0],4,[92,-11,127,24]],
+  ["GB","United Kingdom",[54.0,-2.5],5,[-11,49,3,61]],
+  ["FR","France",[46.6,2.5],5,[-5,41,10,52]],
+  ["IT","Italy",[42.5,12.5],5,[6,36,19,47.5]],
+  ["ES","Spain",[40.0,-3.5],5,[-10,35,5,44]],
+  ["DE","Germany",[51.0,10.3],5,[5,46,16,56]],
+  ["EU","Europe (all)",[48.0,10.0],4,[-11,34,32,61]],
+  ["AS","Asia (all)",[30.0,100.0],3,[60,-11,150,55]],
+  ["WORLD","Whole world",[34.0,55.0],3,null]
+];
+function homeDef(code){ return HOMES.find(h=>h[0]===code); }
+function tripHome(){
+  if(state.trip.home && homeDef(state.trip.home)) return state.trip.home;
+  const c=(state.trip.countries||[]).find(x=>homeDef(x));   // older trips: infer from countries
+  return c || "WORLD";
+}
+function homeBbox(){ const h=homeDef(tripHome()); return h ? h[4] : null; }
+function inHomeBox(lat,lng){
+  const b=homeBbox();
+  return !b || (lng>=b[0] && lat>=b[1] && lng<=b[2] && lat<=b[3]);
+}
+function applyHomeView(){
+  const h=homeDef(tripHome());
+  if(map && h) map.setView(h[2], h[3]);
+}
 function legForDate(d){
   for(const l of (state.trip.legs||[])) if(l.start && l.end && d>=l.start && d<=l.end) return l;
   return null;
@@ -2808,10 +2859,14 @@ let searchTimer=null;
 function curatedMatches(q){
   const terms=q.toLowerCase().split(/\s+/).map(t=>t.replace(/(ing|s)$/,"")).filter(t=>t.length>=2);
   if(!terms.length) return [];
-  return POINTS.filter(p=>{
+  const all=POINTS.filter(p=>{
     const hay=(p.name+" "+p.city+" "+p.cat+" "+(p.tags||[]).join(" ")).toLowerCase();
     return terms.every(t=>hay.includes(t));
-  }).slice(0,6).map(p=>({label:p.name, lat:p.lat, lng:p.lng, city:p.city, kind:p.cat, cat:p.cat==="Pokémon"||p.cat==="Photography"?"Sightseeing":p.cat, src:"list"}));
+  });
+  // prefer matches inside the trip's home region; fall back to global hits
+  const local=all.filter(p=>inHomeBox(p.lat,p.lng));
+  return (local.length?local:all).slice(0,6)
+    .map(p=>({label:p.name, lat:p.lat, lng:p.lng, city:p.city, kind:p.cat, cat:p.cat==="Pokémon"||p.cat==="Photography"?"Sightseeing":p.cat, src:"list"}));
 }
 function onLocInput(){
   const q=document.getElementById("locInput").value.trim();
@@ -2850,7 +2905,8 @@ function osmCategory(key, value){
 /* Photon: typo-tolerant OSM autocomplete that understands POIs (resorts,
    restaurants, shrines); bbox keeps results inside Japan */
 async function photonSearch(q){
-  const url="https://photon.komoot.io/api/?limit=7&lang=en&q="+encodeURIComponent(q);
+  const bb=homeBbox();
+  const url="https://photon.komoot.io/api/?limit=7&lang=en"+(bb?"&bbox="+bb.join(","):"")+"&q="+encodeURIComponent(q);
   const res=await fetch(url);
   if(!res.ok) throw 0;
   const data=await res.json();
@@ -2869,7 +2925,10 @@ async function geocode(q, curated){
     if(items.length){ renderSuggest([...curated, ...items], false); return; }
   }catch{ /* fall through to Nominatim */ }
   try{
-    const url="https://nominatim.openstreetmap.org/search?format=json&limit=5&q="+encodeURIComponent(q);
+    const bb=homeBbox();
+    const url="https://nominatim.openstreetmap.org/search?format=json&limit=5"
+      +(bb?`&viewbox=${bb[0]},${bb[3]},${bb[2]},${bb[1]}&bounded=1`:"")
+      +"&q="+encodeURIComponent(q);
     const res=await fetch(url,{headers:{"Accept":"application/json"}});
     if(!res.ok) throw 0;
     const data=await res.json();
@@ -3012,6 +3071,8 @@ async function boot(){
     if(state.me && state.people[state.me.name]) await saveMe();  // announce yourself on this trip
   }
   render();
+  // frame the trip's home region unless existing pins already framed the map
+  if(!state._didFit) applyHomeView();
   if(!state.me) openProfile();
   // gentle background refresh so collaborators' changes appear
   if(hasStore) setInterval(async()=>{
