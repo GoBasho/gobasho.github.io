@@ -13,7 +13,7 @@ window.MERIDIAN_CONFIG = {
   // "https://our-japan-trip-default-rtdb.asia-southeast1.firebasedatabase.app")
   // or simply the console page link (console.firebase.google.com/...) — both work.
   // Leave as "" to keep everything local to each person's browser.
-  firebaseUrl: "https://console.firebase.google.com/project/gojapan-2e7da/database/gojapan-2e7da-default-rtdb/data/~2F",
+  firebaseUrl: "https://gojapan-2e7da-default-rtdb.firebaseio.com",
 
   // A name that keeps your trip's data separate from anything else in the
   // database. Change it if you ever want to start a fresh trip.
