@@ -1,0 +1,1760 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Meridian — Japan Trip Planner</title>
+<link rel="stylesheet" href="vendor/leaflet/leaflet.css">
+<script src="vendor/leaflet/leaflet.js"></script>
+<script src="config.js"></script>
+<script src="storage.js"></script>
+<style>
+  :root {
+    --ink: #14171f;
+    --ink-soft: #454b5a;
+    --ink-faint: #8b909c;
+    --paper: #f4f5f2;
+    --surface: #ffffff;
+    --line: #e2e3dd;
+    --line-strong: #cfd0c8;
+    --shu: #c8483c;
+    --shu-dim: #e9d3cf;
+    --indigo: #2e5e7e;
+    --sky: #f0f2ee;
+    --shadow: 0 1px 2px rgba(20,23,31,.04), 0 8px 24px rgba(20,23,31,.06);
+    --radius: 10px;
+    --serif: "Hiragino Mincho ProN", "Yu Mincho", "YuMincho", Georgia, "Times New Roman", serif;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    font-family: var(--sans);
+    color: var(--ink);
+    background: var(--paper);
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+  button { font-family: inherit; cursor: pointer; }
+  input, select, textarea { font-family: inherit; font-size: 14px; }
+
+  /* ---------- layout shell ---------- */
+  .app { display: flex; flex-direction: column; height: 100vh; }
+
+  header.bar {
+    display: flex; align-items: center; gap: 20px;
+    padding: 12px 22px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--line);
+    flex-shrink: 0;
+    z-index: 500;
+  }
+  .wordmark {
+    font-family: var(--serif);
+    font-size: 21px;
+    letter-spacing: .04em;
+    line-height: 1;
+    padding-right: 20px;
+    border-right: 1px solid var(--line);
+  }
+  .wordmark small {
+    display: block;
+    font-family: var(--sans);
+    font-size: 9px;
+    letter-spacing: .32em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    margin-top: 5px;
+  }
+  .trip-head { display: flex; flex-direction: column; min-width: 0; }
+  .trip-title {
+    font-family: var(--serif);
+    font-size: 17px;
+    border: none; background: transparent; color: var(--ink);
+    padding: 2px 4px; margin-left: -4px; border-radius: 4px;
+    max-width: 340px;
+  }
+  .trip-title:hover { background: var(--sky); }
+  .trip-title:focus { outline: 2px solid var(--indigo); background: var(--surface); }
+  .trip-dates { display: flex; align-items: center; gap: 6px; color: var(--ink-faint); font-size: 12px; padding-left: 4px; }
+  .trip-dates input {
+    border: none; background: transparent; color: var(--ink-soft); font-size: 12px;
+    padding: 1px 3px; border-radius: 4px; width: 116px;
+  }
+  .trip-dates input:hover { background: var(--sky); }
+
+  .tabs { display: flex; gap: 2px; margin-left: auto; background: var(--paper); padding: 3px; border-radius: 8px; }
+  .tab {
+    border: none; background: transparent; color: var(--ink-soft);
+    padding: 7px 15px; border-radius: 6px; font-size: 13px; font-weight: 500;
+    letter-spacing: .01em;
+  }
+  .tab.active { background: var(--surface); color: var(--ink); box-shadow: var(--shadow); }
+
+  .me-chip {
+    display: flex; align-items: center; gap: 8px;
+    padding: 5px 12px 5px 8px; border: 1px solid var(--line); border-radius: 999px;
+    background: var(--surface); font-size: 12.5px; font-weight: 500;
+  }
+  .me-chip:hover { border-color: var(--line-strong); }
+  .dot { width: 11px; height: 11px; border-radius: 50%; flex-shrink: 0; }
+
+  /* ---------- main body ---------- */
+  .body { flex: 1; display: flex; min-height: 0; }
+  aside.rail {
+    width: 320px; flex-shrink: 0;
+    background: var(--surface);
+    border-right: 1px solid var(--line);
+    overflow-y: auto;
+    display: flex; flex-direction: column;
+  }
+  .rail-section { padding: 18px 20px; border-bottom: 1px solid var(--line); }
+  .rail-section:last-child { border-bottom: none; }
+  .eyebrow {
+    font-size: 10px; letter-spacing: .18em; text-transform: uppercase;
+    color: var(--ink-faint); font-weight: 600; margin: 0 0 12px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .eyebrow .count { color: var(--ink-faint); font-weight: 500; letter-spacing: 0; }
+
+  .add-row { display: flex; gap: 8px; }
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+    border: 1px solid var(--line-strong); background: var(--surface); color: var(--ink);
+    padding: 9px 12px; border-radius: 8px; font-size: 13px; font-weight: 500; flex: 1;
+  }
+  .btn:hover { border-color: var(--ink-soft); }
+  .btn svg { width: 14px; height: 14px; }
+  .btn.primary { background: var(--ink); color: #fff; border-color: var(--ink); }
+  .btn.primary:hover { background: #000; }
+  .btn.ghost { border-color: transparent; background: transparent; padding: 6px 8px; flex: 0; color: var(--ink-soft); }
+  .btn.ghost:hover { background: var(--sky); }
+  .btn.wide { width: 100%; flex: none; }
+
+  /* people list */
+  .person {
+    display: flex; align-items: center; gap: 10px; padding: 8px 6px; border-radius: 7px;
+  }
+  .person:hover { background: var(--sky); }
+  .person .swatch { width: 22px; height: 22px; border-radius: 6px; flex-shrink: 0; }
+  .person .pname { font-size: 13px; font-weight: 500; }
+  .person .pmeta { font-size: 11px; color: var(--ink-faint); }
+  .person.hidden { opacity: .4; }
+  .person .vis {
+    width: 26px; height: 22px; border: none; background: transparent; color: var(--ink-faint);
+    display: flex; align-items: center; justify-content: center; border-radius: 5px;
+  }
+  .person .vis:hover { background: var(--line); color: var(--ink); }
+  .you-tag { font-size: 9px; letter-spacing: .1em; text-transform: uppercase; color: var(--shu); border: 1px solid var(--shu-dim); padding: 1px 5px; border-radius: 4px; }
+
+  /* date filter strip */
+  .datestrip { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; margin: 0 -2px; }
+  .datechip {
+    flex-shrink: 0; border: 1px solid var(--line); background: var(--surface); border-radius: 8px;
+    padding: 7px 10px; text-align: center; min-width: 46px; color: var(--ink-soft);
+  }
+  .datechip:hover { border-color: var(--line-strong); }
+  .datechip.active { background: var(--indigo); border-color: var(--indigo); color: #fff; }
+  .datechip .dow { display: block; font-size: 9px; letter-spacing: .08em; text-transform: uppercase; opacity: .8; }
+  .datechip .dnum { display: block; font-family: var(--serif); font-size: 16px; line-height: 1.3; }
+  .datechip .dcount { display: block; font-size: 9px; opacity: .75; height: 10px; }
+
+  .list-empty { color: var(--ink-faint); font-size: 12.5px; line-height: 1.6; padding: 4px 2px; }
+
+  /* item rows in rail */
+  .item {
+    display: flex; gap: 10px; padding: 9px 8px; border-radius: 8px; align-items: flex-start;
+  }
+  .item:hover { background: var(--sky); }
+  .item .tick { width: 3px; align-self: stretch; border-radius: 2px; margin-top: 2px; margin-bottom: 2px; flex-shrink: 0; }
+  .item .ibody { flex: 1; min-width: 0; }
+  .item .ititle { font-size: 13px; font-weight: 500; }
+  .item .isub { font-size: 11.5px; color: var(--ink-faint); margin-top: 1px; }
+  .item .idel { opacity: 0; border: none; background: transparent; color: var(--ink-faint); padding: 2px 4px; border-radius: 4px; font-size: 15px; line-height: 1; }
+  .item:hover .idel { opacity: 1; }
+  .item .idel:hover { background: var(--shu-dim); color: var(--shu); }
+
+  /* ---------- map ---------- */
+  .stage { flex: 1; position: relative; min-width: 0; }
+  #map { position: absolute; inset: 0; background: var(--sky); }
+  .leaflet-container { font-family: var(--sans); }
+  .pin-pick-note {
+    position: absolute; top: 14px; left: 50%; transform: translateX(-50%);
+    background: var(--ink); color: #fff; padding: 8px 16px; border-radius: 999px;
+    font-size: 12.5px; z-index: 600; box-shadow: var(--shadow); display: none; align-items: center; gap: 10px;
+  }
+  .pin-pick-note.show { display: flex; }
+  .pin-pick-note button { border: none; background: rgba(255,255,255,.18); color: #fff; border-radius: 6px; padding: 3px 9px; font-size: 11px; }
+
+  .map-legend {
+    position: absolute; bottom: 16px; left: 16px; z-index: 550;
+    background: rgba(255,255,255,.94); border: 1px solid var(--line); border-radius: 10px;
+    padding: 12px 14px; box-shadow: var(--shadow); max-width: 210px;
+    backdrop-filter: blur(6px);
+  }
+  .map-legend .eyebrow { margin-bottom: 8px; }
+  .legrow { display: flex; align-items: center; gap: 8px; font-size: 12px; padding: 2px 0; }
+  .legrow .dot { width: 9px; height: 9px; }
+  .legrow.type { color: var(--ink-soft); }
+  .marker-pin {
+    width: 24px; height: 24px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg);
+    border: 2px solid #fff; box-shadow: 0 2px 5px rgba(0,0,0,.3);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .marker-pin.stay { border-radius: 5px; transform: none; }
+  .marker-pin span { transform: rotate(45deg); color: #fff; font-size: 10px; font-weight: 700; }
+  .marker-pin.stay span { transform: none; }
+
+  .leaflet-popup-content-wrapper { border-radius: 10px; }
+  .pop { font-family: var(--sans); }
+  .pop h4 { margin: 0 0 3px; font-size: 13.5px; font-family: var(--serif); }
+  .pop .pmeta { font-size: 11.5px; color: var(--ink-faint); }
+  .pop .who { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; margin-top: 5px; }
+
+  /* ---------- panel views (itinerary / coordination) ---------- */
+  .panel { flex: 1; overflow-y: auto; padding: 26px 32px; }
+  .panel-inner { max-width: 860px; margin: 0 auto; }
+  .panel h2 {
+    font-family: var(--serif); font-size: 24px; font-weight: 400; margin: 0 0 4px;
+  }
+  .panel .lede { color: var(--ink-soft); margin: 0 0 26px; font-size: 13.5px; }
+
+  .day-block { margin-bottom: 30px; }
+  .day-head { display: flex; align-items: baseline; gap: 12px; padding-bottom: 8px; border-bottom: 1.5px solid var(--ink); margin-bottom: 4px; }
+  .day-head .dh-num { font-family: var(--serif); font-size: 20px; }
+  .day-head .dh-dow { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-faint); }
+
+  .person-day { padding: 14px 0; border-bottom: 1px solid var(--line); }
+  .person-day:last-child { border-bottom: none; }
+  .pd-head { display: flex; align-items: center; gap: 9px; margin-bottom: 4px; }
+  .pd-head .swatch { width: 16px; height: 16px; border-radius: 5px; }
+  .pd-head .pdn { font-weight: 600; font-size: 13.5px; }
+  .verdict {
+    margin-left: auto; font-size: 11.5px; padding: 3px 10px; border-radius: 999px; font-weight: 500;
+  }
+  .verdict.good { background: #e6efe8; color: #3a6b4a; }
+  .verdict.warn { background: #f6eede; color: #8a6a2f; }
+  .verdict.split { background: var(--shu-dim); color: var(--shu); }
+  .verdict.rest { background: var(--sky); color: var(--ink-faint); }
+
+  .route { margin: 10px 0 4px; padding-left: 4px; }
+  .leg { display: flex; align-items: flex-start; gap: 12px; }
+  .leg .rail-dot { display: flex; flex-direction: column; align-items: center; flex-shrink: 0; padding-top: 3px; }
+  .leg .rail-dot .rd { width: 9px; height: 9px; border-radius: 50%; border: 2px solid var(--ink-faint); background: #fff; }
+  .leg .rail-dot .rd.anchor { background: var(--ink-faint); }
+  .leg .rail-dot .rline { width: 2px; flex: 1; background: var(--line-strong); min-height: 18px; }
+  .leg .stop { padding-bottom: 4px; }
+  .leg .stop .sname { font-size: 13px; font-weight: 500; }
+  .leg .stop .stime { font-size: 11px; color: var(--ink-faint); }
+  .leg-travel { font-size: 11.5px; color: var(--ink-soft); padding: 2px 0 8px 21px; display: flex; align-items: center; gap: 8px; }
+  .mode-tag { font-size: 10px; letter-spacing: .05em; text-transform: uppercase; padding: 2px 7px; border-radius: 5px; font-weight: 600; }
+  .mode-walk { background: #e6efe8; color: #3a6b4a; }
+  .mode-local { background: #e4ecf2; color: #2e5e7e; }
+  .mode-regional { background: #efe8dc; color: #8a6a2f; }
+  .mode-shink { background: var(--shu-dim); color: var(--shu); }
+
+  .coord-card {
+    border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 18px; margin-bottom: 14px;
+    background: var(--surface); box-shadow: var(--shadow);
+  }
+  .coord-card .cc-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .coord-card .cc-people { display: flex; align-items: center; gap: 6px; font-weight: 600; font-size: 14px; }
+  .coord-card .cc-where { margin-left: auto; font-size: 12px; color: var(--ink-faint); }
+  .coord-card .cc-line { font-size: 12.5px; color: var(--ink-soft); padding: 3px 0; display: flex; gap: 8px; }
+  .coord-card .cc-line b { color: var(--ink); font-weight: 600; }
+
+  /* ---------- modal ---------- */
+  .scrim {
+    position: fixed; inset: 0; background: rgba(20,23,31,.42); z-index: 900;
+    display: none; align-items: center; justify-content: center; padding: 20px;
+    backdrop-filter: blur(2px);
+  }
+  .scrim.show { display: flex; }
+  .modal {
+    background: var(--surface); border-radius: 14px; width: 100%; max-width: 460px;
+    box-shadow: 0 24px 60px rgba(20,23,31,.28); max-height: 90vh; overflow: hidden;
+    display: flex; flex-direction: column;
+  }
+  .modal.wide { max-width: 540px; }
+  .modal-head { padding: 20px 24px 6px; }
+  .modal-head h3 { font-family: var(--serif); font-size: 19px; font-weight: 400; margin: 0; }
+  .modal-head p { color: var(--ink-faint); font-size: 12.5px; margin: 4px 0 0; }
+  .modal-body { padding: 14px 24px; overflow-y: auto; }
+  .modal-foot { padding: 14px 24px 20px; display: flex; gap: 10px; justify-content: flex-end; border-top: 1px solid var(--line); }
+
+  .field { margin-bottom: 14px; }
+  .field label { display: block; font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-faint); font-weight: 600; margin-bottom: 6px; }
+  .field input[type=text], .field input[type=date], .field input[type=time], .field select, .field textarea {
+    width: 100%; border: 1px solid var(--line-strong); border-radius: 8px; padding: 9px 11px; background: var(--surface); color: var(--ink);
+  }
+  .field input:focus, .field select:focus, .field textarea:focus { outline: 2px solid var(--indigo); border-color: var(--indigo); }
+  .field textarea { resize: vertical; min-height: 54px; }
+  .field-row { display: flex; gap: 12px; }
+  .field-row .field { flex: 1; }
+
+  .loc-box { position: relative; }
+  .loc-suggest {
+    position: absolute; top: 100%; left: 0; right: 0; z-index: 20; margin-top: 4px;
+    background: var(--surface); border: 1px solid var(--line-strong); border-radius: 8px; box-shadow: var(--shadow);
+    max-height: 200px; overflow-y: auto; display: none;
+  }
+  .loc-suggest.show { display: block; }
+  .loc-opt { padding: 8px 11px; font-size: 13px; display: flex; justify-content: space-between; gap: 10px; align-items: center; }
+  .loc-opt:hover { background: var(--sky); }
+  .loc-opt .lo-city { font-size: 11px; color: var(--ink-faint); flex-shrink: 0; }
+  .loc-opt .lo-src { font-size: 9px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-faint); }
+  .loc-picked { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--ink-soft); margin-top: 7px; }
+  .loc-picked .dotcoord { color: var(--indigo); font-weight: 600; }
+  .loc-picked.none { color: var(--ink-faint); }
+  .loc-actions { display: flex; gap: 8px; margin-top: 8px; }
+  .mini-btn { border: 1px solid var(--line-strong); background: var(--surface); border-radius: 7px; padding: 6px 10px; font-size: 12px; color: var(--ink-soft); }
+  .mini-btn:hover { border-color: var(--ink-soft); color: var(--ink); }
+  .mini-btn.on { background: var(--indigo); border-color: var(--indigo); color: #fff; }
+
+  .swatch-grid { display: flex; gap: 8px; flex-wrap: wrap; }
+  .swatch-grid button { width: 34px; height: 34px; border-radius: 8px; border: 2px solid transparent; }
+  .swatch-grid button.sel { border-color: var(--ink); box-shadow: 0 0 0 2px #fff inset; }
+
+  .seg { display: flex; border: 1px solid var(--line-strong); border-radius: 8px; overflow: hidden; }
+  .seg button { flex: 1; border: none; background: var(--surface); padding: 9px; font-size: 13px; color: var(--ink-soft); }
+  .seg button.on { background: var(--ink); color: #fff; }
+
+  /* explore view */
+  .explore-day { font-family: var(--serif); font-size: 22px; margin-bottom: 6px; }
+  .explore-hint { font-size: 13px; color: var(--ink-soft); margin-bottom: 6px; }
+  .base-line { font-size: 13.5px; color: var(--ink-soft); margin-bottom: 6px; }
+  .base-line b { color: var(--ink); font-weight: 600; }
+  .eyebrow.explore-sec { margin-top: 22px; }
+  .trip-suggest { display: flex; flex-wrap: wrap; gap: 8px; margin: 2px 0 4px; }
+  .trip-opt { display: flex; flex-direction: column; gap: 4px; align-items: flex-start; border: 1px solid var(--line-strong); background: var(--surface); border-radius: 9px; padding: 9px 13px; }
+  .trip-opt:hover { border-color: var(--indigo); }
+  .trip-opt .to-city { font-weight: 600; font-size: 13.5px; }
+  .trip-opt .to-meta { font-size: 11px; color: var(--ink-faint); display: flex; align-items: center; gap: 6px; }
+  .trip-set { display: flex; align-items: center; gap: 9px; font-size: 13.5px; margin: 2px 0 4px; }
+  .trip-set b { font-weight: 600; }
+  .trip-set .mini-btn { margin-left: 4px; }
+  .rec-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(224px, 1fr)); gap: 12px; margin-top: 12px; }
+  .rec-card { border: 1px solid var(--line); border-radius: 10px; padding: 14px; background: var(--surface); display: flex; flex-direction: column; gap: 5px; box-shadow: var(--shadow); }
+  .rec-cat { font-size: 9.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-faint); font-weight: 600; }
+  .rec-name { font-family: var(--serif); font-size: 15.5px; line-height: 1.2; }
+  .rec-blurb { font-size: 12px; color: var(--ink-soft); line-height: 1.45; flex: 1; }
+  .rec-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 6px; }
+  .rec-dist { font-size: 10.5px; color: var(--ink-faint); }
+  .verdict.trip { background: #e4ecf2; color: var(--indigo); }
+  .datechip.trip { border-color: var(--indigo); }
+  .datechip.trip .dcount { color: var(--indigo); }
+  .datechip.trip.active .dcount { color: #fff; }
+
+  /* interests */
+  .your-interests { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin: -14px 0 22px; font-size: 12px; color: var(--ink-faint); }
+  .mini-chip { background: var(--sky); border: 1px solid var(--line); border-radius: 999px; padding: 3px 10px; font-size: 11.5px; color: var(--ink-soft); }
+  .linkish { border: none; background: transparent; color: var(--indigo); font-size: 12px; cursor: pointer; padding: 2px 4px; }
+  .linkish:hover { text-decoration: underline; }
+  .interests-cta { background: var(--sky); border: 1px solid var(--line); border-radius: 10px; padding: 13px 15px; font-size: 12.5px; color: var(--ink-soft); display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 6px; }
+  .interests-cta b { color: var(--ink); }
+  .rec-card.foryou { border-color: var(--shu-dim); }
+  .rec-thumb { height: 118px; border-radius: 8px; margin-bottom: 9px; background: var(--sky); background-size: cover; background-position: center; display: flex; align-items: center; justify-content: center; color: var(--ink-faint); font-size: 10.5px; overflow: hidden; }
+  .rec-thumb.loading { background: linear-gradient(100deg, #ececea 30%, #f6f6f4 50%, #ececea 70%); background-size: 200% 100%; animation: shimmer 1.15s linear infinite; }
+  .rec-thumb.no-img { font-style: italic; background: var(--sky); }
+  @keyframes shimmer { to { background-position: -200% 0; } }
+  .region-label { font-family: var(--serif); font-size: 15px; margin: 18px 0 2px; padding-bottom: 4px; border-bottom: 1px solid var(--line); }
+  .across-note { font-size: 12.5px; color: var(--ink-soft); margin: 4px 0 2px; }
+  .rec-match { font-size: 9.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--shu); font-weight: 700; }
+  .rec-note { font-size: 10.5px; color: var(--ink-faint); margin-top: 2px; }
+  .rec-note a { color: var(--indigo); }
+
+  .chip-pick { display: flex; flex-wrap: wrap; gap: 7px; }
+  .chip { border: 1px solid var(--line-strong); background: var(--surface); color: var(--ink-soft); border-radius: 999px; padding: 6px 12px; font-size: 12.5px; }
+  .chip.on { background: var(--ink); border-color: var(--ink); color: #fff; }
+  .chip-add { display: flex; gap: 8px; margin-top: 9px; }
+  .chip-add input { flex: 1; }
+  .field-hint { font-size: 11px; color: var(--ink-faint); margin-top: 7px; line-height: 1.4; }
+
+  .person .pcol { flex: 1; min-width: 0; }
+  .person .pinterests { font-size: 11px; color: var(--ink-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
+
+  .notice { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: var(--ink); color: #fff; padding: 10px 18px; border-radius: 999px; font-size: 12.5px; z-index: 950; box-shadow: var(--shadow); opacity: 0; transition: opacity .2s; pointer-events: none; }
+  .notice.show { opacity: 1; }
+
+  .storage-warn { font-size: 11.5px; color: var(--shu); background: var(--shu-dim); padding: 3px 10px; border-radius: 6px; }
+
+  /* scrollbars */
+  ::-webkit-scrollbar { width: 9px; height: 9px; }
+  ::-webkit-scrollbar-thumb { background: var(--line-strong); border-radius: 6px; border: 2px solid var(--surface); }
+  ::-webkit-scrollbar-track { background: transparent; }
+
+  @media (max-width: 860px) {
+    .wordmark small, .trip-dates { display: none; }
+    .body { flex-direction: column; }
+    aside.rail { width: 100%; height: 46%; border-right: none; border-bottom: 1px solid var(--line); }
+    .stage, .panel { min-height: 320px; }
+    .tabs { margin-left: 0; }
+    header.bar { flex-wrap: wrap; gap: 12px; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="bar">
+    <div class="wordmark">Meridian<small>Japan · Trip Planner</small></div>
+    <div class="trip-head">
+      <input class="trip-title" id="tripTitle" value="Our Japan Trip" maxlength="48" aria-label="Trip name">
+      <div class="trip-dates">
+        <input type="date" id="tripStart" aria-label="Trip start">
+        <span>&ndash;</span>
+        <input type="date" id="tripEnd" aria-label="Trip end">
+        <span id="storageWarn"></span>
+      </div>
+    </div>
+    <nav class="tabs" id="tabs">
+      <button class="tab active" data-view="map">Map</button>
+      <button class="tab" data-view="itinerary">Itinerary</button>
+      <button class="tab" data-view="explore">Explore</button>
+      <button class="tab" data-view="coord">Coordination</button>
+    </nav>
+    <button class="me-chip" id="meChip" title="Edit your profile">
+      <span class="dot" id="meDot"></span><span id="meName">Set up</span>
+    </button>
+  </header>
+
+  <div class="body">
+    <aside class="rail">
+      <div class="rail-section">
+        <div class="add-row">
+          <button class="btn primary" id="addActivity">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="10" r="3"/><path d="M12 21s-7-6.5-7-11a7 7 0 0 1 14 0c0 4.5-7 11-7 11z"/></svg>
+            Activity
+          </button>
+          <button class="btn" id="addStay">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21V8l9-5 9 5v13"/><path d="M9 21v-6h6v6"/></svg>
+            Stay
+          </button>
+        </div>
+      </div>
+
+      <div class="rail-section">
+        <div class="eyebrow">Travelers <span class="count" id="peopleCount">0</span></div>
+        <div id="peopleList"></div>
+      </div>
+
+      <div class="rail-section">
+        <div class="eyebrow">Days <button class="btn ghost" id="clearDay" style="display:none;font-size:11px;">Show all</button></div>
+        <div class="datestrip" id="dateStrip"></div>
+      </div>
+
+      <div class="rail-section" style="flex:1;">
+        <div class="eyebrow"><span id="railListLabel">Plans</span> <span class="count" id="railCount"></span></div>
+        <div id="railList"></div>
+      </div>
+    </aside>
+
+    <div class="stage" id="stageMap">
+      <div id="map"></div>
+      <div class="pin-pick-note" id="pinNote">
+        <span>Click the map to place this location</span>
+        <button id="pinCancel">Cancel</button>
+      </div>
+      <div class="map-legend" id="legend">
+        <div class="eyebrow">Legend</div>
+        <div id="legendPeople"></div>
+        <div style="height:8px"></div>
+        <div class="legrow type"><span class="marker-pin" style="width:14px;height:14px;background:#9aa0ab"><span></span></span> Activity</div>
+        <div class="legrow type"><span class="marker-pin stay" style="width:13px;height:13px;background:#9aa0ab"><span></span></span> Hotel / stay</div>
+      </div>
+    </div>
+
+    <div class="panel" id="stageItinerary" style="display:none;"><div class="panel-inner" id="itineraryInner"></div></div>
+    <div class="panel" id="stageExplore" style="display:none;"><div class="panel-inner" id="exploreInner"></div></div>
+    <div class="panel" id="stageCoord" style="display:none;"><div class="panel-inner" id="coordInner"></div></div>
+  </div>
+</div>
+
+<!-- profile / onboarding modal -->
+<div class="scrim" id="profileScrim">
+  <div class="modal">
+    <div class="modal-head">
+      <h3 id="profileTitle">Add yourself to the trip</h3>
+      <p>Your name and color identify your plans on the shared map.</p>
+    </div>
+    <div class="modal-body">
+      <div class="field">
+        <label>Your name</label>
+        <input type="text" id="profileName" placeholder="e.g. Zach" maxlength="24">
+      </div>
+      <div class="field">
+        <label>Marker color</label>
+        <div class="swatch-grid" id="swatchGrid"></div>
+      </div>
+      <div class="field">
+        <label>Interests</label>
+        <div class="chip-pick" id="interestChips"></div>
+        <div class="chip-add">
+          <input type="text" id="interestInput" placeholder="Add your own — e.g. ramen, Gundam, jazz" maxlength="28">
+          <button class="mini-btn" id="interestAdd" type="button">Add</button>
+        </div>
+        <div class="field-hint">Recommendations get tailored to these, down to niche finds like Pokémon manhole covers and good photo spots.</div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn primary wide" id="profileSave">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- add / edit item modal -->
+<div class="scrim" id="itemScrim">
+  <div class="modal wide">
+    <div class="modal-head">
+      <h3 id="itemTitle">Add activity</h3>
+      <p id="itemSubtitle">Pick a place, set the day, and it appears on the shared map.</p>
+    </div>
+    <div class="modal-body">
+      <div class="field" id="fldTitle">
+        <label id="lblTitle">What is it</label>
+        <input type="text" id="itemName" placeholder="e.g. Fushimi Inari Shrine">
+      </div>
+
+      <div class="field">
+        <label>Location</label>
+        <div class="loc-box">
+          <input type="text" id="locInput" placeholder="Search a place, or click the map">
+          <div class="loc-suggest" id="locSuggest"></div>
+        </div>
+        <div class="loc-actions">
+          <button class="mini-btn" id="pickOnMap" type="button">Place on map</button>
+        </div>
+        <div class="loc-picked none" id="locPicked">No location set</div>
+      </div>
+
+      <div id="stayFields" style="display:none;">
+        <div class="field">
+          <label>City</label>
+          <input type="text" id="stayCity" placeholder="e.g. Kyoto">
+        </div>
+        <div class="field-row">
+          <div class="field"><label>Arrive</label><input type="date" id="stayStart"></div>
+          <div class="field"><label>Depart</label><input type="date" id="stayEnd"></div>
+        </div>
+      </div>
+
+      <div id="actFields">
+        <div class="field-row">
+          <div class="field"><label>Day</label><input type="date" id="actDate"></div>
+          <div class="field"><label>Time (optional)</label><input type="time" id="actTime"></div>
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label>Category</label>
+            <select id="actCat">
+              <option>Sightseeing</option><option>Food &amp; drink</option><option>Culture</option>
+              <option>Nature</option><option>Shopping</option><option>Nightlife</option><option>Travel</option><option>Other</option>
+            </select>
+          </div>
+          <div class="field"><label>Hours (optional)</label><input type="text" id="actDur" placeholder="e.g. 2"></div>
+        </div>
+        <div class="field"><label>Notes (optional)</label><textarea id="actNotes" placeholder="Reservations, who's keen, alternatives..."></textarea></div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" id="itemCancel" style="flex:0;">Cancel</button>
+      <button class="btn primary" id="itemSave" style="flex:0;padding-left:22px;padding-right:22px;">Save</button>
+    </div>
+  </div>
+</div>
+
+<div class="notice" id="notice"></div>
+
+<script>
+/* ============================================================
+   Meridian — Japan trip planner
+   Data is kept in shared artifact storage, one key per traveler,
+   so anyone opening the shared link reads and writes the same trip.
+   ============================================================ */
+
+const PALETTE = ["#c8483c","#2e5e7e","#4e7a5e","#8a6d3b","#6e4b7a","#3f6e73","#a85c4a","#566173"];
+
+/* nearest-city centroids drive the "same area / needs travel" logic */
+const CITIES = [
+  ["Tokyo",35.6762,139.6503],["Yokohama",35.4437,139.6380],["Kamakura",35.3192,139.5466],
+  ["Hakone",35.2324,139.1069],["Fuji Five Lakes",35.5171,138.7519],["Nikko",36.7198,139.6982],
+  ["Kyoto",35.0116,135.7681],["Osaka",34.6937,135.5023],["Nara",34.6851,135.8048],
+  ["Kobe",34.6901,135.1955],["Nagoya",35.1815,136.9066],["Kanazawa",36.5613,136.6562],
+  ["Hiroshima",34.3853,132.4553],["Miyajima",34.2960,132.3199],["Fukuoka",33.5904,130.4017],
+  ["Sapporo",43.0618,141.3545],["Himeji",34.8394,134.6939],["Uji",34.8844,135.7998],["Otaru",43.1907,140.9947]
+];
+
+/* curated well-known destinations with a category and short description, used for recommendations */
+const P = (name,lat,lng,city,cat,blurb)=>({name,lat,lng,city,cat,blurb});
+const PLACES = [
+  P("Senso-ji Temple",35.7148,139.7967,"Tokyo","Culture","Tokyo's oldest temple, reached through the Nakamise shopping street."),
+  P("Shibuya Crossing",35.6595,139.7005,"Tokyo","Sightseeing","The famous scramble; view it from above at Shibuya Sky."),
+  P("Meiji Shrine",35.6764,139.6993,"Tokyo","Culture","Forested Shinto shrine beside Harajuku, a calm break from the crowds."),
+  P("Tokyo Skytree",35.7101,139.8107,"Tokyo","Sightseeing","634m tower with sweeping observation decks over the Kanto plain."),
+  P("teamLab Planets",35.6486,139.7906,"Tokyo","Culture","Immersive digital-art rooms you walk through barefoot; book ahead."),
+  P("Tsukiji Outer Market",35.6654,139.7707,"Tokyo","Food & drink","Stalls for sushi, tamagoyaki, and street snacks; go early and hungry."),
+  P("Ueno Park",35.7156,139.7745,"Tokyo","Nature","Museums, a zoo, and cherry trees gathered in one large park."),
+  P("Shinjuku Gyoen",35.6852,139.7100,"Tokyo","Nature","Spacious garden blending English, French, and Japanese styles."),
+  P("Akihabara",35.7022,139.7745,"Tokyo","Shopping","Electronics, anime, and arcades stacked floor upon floor."),
+  P("Tokyo Tower",35.6586,139.7454,"Tokyo","Sightseeing","Retro red-and-white landmark, especially good after dark."),
+  P("Ginza",35.6717,139.7650,"Tokyo","Shopping","Flagship stores and department-store food halls; weekends go car-free."),
+  P("Harajuku / Takeshita St.",35.6702,139.7027,"Tokyo","Shopping","Youth-fashion lane packed with crepes and boutiques."),
+  P("Imperial Palace",35.6852,139.7528,"Tokyo","Sightseeing","Palace grounds and gardens ringed by a popular running moat."),
+  P("Fushimi Inari Taisha",34.9671,135.7727,"Kyoto","Culture","Thousands of vermilion torii gates winding up the mountain."),
+  P("Kinkaku-ji (Golden Pavilion)",35.0394,135.7292,"Kyoto","Sightseeing","Gold-leaf pavilion mirrored in its pond; short but iconic."),
+  P("Kiyomizu-dera",34.9949,135.7850,"Kyoto","Culture","Hillside temple with a wooden stage over the city."),
+  P("Arashiyama Bamboo Grove",35.0170,135.6718,"Kyoto","Nature","Towering bamboo path, best walked early before crowds."),
+  P("Gion District",35.0037,135.7752,"Kyoto","Culture","Historic geisha quarter of wooden machiya and lantern-lit lanes."),
+  P("Nijo Castle",35.0142,135.7481,"Kyoto","Culture","Shogun's residence with 'nightingale' floors and painted screens."),
+  P("Ginkaku-ji (Silver Pavilion)",35.0270,135.7982,"Kyoto","Sightseeing","Zen temple with a raked-sand garden and moss slopes."),
+  P("Philosopher's Path",35.0271,135.7947,"Kyoto","Nature","Canal-side walk linking temples, lovely in cherry season."),
+  P("Nishiki Market",35.0050,135.7648,"Kyoto","Food & drink","Covered market of pickles, sweets, and Kyoto specialties."),
+  P("Osaka Castle",34.6873,135.5259,"Osaka","Sightseeing","Reconstructed keep set in a broad moated park."),
+  P("Dotonbori",34.6687,135.5013,"Osaka","Food & drink","Neon canal district for takoyaki, okonomiyaki, and the Glico sign."),
+  P("Universal Studios Japan",34.6654,135.4323,"Osaka","Sightseeing","Major theme park; plan a full day and book tickets early."),
+  P("Shinsekai",34.6524,135.5063,"Osaka","Food & drink","Retro district around Tsutenkaku Tower, home of kushikatsu."),
+  P("Umeda Sky Building",34.7052,135.4897,"Osaka","Sightseeing","Floating-garden rooftop observatory in the north of the city."),
+  P("Kuromon Ichiba Market",34.6647,135.5065,"Osaka","Food & drink","Market stalls grilling seafood to eat on the spot."),
+  P("Todai-ji",34.6890,135.8398,"Nara","Culture","Vast wooden hall housing a giant bronze Buddha."),
+  P("Nara Park",34.6851,135.8430,"Nara","Nature","Free-roaming deer that bow for crackers."),
+  P("Kasuga Taisha",34.6817,135.8483,"Nara","Culture","Shrine lined with hundreds of moss-covered stone lanterns."),
+  P("Peace Memorial Park",34.3955,132.4536,"Hiroshima","Culture","Memorials and museum on the events of 1945."),
+  P("Itsukushima Shrine (Miyajima)",34.2960,132.3199,"Miyajima","Culture","Floating torii gate on a sacred island; ferry across."),
+  P("Hakone Open-Air Museum",35.2445,139.0500,"Hakone","Culture","Sculptures across hillside grounds, plus a Picasso hall."),
+  P("Owakudani",35.2445,139.0197,"Hakone","Nature","Volcanic valley with sulfur vents and black-shelled eggs."),
+  P("Lake Ashi",35.2049,139.0244,"Hakone","Nature","Sightseeing cruises with Mt. Fuji views on clear days."),
+  P("Toshogu Shrine",36.7580,139.5988,"Nikko","Culture","Ornate mausoleum complex deep in cedar forest."),
+  P("Kenroku-en Garden",36.5620,136.6626,"Kanazawa","Nature","One of Japan's three great landscape gardens."),
+  P("Higashi Chaya District",36.5720,136.6668,"Kanazawa","Culture","Preserved teahouse quarter with gold-leaf shops."),
+  P("Chureito Pagoda",35.4996,138.8004,"Fuji Five Lakes","Sightseeing","Classic pagoda-and-Fuji viewpoint after a stair climb."),
+  P("Lake Kawaguchiko",35.5171,138.7519,"Fuji Five Lakes","Nature","Lakeside Fuji views, onsen, and boat rides."),
+  P("Kotoku-in (Great Buddha)",35.3167,139.5361,"Kamakura","Culture","Open-air bronze Buddha over 11m tall."),
+  P("Hasedera",35.3123,139.5330,"Kamakura","Culture","Hillside temple with sea views and a large Kannon statue."),
+  P("Himeji Castle",34.8394,134.6939,"Himeji","Sightseeing","Japan's finest original castle, a brilliant-white hilltop keep."),
+  P("Kitano Ijinkan",34.7010,135.1897,"Kobe","Culture","Hillside district of preserved Western merchant houses."),
+  P("Nunobiki Herb Garden",34.7078,135.1830,"Kobe","Nature","Ropeway garden with harbor views above the city."),
+  P("Byodo-in",34.8894,135.8078,"Uji","Culture","Phoenix Hall temple from the 10-yen coin; matcha nearby."),
+  P("Otaru Canal",43.1979,140.9942,"Otaru","Sightseeing","Gas-lit canal walk and glassworks; easy from Sapporo.")
+];
+/* derive interest tags from each place's category, name, and description */
+function autoTag(p){
+  const t = new Set(); const s = (p.name+" "+p.blurb+" "+p.cat).toLowerCase();
+  const cat = p.cat.toLowerCase();
+  if(cat.includes("food")) t.add("food");
+  if(cat==="nature") t.add("nature");
+  if(cat==="shopping") t.add("shopping");
+  if(cat==="nightlife") t.add("nightlife");
+  if(cat==="culture") t.add("culture");
+  if(cat==="sightseeing") t.add("sightseeing");
+  if(/shrine|temple|-ji|-dera|taisha|torii|pagoda/.test(s)){ t.add("temple"); t.add("culture"); t.add("photo"); }
+  if(/castle/.test(s)){ t.add("history"); t.add("photo"); }
+  if(/museum|art|sculpture/.test(s)){ t.add("art"); t.add("culture"); }
+  if(/tower|sky|observation|view|skyline|deck/.test(s)){ t.add("views"); t.add("photo"); }
+  if(/garden|park|bamboo|lake|forest|deer|herb|canal|pond/.test(s)){ t.add("nature"); t.add("photo"); }
+  if(/market|ramen|sushi|takoyaki|okonomiyaki|kushikatsu|matcha|seafood/.test(s)) t.add("food");
+  if(/anime|game|arcade|electronic/.test(s)) t.add("anime");
+  if(/cherry|blossom|sakura/.test(s)){ t.add("sakura"); t.add("photo"); }
+  if(/craft|pottery|lacquer|gold[ -]?leaf|textile|ceramic|kiln|glasswork/.test(s)){ t.add("crafts"); t.add("culture"); }
+  if(/onsen|hot spring|bathhouse|ryokan/.test(s)) t.add("onsen");
+  return [...t];
+}
+PLACES.forEach(p=>{ p.tags = autoTag(p); p.mainstream = true; });
+
+/* niche and photo-focused points; surfaced only when they match a traveler's interests.
+   PokeLid coordinates are approximate — the official map at local.pokemon.jp is authoritative. */
+const POKELID_URL = "https://local.pokemon.jp/en/manhole/";
+const SPECIAL = [
+  P("PokéLid: Wynaut & Tyrunt (Ueno)",35.7163,139.7757,"Tokyo","Pokémon","Manhole cover by the National Museum of Nature and Science in Ueno Park."),
+  P("PokéLid: Baltoy & Bronzor (Ueno)",35.7188,139.7767,"Tokyo","Pokémon","Second Ueno Park cover near the Tokyo National Museum."),
+  P("PokéLids: Serigaya Park (Machida)",35.5406,139.4569,"Tokyo","Pokémon","Six Gen-1 covers — Tokyo's first PokéLids, about an hour west of the centre."),
+  P("PokéLid: Pikachu (Sakuragicho)",35.4509,139.6317,"Yokohama","Pokémon","Pikachu cover outside Sakuragicho Station, near the harbour."),
+  P("PokéLid: near Red Brick Warehouse",35.4530,139.6428,"Yokohama","Pokémon","Pikachu & Raichu cover by Yokohama's Red Brick Warehouse."),
+  P("PokéLid: Squirtle (Kamakura)",35.3190,139.5500,"Kamakura","Pokémon","Seaside Squirtle cover — pairs well with the Great Buddha day trip."),
+  P("PokéLids: Kyoto (Gen-2)",34.9878,135.7469,"Kyoto","Pokémon","Five Johto-region covers around Kyoto; check the official map for exact spots."),
+  P("Shibuya Sky",35.6580,139.7016,"Tokyo","Photography","Open-air rooftop deck over the scramble — sunset and skyline shots."),
+  P("Tokyo Metropolitan Gov. Observatory",35.6896,139.6917,"Tokyo","Photography","Free twin-tower observatories with wide city panoramas, Fuji on clear days."),
+  P("Nezu Shrine torii tunnel",35.7208,139.7607,"Tokyo","Photography","A vermilion torii corridor much quieter than Kyoto's."),
+  P("Unicorn Gundam Statue (Odaiba)",35.6250,139.7757,"Tokyo","Photography","Life-size Gundam that transforms on a schedule, bay bridge behind."),
+  P("Yasaka Pagoda (Hokan-ji)",34.9985,135.7810,"Kyoto","Photography","The classic five-story pagoda framed by old Higashiyama streets."),
+  P("Kamo River & Pontocho",35.0037,135.7708,"Kyoto","Photography","Riverside lanterns and machiya alleys, best at dusk."),
+  P("Hakone Shrine lake torii",35.2044,139.0261,"Hakone","Photography","Torii gate rising from Lake Ashi — reflections at dawn.")
+];
+SPECIAL.forEach(p=>{
+  p.mainstream = false;
+  const base = autoTag(p);
+  if(p.cat==="Pokémon"){ base.push("pokemon"); p.note = POKELID_URL; }
+  if(p.cat==="Photography"){ base.push("photo"); base.push("views"); }
+  p.tags = [...new Set(base)];
+});
+
+/* unified pool used for search and recommendations */
+/* nationwide and specialty spots. `wiki` supplies an example photo; `region` places
+   far-flung spots in the "Across Japan" browser rather than a base-city section. */
+const M = (name,lat,lng,city,cat,blurb,tags,wiki,region)=>({name,lat,lng,city,cat,blurb,tags,wiki,region,mainstream:false});
+const MORE = [
+  // Hokkaido
+  M("Blue Pond (Biei)",43.4925,142.6414,"Biei","Nature","Mineral pond that glows an unreal turquoise; birch trees rise from the water.",["photo","nature"],"Blue_Pond_(Biei)","Hokkaido"),
+  M("Farm Tomita (Furano)",43.4183,142.4747,"Furano","Nature","Rolling lavender rows in July, striped flower fields the rest of summer.",["photo","nature"],"Farm_Tomita","Hokkaido"),
+  M("Noboribetsu Jigokudani",42.4986,141.1469,"Noboribetsu","Nature","Steaming 'Hell Valley' of red rock feeding one of Hokkaido's best onsen.",["photo","onsen","nature"],"Noboribetsu,_Hokkaido","Hokkaido"),
+  M("Sapporo TV Tower",43.0609,141.3564,"Sapporo","Sightseeing","Odori Park landmark, lit at night and framed by the summer beer garden.",["photo","views","architecture"],"Sapporo_TV_Tower"),
+  // Tohoku
+  M("Ginzan Onsen",38.5719,140.5306,"Ginzan","Culture","Gas-lit onsen town of wooden ryokan along a river; magical under snow.",["photo","onsen","culture"],"Ginzan_Onsen","Tohoku"),
+  M("Ōuchi-juku",37.3350,139.8590,"Ōuchi-juku","Culture","Thatched-roof Edo post town, especially striking in winter.",["photo","culture","history"],"Ōuchi-juku","Tohoku"),
+  // Kanto
+  M("Kusatsu Onsen (Yubatake)",36.6221,138.5966,"Kusatsu","Culture","Steaming wooden 'hot water field' at the heart of a famous spa town.",["photo","onsen"],"Kusatsu,_Gunma","Kanto"),
+  // Chubu
+  M("Shirakawa-go",36.2578,136.9066,"Shirakawa-go","Culture","UNESCO village of steep thatched farmhouses; snowbound in winter.",["photo","culture","history"],"Shirakawa,_Gifu","Chubu"),
+  M("Matsumoto Castle",36.2384,137.9690,"Matsumoto","Sightseeing","Original black-and-white keep mirrored in its moat, Alps behind.",["photo","history"],"Matsumoto_Castle","Chubu"),
+  M("Kamikōchi",36.2500,137.6333,"Kamikōchi","Nature","Alpine valley of clear rivers and peaks; the Kappa Bridge classic.",["photo","nature"],"Kamikōchi","Chubu"),
+  M("Tateyama Snow Wall",36.5806,137.6178,"Tateyama","Nature","Spring corridor cut through snow walls up to 20m high.",["photo","nature"],"Tateyama_Kurobe_Alpine_Route","Chubu"),
+  M("Nabana no Sato",35.0876,136.6410,"Nabana no Sato","Nature","Vast winter light tunnels and illuminations near Nagoya.",["photo","nature"],"Nabana_no_Sato","Chubu"),
+  M("Ghibli Park",35.1810,137.0790,"Nagoya","Culture","Studio Ghibli park in Aichi; recreated film scenes to wander.",["anime"],"Ghibli_Park"),
+  // Kansai
+  M("Nachi Falls",33.6700,135.8900,"Nachi","Nature","Japan's tallest waterfall beside a vermilion pagoda — the iconic pairing.",["photo","nature","temple"],"Nachi_Falls","Kansai"),
+  M("Kinosaki Onsen",35.6258,134.8069,"Kinosaki","Culture","Willow-lined canal town made for strolling between seven bathhouses in yukata.",["photo","onsen"],"Kinosaki_Onsen","Kansai"),
+  // Chugoku
+  M("Tottori Sand Dunes",35.5407,134.2270,"Tottori","Nature","Wind-rippled dunes meeting the sea; camel rides and sandboarding.",["photo","nature"],"Tottori_Sand_Dunes","Chugoku"),
+  M("Kintai Bridge (Iwakuni)",34.1676,132.1770,"Iwakuni","Sightseeing","Five graceful wooden arches over a wide river, cherry trees on the banks.",["photo","history"],"Kintai_Bridge","Chugoku"),
+  // Shikoku
+  M("Iya Valley Vine Bridge",33.8790,133.8020,"Iya Valley","Nature","Ancient kazura-vine bridge slung over a gorge deep in the mountains.",["photo","nature"],"Iya_Valley","Shikoku"),
+  M("Dōgo Onsen",33.8517,132.7860,"Matsuyama","Culture","One of Japan's oldest bathhouses, a wooden warren said to inspire Spirited Away.",["photo","onsen","culture"],"Dōgo_Onsen","Shikoku"),
+  M("Ritsurin Garden",34.3295,134.0430,"Takamatsu","Nature","Strolling garden of ponds and pines beneath a wooded hill.",["photo","nature"],"Ritsurin_Garden","Shikoku"),
+  // Kyushu
+  M("Takachiho Gorge",32.7150,131.3060,"Takachiho","Nature","Sheer basalt cliffs and a waterfall you can row a boat beneath.",["photo","nature"],"Takachiho,_Miyazaki","Kyushu"),
+  M("Beppu Hells (Jigoku)",33.2846,131.4830,"Beppu","Nature","Vividly colored hot-spring 'hells', including a cobalt-blue pool.",["photo","onsen"],"Beppu,_Ōita","Kyushu"),
+  M("Kurokawa Onsen",33.0847,131.1430,"Kurokawa","Culture","Secluded riverside onsen village of rustic open-air baths.",["onsen","photo"],"Kurokawa_Onsen","Kyushu"),
+  M("Nakasu Yatai (Fukuoka)",33.5920,130.4030,"Fukuoka","Food & drink","Riverside night food stalls for tonkotsu ramen and yakitori.",["food","market","nightlife"],"Yatai_(food_cart)"),
+  // Okinawa
+  M("Kabira Bay (Ishigaki)",24.4560,124.1450,"Ishigaki","Nature","Gradient turquoise lagoon with glass-bottom boats; swimming not allowed.",["photo","nature"],"Kabira_Bay","Okinawa"),
+  M("Cape Manzamo",26.5050,127.8500,"Onna","Nature","Elephant-trunk cliff over the East China Sea, best at sunset.",["photo","nature"],"Cape_Manzamo","Okinawa"),
+  // Tokyo specialty (anime / markets / architecture)
+  M("Nakano Broadway",35.7076,139.6657,"Tokyo","Shopping","Warren of retro anime, manga, and collectible shops.",["anime","shopping"],"Nakano_Broadway"),
+  M("Ghibli Museum (Mitaka)",35.6962,139.5704,"Tokyo","Culture","Whimsical museum of Studio Ghibli; timed tickets sell out early.",["anime"],"Ghibli_Museum"),
+  M("Pokémon Center Shibuya",35.6617,139.7003,"Tokyo","Shopping","Flagship Pokémon store inside Shibuya Parco.",["pokemon","anime","shopping"],"Pokémon_Center"),
+  M("Nintendo TOKYO",35.6626,139.6987,"Tokyo","Shopping","Official Nintendo store in Shibuya Parco, full of Mario goods.",["anime","shopping"],"Parco"),
+  M("Ameya-Yokochō (Ameyoko)",35.7100,139.7745,"Tokyo","Food & drink","Loud open-air market lane under the Ueno train tracks.",["market","food","shopping"],"Ameya-Yokochō"),
+  M("Yanaka Ginza",35.7276,139.7660,"Tokyo","Food & drink","Old-Tokyo shopping street of snacks, crafts, and cats.",["market","food"],"Yanaka,_Tokyo"),
+  M("Tokyo International Forum",35.6772,139.7630,"Tokyo","Sightseeing","Vast glass-and-steel atrium like the hull of a ship.",["architecture","photo"],"Tokyo_International_Forum"),
+  M("Roppongi Hills / Mori Tower",35.6604,139.7292,"Tokyo","Sightseeing","Skyline views and rotating art high above the city.",["architecture","art","views"],"Roppongi_Hills"),
+  // Osaka / Kanazawa specialty
+  M("Den Den Town",34.6614,135.5040,"Osaka","Shopping","Osaka's electronics-and-anime district, Akihabara's western cousin.",["anime","shopping"],"Den_Den_Town"),
+  M("Super Nintendo World",34.6656,135.4310,"Osaka","Sightseeing","Interactive Mario-themed land inside Universal Studios Japan.",["anime"],"Super_Nintendo_World"),
+  M("Ōmichō Market",36.5716,136.6570,"Kanazawa","Food & drink","Kanazawa's covered market for crab, sea urchin, and sushi.",["market","food"],"Ōmichō_Market"),
+  M("21st Century Museum, Kanazawa",36.5606,136.6588,"Kanazawa","Culture","Circular glass museum with the famous walk-in swimming-pool illusion.",["architecture","art","photo"],"21st_Century_Museum_of_Contemporary_Art,_Kanazawa"),
+  // cherry-blossom and craft spots in the main cities
+  M("Chidorigafuchi",35.6913,139.7503,"Tokyo","Nature","Moat lined with cherry trees; rowboats drift under the blossoms.",["sakura","photo","nature"],"Chidorigafuchi"),
+  M("Maruyama Park",35.0035,135.7810,"Kyoto","Nature","Kyoto's classic hanami spot, centred on a giant weeping cherry.",["sakura","photo","nature"],"Maruyama_Park_(Kyoto)"),
+  M("Sannenzaka & Ninenzaka",34.9967,135.7808,"Kyoto","Culture","Stone-paved slopes of craft shops and teahouses below Kiyomizu.",["crafts","photo","culture"],"Sannen-zaka"),
+  M("Kiyomizu-zaka craft shops",34.9948,135.7830,"Kyoto","Shopping","Kiyomizu-yaki pottery, fans, and sweets on the temple approach.",["crafts","shopping"],"Kiyomizu-dera")
+];
+
+const POINTS = [...PLACES, ...SPECIAL, ...MORE];
+POINTS.forEach((p,i)=>{ p._i = i; });
+
+/* example-photo titles for the local photo specials defined above */
+const WIKI = {
+  "Shibuya Sky":"Shibuya_Scramble_Square",
+  "Tokyo Metropolitan Gov. Observatory":"Tokyo_Metropolitan_Government_Building",
+  "Nezu Shrine torii tunnel":"Nezu_Shrine",
+  "Unicorn Gundam Statue (Odaiba)":"Unicorn_Gundam_Statue",
+  "Yasaka Pagoda (Hokan-ji)":"Hōkan-ji",
+  "Kamo River & Pontocho":"Ponto-chō",
+  "Hakone Shrine lake torii":"Hakone_Shrine"
+};
+POINTS.forEach(p=>{ if(WIKI[p.name] && !p.wiki) p.wiki = WIKI[p.name]; });
+
+/* interest vocabulary: display label paired with the tag used in the data */
+const INTERESTS = [
+  ["Photography","photo"],["Pokémon","pokemon"],["Food & drink","food"],["Anime & games","anime"],
+  ["Temples & shrines","temple"],["Nature & gardens","nature"],["History & castles","history"],
+  ["Art & museums","art"],["Views & skylines","views"],["Shopping","shopping"],
+  ["Nightlife","nightlife"],["Traditional culture","culture"],
+  ["Onsen & baths","onsen"],["Markets & street food","market"],["Modern architecture","architecture"],
+  ["Cherry blossoms","sakura"],["Traditional crafts","crafts"]
+];
+function interestLabel(tag){ const m=INTERESTS.find(i=>i[1]===tag); return m?m[0]:(tag.charAt(0).toUpperCase()+tag.slice(1)); }
+function pointMatches(pt, interests){
+  const hay=(pt.name+" "+pt.blurb+" "+pt.cat+" "+pt.city).toLowerCase();
+  const hits=[];
+  for(const it of interests){
+    if((pt.tags||[]).includes(it)) hits.push(interestLabel(it));
+    else if(it.length>=3 && hay.includes(it.toLowerCase())) hits.push(it);
+  }
+  return hits;
+}
+
+const state = {
+  me: null,               // { name, color } for this browser
+  people: {},             // name -> { name, color, stays[], activities[], updated }
+  trip: { title: "Our Japan Trip", start: "", end: "" },
+  view: "map",
+  hidden: {},             // name -> true when filtered out
+  selectedDate: null,
+  editing: null,          // item being edited { kind, id }
+  pendingLoc: null,       // { lat, lng, label } chosen in the form
+  picking: false,
+  sharedOK: true
+};
+
+let map, markerLayer, pickHandler=null;
+
+/* ---------- storage helpers (shared across all viewers) ---------- */
+const hasStore = typeof window.storage !== "undefined";
+async function sGet(k, shared){ try { return await window.storage.get(k, shared); } catch { return null; } }
+async function sSet(k, v, shared){ try { return await window.storage.set(k, v, shared); } catch(e){ state.sharedOK=false; return null; } }
+async function sList(prefix, shared){ try { return await window.storage.list(prefix, shared); } catch { return {keys:[]}; } }
+
+async function saveMe(){
+  if(!state.me) return;
+  const rec = state.people[state.me.name];
+  if(!rec) return;
+  rec.updated = Date.now();
+  if(hasStore) await sSet("person:"+state.me.name, JSON.stringify(rec), true);
+}
+async function saveTrip(){
+  if(hasStore) await sSet("trip:meta", JSON.stringify(state.trip), true);
+}
+async function loadEveryone(){
+  if(!hasStore) return;
+  const meta = await sGet("trip:meta", true);
+  if(meta && meta.value){ try { Object.assign(state.trip, JSON.parse(meta.value)); } catch {} }
+  const listed = await sList("person:", true);
+  const keys = (listed && listed.keys) || [];
+  const fresh = {};
+  for(const k of keys){
+    const r = await sGet(k, true);
+    if(r && r.value){ try { const p = JSON.parse(r.value); if(!p.deleted) fresh[p.name] = p; } catch {} }
+  }
+  state.people = fresh;
+  if(state.me && !state.people[state.me.name]){
+    state.people[state.me.name] = { name: state.me.name, color: state.me.color, stays: [], activities: [], dayTrips: {}, interests: [], updated: Date.now() };
+  }
+}
+
+/* ---------- geo math ---------- */
+function haversine(a, b){
+  const R = 6371, toR = d => d*Math.PI/180;
+  const dLat = toR(b.lat-a.lat), dLng = toR(b.lng-a.lng);
+  const s = Math.sin(dLat/2)**2 + Math.cos(toR(a.lat))*Math.cos(toR(b.lat))*Math.sin(dLng/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(s), Math.sqrt(1-s));
+}
+function nearestCity(loc){
+  let best = null, bd = Infinity;
+  for(const [name,lat,lng] of CITIES){
+    const d = haversine(loc, {lat,lng});
+    if(d < bd){ bd = d; best = name; }
+  }
+  return best;
+}
+/* translate a leg distance into a plausible travel mode + rough minutes */
+function classifyLeg(km){
+  if(km <= 1.5) return { mode:"walk", label:"Walk", cls:"mode-walk", min: Math.max(4, Math.round(km/4.8*60)) };
+  if(km <= 12) return { mode:"local", label:"Local transit", cls:"mode-local", min: Math.round(km/18*60 + 8) };
+  if(km <= 120) return { mode:"regional", label:"Regional train", cls:"mode-regional", min: Math.round(km/70*60 + 20) };
+  return { mode:"shink", label:"Shinkansen / long haul", cls:"mode-shink", min: Math.round(km/180*60 + 45) };
+}
+function fmtMin(m){ return m >= 60 ? `${Math.floor(m/60)}h ${m%60}m` : `${m}m`; }
+
+/* ---------- date helpers ---------- */
+function tripDates(){
+  const out = [];
+  if(!state.trip.start || !state.trip.end) return out;
+  let d = new Date(state.trip.start+"T00:00:00");
+  const end = new Date(state.trip.end+"T00:00:00");
+  let guard = 0;
+  while(d <= end && guard < 120){ out.push(iso(d)); d.setDate(d.getDate()+1); guard++; }
+  return out;
+}
+function iso(d){ return d.toISOString().slice(0,10); }
+function parseISO(s){ return new Date(s+"T00:00:00"); }
+function dow(s){ return ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][parseISO(s).getDay()]; }
+function dnum(s){ return parseISO(s).getDate(); }
+function prettyDate(s){ const d=parseISO(s); return d.toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric"}); }
+function stayCoversDate(stay, date){ return stay.start && stay.end && date >= stay.start && date <= stay.end; }
+
+/* ---------- collecting items ---------- */
+function visiblePeople(){ return Object.values(state.people).filter(p => !state.hidden[p.name]); }
+function allActivities(){
+  const out = [];
+  for(const p of visiblePeople()) for(const a of (p.activities||[])) out.push({...a, person:p.name, color:p.color, kind:"activity"});
+  return out;
+}
+function allStays(){
+  const out = [];
+  for(const p of visiblePeople()) for(const s of (p.stays||[])) out.push({...s, person:p.name, color:p.color, kind:"stay"});
+  return out;
+}
+
+/* ============================================================
+   Rendering
+   ============================================================ */
+function render(){
+  renderPeople();
+  renderDateStrip();
+  renderRailList();
+  renderTripHeader();
+  if(state.view === "map") renderMarkers();
+  if(state.view === "itinerary") renderItinerary();
+  if(state.view === "explore") renderExplore();
+  if(state.view === "coord") renderCoord();
+  renderMeChip();
+  document.getElementById("storageWarn").innerHTML =
+    (!hasStore || !state.sharedOK) ? '<span class="storage-warn">Sharing offline</span>' :
+    (window.storage.mode === "local" ? '<span class="storage-warn" title="See README.md — hook up a free Firebase database to share plans with friends">Saved to this browser only</span>' : "");
+}
+
+function renderMeChip(){
+  const c = document.getElementById("meChip");
+  if(state.me){
+    document.getElementById("meDot").style.background = state.me.color;
+    document.getElementById("meName").textContent = state.me.name;
+  } else {
+    document.getElementById("meDot").style.background = "#ccc";
+    document.getElementById("meName").textContent = "Set up";
+  }
+}
+
+function renderTripHeader(){
+  document.getElementById("tripTitle").value = state.trip.title || "";
+  document.getElementById("tripStart").value = state.trip.start || "";
+  document.getElementById("tripEnd").value = state.trip.end || "";
+}
+
+function renderPeople(){
+  const wrap = document.getElementById("peopleList");
+  const names = Object.values(state.people);
+  document.getElementById("peopleCount").textContent = names.length;
+  if(!names.length){ wrap.innerHTML = '<div class="list-empty">No travelers yet. Add yourself to start planning.</div>'; return; }
+  wrap.innerHTML = "";
+  for(const p of names){
+    const isMe = state.me && p.name === state.me.name;
+    const hidden = state.hidden[p.name];
+    const acts = (p.activities||[]).length, stays = (p.stays||[]).length;
+    const ints = (p.interests||[]).slice(0,3).map(interestLabel).join(" · ");
+    const row = document.createElement("div");
+    row.className = "person" + (hidden ? " hidden" : "");
+    row.innerHTML = `
+      <span class="swatch" style="background:${p.color}"></span>
+      <div class="pcol"><div class="pname">${esc(p.name)} ${isMe?'<span class="you-tag">You</span>':''}</div>${ints?`<div class="pinterests">${esc(ints)}</div>`:''}</div>
+      <span class="pmeta">${acts} plan${acts!==1?'s':''}</span>
+      <button class="vis" title="Toggle on map">${hidden?eyeOff():eyeOn()}</button>`;
+    row.querySelector(".vis").onclick = () => { state.hidden[p.name] = !state.hidden[p.name]; render(); };
+    wrap.appendChild(row);
+  }
+  // legend mirrors visible travelers
+  const leg = document.getElementById("legendPeople");
+  leg.innerHTML = visiblePeople().map(p =>
+    `<div class="legrow"><span class="dot" style="background:${p.color}"></span>${esc(p.name)}</div>`).join("")
+    || '<div class="legrow" style="color:var(--ink-faint)">No one visible</div>';
+}
+
+function renderDateStrip(){
+  const strip = document.getElementById("dateStrip");
+  const dates = tripDates();
+  document.getElementById("clearDay").style.display = state.selectedDate ? "block" : "none";
+  if(!dates.length){ strip.innerHTML = '<div class="list-empty">Set your trip dates in the header to see a day-by-day view.</div>'; return; }
+  // count of items per day across visible people
+  const counts = {};
+  for(const a of allActivities()) counts[a.date] = (counts[a.date]||0)+1;
+  const myTrips = (state.me && state.people[state.me.name] && state.people[state.me.name].dayTrips) || {};
+  strip.innerHTML = "";
+  for(const d of dates){
+    const chip = document.createElement("button");
+    chip.className = "datechip" + (state.selectedDate===d ? " active" : "") + (myTrips[d] ? " trip" : "");
+    if(myTrips[d]) chip.title = "Day trip to " + myTrips[d];
+    chip.innerHTML = `<span class="dow">${dow(d)}</span><span class="dnum">${dnum(d)}</span><span class="dcount">${myTrips[d]?('→ '+myTrips[d].slice(0,4)):(counts[d]?('· '+counts[d]):'')}</span>`;
+    chip.onclick = () => { state.selectedDate = (state.selectedDate===d ? null : d); render(); };
+    strip.appendChild(chip);
+  }
+}
+
+function renderRailList(){
+  const wrap = document.getElementById("railList");
+  const label = document.getElementById("railListLabel");
+  label.textContent = state.selectedDate ? prettyDate(state.selectedDate) : "All plans";
+  let acts = allActivities();
+  let stays = allStays();
+  if(state.selectedDate){
+    acts = acts.filter(a => a.date === state.selectedDate);
+    stays = stays.filter(s => stayCoversDate(s, state.selectedDate));
+  }
+  acts.sort((a,b)=> (a.date+(a.time||"99")).localeCompare(b.date+(b.time||"99")));
+  document.getElementById("railCount").textContent = acts.length + stays.length;
+  if(!acts.length && !stays.length){
+    wrap.innerHTML = '<div class="list-empty">Nothing here yet. Use <b>Activity</b> to add a place you want to visit, or <b>Stay</b> to note where you\'re based.</div>';
+    return;
+  }
+  wrap.innerHTML = "";
+  for(const s of stays){
+    wrap.appendChild(itemRow({
+      color: s.color, title: s.hotelName || s.city, tick: s.color,
+      sub: `Stay · ${s.city} · ${shortRange(s.start,s.end)} · ${s.person}`,
+      onDel: canEdit(s.person) ? () => removeItem("stay", s.person, s.id) : null,
+      onClick: () => flyTo(s.location)
+    }));
+  }
+  for(const a of acts){
+    wrap.appendChild(itemRow({
+      color: a.color, title: a.title, tick: a.color,
+      sub: `${a.time?a.time+' · ':''}${a.category||'Activity'}${state.selectedDate?'':' · '+shortDate(a.date)} · ${a.person}`,
+      onDel: canEdit(a.person) ? () => removeItem("activity", a.person, a.id) : null,
+      onClick: () => flyTo(a.location)
+    }));
+  }
+}
+
+function itemRow({color,title,sub,tick,onDel,onClick}){
+  const el = document.createElement("div");
+  el.className = "item";
+  el.innerHTML = `<span class="tick" style="background:${tick}"></span>
+    <div class="ibody"><div class="ititle">${esc(title)}</div><div class="isub">${esc(sub)}</div></div>
+    ${onDel?'<button class="idel" title="Remove">&times;</button>':''}`;
+  if(onClick) el.querySelector(".ibody").onclick = onClick;
+  if(onDel) el.querySelector(".idel").onclick = (e)=>{ e.stopPropagation(); onDel(); };
+  return el;
+}
+
+/* ---------- map ---------- */
+function initMap(){
+  map = L.map("map", { zoomControl:true, attributionControl:true }).setView([35.4,137.0], 6);
+  L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
+    attribution:'&copy; OpenStreetMap &copy; CARTO', subdomains:"abcd", maxZoom:19
+  }).addTo(map);
+  markerLayer = L.layerGroup().addTo(map);
+}
+function pinIcon(color, isStay){
+  return L.divIcon({
+    className:"", html:`<div class="marker-pin ${isStay?'stay':''}" style="background:${color}"><span></span></div>`,
+    iconSize:[24,24], iconAnchor:isStay?[12,12]:[12,24], popupAnchor:[0,isStay?-10:-22]
+  });
+}
+function renderMarkers(){
+  if(!markerLayer) return;
+  markerLayer.clearLayers();
+  let acts = allActivities(), stays = allStays();
+  if(state.selectedDate){
+    acts = acts.filter(a=>a.date===state.selectedDate);
+    stays = stays.filter(s=>stayCoversDate(s,state.selectedDate));
+  }
+  const pts = [];
+  for(const s of stays){
+    if(!s.location) continue;
+    const m = L.marker([s.location.lat,s.location.lng], {icon:pinIcon(s.color,true)});
+    m.bindPopup(`<div class="pop"><h4>${esc(s.hotelName||s.city)}</h4><div class="pmeta">Stay · ${esc(s.city)} · ${shortRange(s.start,s.end)}</div><div class="who"><span class="dot" style="background:${s.color}"></span>${esc(s.person)}</div></div>`);
+    markerLayer.addLayer(m); pts.push([s.location.lat,s.location.lng]);
+  }
+  for(const a of acts){
+    if(!a.location) continue;
+    const m = L.marker([a.location.lat,a.location.lng], {icon:pinIcon(a.color,false)});
+    m.bindPopup(`<div class="pop"><h4>${esc(a.title)}</h4><div class="pmeta">${a.time?esc(a.time)+' · ':''}${esc(a.category||'Activity')} · ${esc(shortDate(a.date))}</div>${a.notes?'<div class="pmeta" style="margin-top:4px">'+esc(a.notes)+'</div>':''}<div class="who"><span class="dot" style="background:${a.color}"></span>${esc(a.person)}</div></div>`);
+    markerLayer.addLayer(m); pts.push([a.location.lat,a.location.lng]);
+  }
+  if(pts.length && !state._didFit){ map.fitBounds(pts, {padding:[60,60], maxZoom:12}); state._didFit=true; }
+}
+function flyTo(loc){
+  if(!loc) return;
+  setView("map");
+  document.querySelectorAll(".tab").forEach(t=>t.classList.toggle("active", t.dataset.view==="map"));
+  map.flyTo([loc.lat,loc.lng], Math.max(map.getZoom(),13), {duration:.6});
+}
+
+/* ---------- itinerary view (feasibility per person-day) ---------- */
+function renderItinerary(){
+  const wrap = document.getElementById("itineraryInner");
+  const dates = tripDates();
+  let head = `<h2>Itinerary</h2><p class="lede">Each person's day is anchored to their hotel, then read as a route. Travel modes and the day verdict are estimates from straight-line distance — real transit times vary.</p>`;
+  if(!dates.length){ wrap.innerHTML = head + '<div class="list-empty">Set your trip dates in the header to build the day-by-day itinerary.</div>'; return; }
+  const people = visiblePeople();
+  const shownDates = state.selectedDate ? [state.selectedDate] : dates;
+  let body = "";
+  for(const date of shownDates){
+    let dayHtml = "";
+    for(const p of people){
+      const acts = (p.activities||[]).filter(a=>a.date===date && a.location);
+      const stay = (p.stays||[]).find(s=>stayCoversDate(s,date) && s.location);
+      const trip = (p.dayTrips||{})[date];
+      if(!acts.length && !stay && !trip) continue;
+      dayHtml += renderPersonDay(p, date, acts, stay);
+    }
+    if(!dayHtml) continue;
+    body += `<div class="day-block"><div class="day-head"><span class="dh-num">${prettyDate(date)}</span><span class="dh-dow">Day</span></div>${dayHtml}</div>`;
+  }
+  wrap.innerHTML = head + (body || '<div class="list-empty">No plans on the selected day(s) yet.</div>');
+}
+
+function renderPersonDay(p, date, acts, stay){
+  // order the day: by explicit time when given, otherwise nearest-neighbour from the hotel
+  const anchor = stay ? {name: stay.hotelName||stay.city, loc: stay.location, anchor:true} : null;
+  let stops = acts.map(a=>({name:a.title, loc:a.location, time:a.time}));
+  const timed = stops.filter(s=>s.time).sort((a,b)=>a.time.localeCompare(b.time));
+  const untimed = stops.filter(s=>!s.time);
+  if(anchor && untimed.length){
+    // greedy nearest-neighbour ordering for untimed stops from the hotel
+    let cur = anchor.loc; const ordered=[];
+    const pool=[...untimed];
+    while(pool.length){
+      let bi=0,bd=Infinity;
+      pool.forEach((s,i)=>{ const d=haversine(cur,s.loc); if(d<bd){bd=d;bi=i;} });
+      ordered.push(pool[bi]); cur=pool[bi].loc; pool.splice(bi,1);
+    }
+    stops = [...timed, ...ordered];
+  } else {
+    stops = [...timed, ...untimed];
+  }
+  const sequence = anchor ? [anchor, ...stops] : stops;
+
+  // compute legs + verdict
+  let legs=[], maxLeg=0, totalMin=0;
+  const cities = new Set();
+  for(const s of sequence) if(s.loc) cities.add(nearestCity(s.loc));
+  for(let i=1;i<sequence.length;i++){
+    const km = haversine(sequence[i-1].loc, sequence[i].loc);
+    const c = classifyLeg(km);
+    legs.push({km, ...c}); maxLeg=Math.max(maxLeg,km); totalMin+=c.min;
+  }
+  const trip = (p.dayTrips||{})[date];
+  const stopCount = sequence.filter(s=>!s.anchor).length;
+  const verdict = trip ? {cls:"trip", text:"Day trip to "+trip} : dayVerdict(stopCount, cities.size, maxLeg);
+
+  let html = `<div class="person-day"><div class="pd-head"><span class="swatch" style="background:${p.color}"></span><span class="pdn">${esc(p.name)}</span><span class="verdict ${verdict.cls}">${esc(verdict.text)}</span></div>`;
+  if(stopCount === 0){
+    const msg = trip ? `Day trip to ${esc(trip)} planned — add spots from the Explore tab.`
+                     : `Based in ${esc(anchor.name)} — no activities planned.`;
+    html += `<div class="list-empty" style="padding-left:2px">${msg}</div></div>`;
+    return html;
+  }
+  html += `<div class="route">`;
+  sequence.forEach((s,i)=>{
+    const last = i===sequence.length-1;
+    html += `<div class="leg"><div class="rail-dot"><span class="rd ${s.anchor?'anchor':''}"></span>${last?'':'<span class="rline"></span>'}</div>
+      <div class="stop"><div class="sname">${esc(s.name)}${s.anchor?' <span style="color:var(--ink-faint);font-weight:400">· base</span>':''}</div>${s.time?`<div class="stime">${esc(s.time)}</div>`:''}</div></div>`;
+    if(!last){
+      const lg = legs[i];
+      html += `<div class="leg-travel"><span class="mode-tag ${lg.cls}">${lg.label}</span>${lg.km.toFixed(1)} km · ~${fmtMin(lg.min)}</div>`;
+    }
+  });
+  html += `</div></div>`;
+  return html;
+}
+
+function dayVerdict(stopCount, cityCount, maxLeg){
+  if(stopCount===0) return {cls:"rest", text:"Rest / travel day"};
+  if(cityCount>1 && maxLeg>60) return {cls:"split", text:"Spans multiple areas"};
+  if(maxLeg>25) return {cls:"warn", text:"Spread out — budget travel"};
+  return {cls:"good", text:"Compact day"};
+}
+
+/* ---------- explore view: day trips + area recommendations ---------- */
+function baseCityForDate(p, date){ const s=(p.stays||[]).find(x=>stayCoversDate(x,date)); return s?s.city:null; }
+function hotelLocForDate(p, date){ const s=(p.stays||[]).find(x=>stayCoversDate(x,date)); return s?s.location:null; }
+function uniqueBaseCities(p){ return [...new Set((p.stays||[]).map(s=>s.city))]; }
+function firstDateInCity(p, city){ const s=(p.stays||[]).find(x=>x.city===city); return s?s.start:null; }
+
+/* cities reachable from a base within comfortable day-trip range, nearest first */
+function dayTripSuggestions(baseCity){
+  const base = CITIES.find(c=>c[0]===baseCity);
+  if(!base) return [];
+  const origin={lat:base[1], lng:base[2]};
+  const out=[];
+  for(const [name,lat,lng] of CITIES){
+    if(name===baseCity) continue;
+    const km=haversine(origin,{lat,lng});
+    if(km>140) continue;
+    out.push({city:name, km, ...classifyLeg(km)});
+  }
+  out.sort((a,b)=>a.km-b.km);
+  return out.slice(0,6);
+}
+
+/* curated mainstream spots in a city the traveler hasn't already added */
+function recsForCity(city, p, date){
+  const have=new Set();
+  for(const a of (p.activities||[])){ if(!date || a.date===date) have.add(a.title.toLowerCase()); }
+  return POINTS.filter(pl=>pl.mainstream && pl.city===city && !have.has(pl.name.toLowerCase()));
+}
+
+/* points in a city that match the traveler's interests, including niche/photo spots */
+function forYouInCity(city, p, date){
+  const interests = p.interests||[];
+  if(!interests.length) return [];
+  const have=new Set();
+  for(const a of (p.activities||[])){ if(!date || a.date===date) have.add(a.title.toLowerCase()); }
+  const out=[];
+  for(const pt of POINTS){
+    if(pt.city!==city || have.has(pt.name.toLowerCase())) continue;
+    const hits=pointMatches(pt, interests);
+    if(hits.length) out.push({pt, hits});
+  }
+  // niche items first so specialty finds don't get buried under headline sights
+  out.sort((a,b)=> (a.pt.mainstream?1:0) - (b.pt.mainstream?1:0));
+  return out;
+}
+
+function forYouSection(title, city, targetDate, p){
+  const items=forYouInCity(city, p, targetDate);
+  if(!items.length) return "";
+  const hotel=targetDate?hotelLocForDate(p,targetDate):null;
+  let html=`<div class="eyebrow explore-sec">${esc(title)} <span class="count">${items.length}</span></div><div class="rec-grid">`;
+  for(const {pt,hits} of items){
+    const dist = hotel ? ` &middot; ${haversine(hotel,{lat:pt.lat,lng:pt.lng}).toFixed(1)} km from base` : "";
+    const note = pt.note ? `<div class="rec-note">Approximate — <a href="${pt.note}" target="_blank" rel="noopener">official map</a></div>` : "";
+    html+=`<div class="rec-card foryou"><div class="rec-thumb" data-thumb="${esc(pt.wiki||pt.name)}"></div><div class="rec-match">${esc(hits[0])}</div><div class="rec-name">${esc(pt.name)}</div>
+      <div class="rec-blurb">${esc(pt.blurb)}</div>${note}
+      <div class="rec-foot"><span class="rec-dist">${esc(pt.city)}${dist}</span>
+      <button class="mini-btn" data-addrec="${pt._i}" data-recdate="${targetDate||''}">Add${targetDate?'':'…'}</button></div></div>`;
+  }
+  return html+`</div>`;
+}
+
+function recSection(title, city, targetDate, p){
+  const recs=recsForCity(city, p, targetDate);
+  if(!recs.length) return `<div class="eyebrow explore-sec">${esc(title)}</div><div class="list-empty">Everything here is already on your list.</div>`;
+  const hotel=targetDate?hotelLocForDate(p,targetDate):null;
+  let html=`<div class="eyebrow explore-sec">${esc(title)} <span class="count">${recs.length}</span></div><div class="rec-grid">`;
+  for(const r of recs){
+    const dist = hotel ? ` &middot; ${haversine(hotel,{lat:r.lat,lng:r.lng}).toFixed(1)} km from base` : "";
+    html+=`<div class="rec-card"><div class="rec-thumb" data-thumb="${esc(r.wiki||r.name)}"></div><div class="rec-cat">${esc(r.cat)}</div><div class="rec-name">${esc(r.name)}</div>
+      <div class="rec-blurb">${esc(r.blurb)}</div>
+      <div class="rec-foot"><span class="rec-dist">${esc(r.city)}${dist}</span>
+      <button class="mini-btn" data-addrec="${r._i}" data-recdate="${targetDate||''}">Add${targetDate?'':'…'}</button></div></div>`;
+  }
+  return html+`</div>`;
+}
+
+/* nationwide spots (those with a region) grouped by area, filtered to interests */
+function acrossJapanSection(p){
+  const interests = p.interests||[];
+  const have = new Set((p.activities||[]).map(a=>a.title.toLowerCase()));
+  const pool = POINTS.filter(pt=>pt.region && !have.has(pt.name.toLowerCase()));
+  const pick = pt => interests.length ? pointMatches(pt, interests).length>0 : (pt.tags||[]).includes("photo");
+  const chosen = pool.filter(pick);
+  if(!chosen.length) return "";
+  const byRegion = {};
+  for(const pt of chosen){ (byRegion[pt.region] = byRegion[pt.region]||[]).push(pt); }
+  const order = ["Hokkaido","Tohoku","Kanto","Chubu","Kansai","Chugoku","Shikoku","Kyushu","Okinawa"];
+  const regions = Object.keys(byRegion).sort((a,b)=>order.indexOf(a)-order.indexOf(b));
+  const label = interests.length ? "Across Japan, matched to your interests" : "Photo spots across Japan";
+  let html = `<div class="eyebrow explore-sec">${esc(label)}</div><p class="across-note">Farther-flung spots worth a dedicated trip. Each shows an example photo so you can judge whether it earns the journey. Adding one drops it on your start date to slot in later.</p>`;
+  for(const region of regions){
+    html += `<div class="region-label">${esc(region)}</div><div class="rec-grid">`;
+    for(const pt of byRegion[region]){
+      const m = interests.length ? pointMatches(pt, interests)[0] : "Photo spot";
+      html += `<div class="rec-card foryou"><div class="rec-thumb" data-thumb="${esc(pt.wiki||pt.name)}"></div><div class="rec-match">${esc(m)}</div><div class="rec-name">${esc(pt.name)}</div>
+        <div class="rec-blurb">${esc(pt.blurb)}</div>
+        <div class="rec-foot"><span class="rec-dist">${esc(pt.city)}</span>
+        <button class="mini-btn" data-addrec="${pt._i}" data-recdate="">Add…</button></div></div>`;
+    }
+    html += `</div>`;
+  }
+  return html;
+}
+
+function renderExplore(){
+  const wrap=document.getElementById("exploreInner");
+  let head=`<h2>Explore</h2><p class="lede">Assign a day to your base city or a day trip, then add recommendations for either area. Picks are tailored to each traveler's interests. Travel times are rough estimates.</p>`;
+  if(!state.me){ wrap.innerHTML=head+'<div class="list-empty">Add yourself to the trip first.</div>'; return; }
+  const me=state.people[state.me.name];
+  const interests=me.interests||[];
+  const date=state.selectedDate;
+
+  // interests summary line
+  if(interests.length){
+    head+=`<div class="your-interests">Your interests: ${interests.map(t=>`<span class="mini-chip">${esc(interestLabel(t))}</span>`).join("")} <button class="linkish edit-interests">Edit</button></div>`;
+  }
+  const cta = interests.length ? "" :
+    `<div class="interests-cta"><b>Get tailored picks.</b> Add interests to your profile — Pokémon manhole covers, photo spots, food, temples, and more. <button class="mini-btn edit-interests">Add interests</button></div>`;
+
+  if(!date){
+    let body=cta;
+    const bases=uniqueBaseCities(me);
+    if(!bases.length){
+      body+='<div class="list-empty" style="margin-top:12px">Add a stay — a city, hotel, and dates — to see recommendations for your area. Then pick a day from the strip on the left to plan a day trip.</div>';
+    } else {
+      body+='<div class="explore-hint" style="margin-top:12px">Pick a day on the left to plan a day trip. Meanwhile, ideas around where you\'re based:</div>';
+      for(const city of bases){
+        body+=forYouSection("For your interests in "+city, city, firstDateInCity(me,city), me);
+        body+=recSection("Popular in "+city, city, firstDateInCity(me,city), me);
+      }
+    }
+    body+=acrossJapanSection(me);
+    wrap.innerHTML=head+body;
+    wireExplore(wrap);
+    return;
+  }
+
+  const base=baseCityForDate(me,date);
+  const trip=(me.dayTrips||{})[date]||null;
+  let body=`<div class="explore-day">${prettyDate(date)}</div>`;
+  body += base ? `<div class="base-line">Based in <b>${esc(base)}</b> this day.</div>`
+               : `<div class="list-empty" style="margin-bottom:14px">No stay covers this day yet. Add a stay to set your base, or plan a day trip below.</div>`;
+
+  body+=`<div class="eyebrow explore-sec">Day trip</div>`;
+  if(trip){
+    body+=`<div class="trip-set"><span class="dot" style="background:var(--indigo)"></span>Day trip to <b>${esc(trip)}</b> planned<button class="mini-btn" data-cleartrip="1">Clear</button></div>`;
+  } else if(base){
+    const sugg=dayTripSuggestions(base);
+    if(sugg.length){
+      body+=`<div class="trip-suggest">`;
+      for(const s of sugg) body+=`<button class="trip-opt" data-settrip="${esc(s.city)}"><span class="to-city">${esc(s.city)}</span><span class="to-meta"><span class="mode-tag ${s.cls}">${s.label}</span> ~${fmtMin(s.min)} each way</span></button>`;
+      body+=`</div>`;
+    } else body+=`<div class="list-empty">No cities within easy day-trip range of ${esc(base)}.</div>`;
+  } else body+=`<div class="list-empty">Set a base first (add a stay) to see day-trip suggestions.</div>`;
+
+  body+=cta;
+  if(trip) body+=forYouSection("For your interests in "+trip, trip, date, me);
+  if(base) body+=forYouSection("For your interests in "+base, base, date, me);
+  if(trip) body+=recSection("Popular in "+trip, trip, date, me);
+  if(base) body+=recSection("Popular in "+base, base, date, me);
+
+  wrap.innerHTML=head+body;
+  wireExplore(wrap);
+}
+
+/* example photos: pulled lazily from Wikipedia's page-image API (freely licensed, CORS-enabled) */
+const thumbCache = new Map();
+function firstThumb(d){
+  const pages = d && d.query && d.query.pages;
+  if(!pages) return null;
+  for(const k in pages){ if(pages[k].thumbnail && pages[k].thumbnail.source) return pages[k].thumbnail.source; }
+  return null;
+}
+async function resolveThumb(title){
+  if(thumbCache.has(title)) return thumbCache.get(title);
+  const clean = title.replace(/\s*\(.*?\)\s*/g," ").trim();
+  const base = "https://en.wikipedia.org/w/api.php?action=query&format=json&origin=*&prop=pageimages&piprop=thumbnail&pithumbsize=480&redirects=1";
+  let src = null;
+  try {
+    let r = await fetch(`${base}&titles=${encodeURIComponent(clean)}`);
+    src = firstThumb(await r.json());
+    if(!src){
+      let r2 = await fetch(`${base}&generator=search&gsrlimit=1&gsrsearch=${encodeURIComponent(clean+" Japan")}`);
+      src = firstThumb(await r2.json());
+    }
+  } catch { src = null; }
+  thumbCache.set(title, src);
+  return src;
+}
+async function loadThumb(el){
+  const title = el.getAttribute("data-thumb");
+  if(!title){ return; }
+  el.classList.add("loading");
+  const src = await resolveThumb(title);
+  el.classList.remove("loading");
+  if(src){ el.style.backgroundImage = `url("${src}")`; el.classList.add("has-img"); }
+  else { el.classList.add("no-img"); el.textContent = "No preview available"; }
+}
+function hydrateThumbs(wrap){
+  const els = wrap.querySelectorAll(".rec-thumb[data-thumb]");
+  if(!("IntersectionObserver" in window)){ els.forEach(loadThumb); return; }
+  const io = new IntersectionObserver((entries, obs)=>{
+    for(const e of entries){ if(e.isIntersecting){ loadThumb(e.target); obs.unobserve(e.target); } }
+  }, { rootMargin: "150px" });
+  els.forEach(el=>io.observe(el));
+}
+
+function wireExplore(wrap){
+  hydrateThumbs(wrap);
+  wrap.querySelectorAll(".edit-interests").forEach(b=> b.onclick=openProfile);
+  wrap.querySelectorAll("[data-settrip]").forEach(b=> b.onclick=()=>setDayTrip(state.selectedDate, b.dataset.settrip));
+  wrap.querySelectorAll("[data-cleartrip]").forEach(b=> b.onclick=()=>clearDayTrip(state.selectedDate));
+  wrap.querySelectorAll("[data-addrec]").forEach(b=> b.onclick=()=>{
+    const pt=POINTS[+b.dataset.addrec];
+    const d=b.dataset.recdate || state.selectedDate || firstDateInCity(state.people[state.me.name], pt.city) || state.trip.start;
+    addRecommendation(pt, d);
+  });
+}
+
+async function setDayTrip(date, city){
+  if(!date) return;
+  const rec=state.people[state.me.name];
+  rec.dayTrips=rec.dayTrips||{}; rec.dayTrips[date]=city;
+  await saveMe(); render(); toast("Day trip to "+city+" set");
+}
+async function clearDayTrip(date){
+  const rec=state.people[state.me.name];
+  if(rec.dayTrips) delete rec.dayTrips[date];
+  await saveMe(); render(); toast("Day trip cleared");
+}
+async function addRecommendation(place, date){
+  if(!date){ toast("Pick a day first"); return; }
+  const rec=state.people[state.me.name];
+  rec.activities.push({ id:uid(), title:place.name, location:{lat:place.lat, lng:place.lng, label:place.name},
+    date, time:"", durationH:"", category:place.cat, notes:"" });
+  await saveMe(); state._didFit=false; render(); toast("Added "+place.name);
+}
+
+/* ---------- coordination view ---------- */
+function renderCoord(){
+  const wrap = document.getElementById("coordInner");
+  let head = `<h2>Coordination</h2><p class="lede">Where your paths cross. This looks for days you're in the same area and plans that land close together, so overlaps are easy to spot.</p>`;
+  const people = Object.values(state.people);
+  if(people.length < 2){
+    wrap.innerHTML = head + '<div class="list-empty">Share this trip and once a friend adds their stays and plans, overlaps will show up here. The map link carries everything — anyone who opens it can add their own plans.</div>';
+    return;
+  }
+  const cards = [];
+  const dates = tripDates();
+  for(let i=0;i<people.length;i++) for(let j=i+1;j<people.length;j++){
+    const A=people[i], B=people[j];
+    const sharedCityDays = [];   // date -> city where both are based / present
+    const nearbyPlans = [];      // {date, aName, bName, km}
+    for(const date of dates){
+      const aCity = presenceCity(A, date), bCity = presenceCity(B, date);
+      if(aCity && bCity && aCity===bCity) sharedCityDays.push({date, city:aCity});
+      // nearby individual plans on the same day
+      const aActs=(A.activities||[]).filter(a=>a.date===date&&a.location);
+      const bActs=(B.activities||[]).filter(a=>a.date===date&&a.location);
+      for(const a of aActs) for(const b of bActs){
+        const km=haversine(a.location,b.location);
+        if(km<=6) nearbyPlans.push({date, aName:a.title, bName:b.title, km});
+      }
+    }
+    if(!sharedCityDays.length && !nearbyPlans.length) continue;
+    cards.push(coordCard(A,B,sharedCityDays,nearbyPlans));
+  }
+  wrap.innerHTML = head + (cards.join("") || '<div class="list-empty">No overlapping days found yet. As people add stays and plans, matches will appear.</div>');
+}
+/* a person's "city" on a date: their stay's city, else the city of their first activity that day */
+function presenceCity(p, date){
+  const t=(p.dayTrips||{})[date]; if(t) return t;
+  const stay=(p.stays||[]).find(s=>stayCoversDate(s,date));
+  if(stay) return stay.city;
+  const act=(p.activities||[]).find(a=>a.date===date&&a.location);
+  if(act) return nearestCity(act.location);
+  return null;
+}
+function coordCard(A,B,days,plans){
+  const range = days.length ? groupRanges(days) : [];
+  let lines = "";
+  for(const g of range){
+    lines += `<div class="cc-line"><span class="dot" style="background:var(--indigo)"></span>Both in <b>${esc(g.city)}</b> · ${g.count===1?prettyDate(g.dates[0]):shortDate(g.dates[0])+'–'+shortDate(g.dates[g.dates.length-1])}</div>`;
+  }
+  const seen = new Set();
+  for(const np of plans){
+    const key=np.date+np.aName+np.bName; if(seen.has(key))continue; seen.add(key);
+    lines += `<div class="cc-line"><span class="dot" style="background:${A.color}"></span>${shortDate(np.date)}: <b>${esc(np.aName)}</b> &amp; <b>${esc(np.bName)}</b> are ${np.km.toFixed(1)} km apart</div>`;
+  }
+  return `<div class="coord-card"><div class="cc-head"><div class="cc-people">
+      <span class="dot" style="background:${A.color}"></span>${esc(A.name)}
+      <span style="color:var(--ink-faint);font-weight:400">and</span>
+      <span class="dot" style="background:${B.color}"></span>${esc(B.name)}</div>
+      <span class="cc-where">${days.length} shared day${days.length!==1?'s':''}</span></div>${lines}</div>`;
+}
+function groupRanges(days){
+  // collapse consecutive same-city days into ranges for readability
+  const sorted=[...days].sort((a,b)=>a.date.localeCompare(b.date));
+  const groups=[]; let cur=null;
+  for(const d of sorted){
+    if(cur && cur.city===d.city && consecutive(cur.dates[cur.dates.length-1], d.date)){ cur.dates.push(d.date); cur.count++; }
+    else { cur={city:d.city, dates:[d.date], count:1}; groups.push(cur); }
+  }
+  return groups;
+}
+function consecutive(a,b){ const da=parseISO(a); da.setDate(da.getDate()+1); return iso(da)===b; }
+
+/* ============================================================
+   Actions
+   ============================================================ */
+function canEdit(person){ return state.me && person === state.me.name; }
+
+async function removeItem(kind, person, id){
+  if(!canEdit(person)) return;
+  const rec = state.people[person];
+  if(kind==="activity") rec.activities = rec.activities.filter(a=>a.id!==id);
+  else rec.stays = rec.stays.filter(s=>s.id!==id);
+  await saveMe(); render(); toast("Removed");
+}
+
+function setView(v){
+  state.view = v;
+  document.getElementById("stageMap").style.display = v==="map"?"block":"none";
+  document.getElementById("stageItinerary").style.display = v==="itinerary"?"block":"none";
+  document.getElementById("stageExplore").style.display = v==="explore"?"block":"none";
+  document.getElementById("stageCoord").style.display = v==="coord"?"block":"none";
+  if(v==="map" && map) setTimeout(()=>map.invalidateSize(),50);
+  render();
+}
+
+/* ---------- profile modal ---------- */
+function openProfile(){
+  const scrim=document.getElementById("profileScrim");
+  document.getElementById("profileTitle").textContent = state.me ? "Your profile" : "Add yourself to the trip";
+  document.getElementById("profileName").value = state.me ? state.me.name : "";
+  buildSwatches(state.me ? state.me.color : PALETTE[Object.keys(state.people).length % PALETTE.length]);
+  const rec = state.me ? state.people[state.me.name] : null;
+  buildInterestChips(rec ? (rec.interests||[]) : []);
+  scrim.classList.add("show");
+  document.getElementById("profileName").focus();
+}
+function buildInterestChips(selected){
+  const box=document.getElementById("interestChips");
+  const sel=new Set(selected||[]);
+  box._sel=sel;
+  const known=INTERESTS.map(i=>i[1]);
+  const customs=[...sel].filter(t=>!known.includes(t));
+  box.innerHTML="";
+  const addChip=(label,tag)=>{
+    const b=document.createElement("button");
+    b.type="button"; b.className="chip"+(sel.has(tag)?" on":""); b.textContent=label;
+    b.onclick=()=>{ if(sel.has(tag)) sel.delete(tag); else sel.add(tag); b.classList.toggle("on"); };
+    box.appendChild(b);
+  };
+  INTERESTS.forEach(([label,tag])=>addChip(label,tag));
+  customs.forEach(tag=>addChip(tag,tag));
+}
+function addCustomInterest(){
+  const inp=document.getElementById("interestInput");
+  const v=inp.value.trim().toLowerCase();
+  if(!v) return;
+  const box=document.getElementById("interestChips");
+  box._sel.add(v); buildInterestChips([...box._sel]); inp.value="";
+}
+function buildSwatches(sel){
+  const grid=document.getElementById("swatchGrid");
+  const used=new Set(Object.values(state.people).map(p=>p.color).filter(c=>!(state.me&&c===state.me.color)));
+  grid.innerHTML="";
+  grid._sel=sel;
+  PALETTE.forEach(c=>{
+    const b=document.createElement("button");
+    b.style.background=c;
+    b.className = c===sel?"sel":"";
+    if(used.has(c)) b.style.opacity=".35";
+    b.title = used.has(c)?"In use":"";
+    b.onclick=()=>{ grid._sel=c; [...grid.children].forEach(x=>x.classList.remove("sel")); b.classList.add("sel"); };
+    grid.appendChild(b);
+  });
+}
+async function saveProfile(){
+  const name=document.getElementById("profileName").value.trim();
+  const color=document.getElementById("swatchGrid")._sel;
+  if(!name){ toast("Enter a name"); return; }
+  const interests=[...(document.getElementById("interestChips")._sel||[])];
+  const oldName = state.me && state.me.name;
+  if(oldName && oldName!==name){
+    // rename: migrate the record and clear the old key
+    const rec = state.people[oldName]; delete state.people[oldName];
+    rec.name=name; rec.color=color; state.people[name]=rec;
+    if(hasStore) await sSet("person:"+oldName, JSON.stringify({name:oldName,color:color,stays:[],activities:[],deleted:true}), true);
+  } else {
+    if(!state.people[name]) state.people[name]={name, color, stays:[], activities:[], dayTrips:{}, interests:[], updated:Date.now()};
+    else state.people[name].color=color;
+  }
+  if(state.people[name]) state.people[name].interests=interests;
+  state.me={name, color};
+  if(hasStore) await sSet("me", JSON.stringify(state.me), false);  // personal, identifies this browser
+  await saveMe();
+  document.getElementById("profileScrim").classList.remove("show");
+  render();
+}
+
+/* ---------- item modal ---------- */
+function openItem(kind){
+  if(!state.me){ openProfile(); return; }
+  state.editing = {kind};
+  state.pendingLoc = null;
+  const isStay = kind==="stay";
+  document.getElementById("itemTitle").textContent = isStay?"Add a stay":"Add an activity";
+  document.getElementById("itemSubtitle").textContent = isStay
+    ? "Where you're based, and for which dates. It becomes a hotel marker."
+    : "A place you'd like to visit, on a given day.";
+  document.getElementById("stayFields").style.display = isStay?"block":"none";
+  document.getElementById("actFields").style.display = isStay?"none":"block";
+  document.getElementById("fldTitle").style.display = isStay?"none":"block";
+  document.getElementById("lblTitle").textContent = "What is it";
+  // reset fields
+  document.getElementById("itemName").value="";
+  document.getElementById("locInput").value="";
+  document.getElementById("stayCity").value="";
+  document.getElementById("stayStart").value = state.trip.start||"";
+  document.getElementById("stayEnd").value = state.trip.end||"";
+  document.getElementById("actDate").value = state.selectedDate || state.trip.start || "";
+  document.getElementById("actTime").value="";
+  document.getElementById("actDur").value="";
+  document.getElementById("actNotes").value="";
+  document.getElementById("actCat").value="Sightseeing";
+  updatePickedLabel();
+  document.getElementById("itemScrim").classList.add("show");
+}
+function updatePickedLabel(){
+  const el=document.getElementById("locPicked");
+  if(state.pendingLoc){
+    el.className="loc-picked";
+    el.innerHTML=`<span class="dotcoord">Set</span> ${esc(state.pendingLoc.label||"Custom location")} · ${state.pendingLoc.lat.toFixed(4)}, ${state.pendingLoc.lng.toFixed(4)}`;
+  } else {
+    el.className="loc-picked none"; el.textContent="No location set";
+  }
+}
+async function saveItem(){
+  const kind = state.editing.kind;
+  const rec = state.people[state.me.name];
+  if(!state.pendingLoc){ toast("Set a location first"); return; }
+  if(kind==="stay"){
+    const city=document.getElementById("stayCity").value.trim() || nearestCity(state.pendingLoc);
+    const s={ id:uid(), city, hotelName:(document.getElementById("locInput").value.trim()||city),
+      location:state.pendingLoc, start:document.getElementById("stayStart").value, end:document.getElementById("stayEnd").value };
+    if(!s.start||!s.end){ toast("Set arrive and depart dates"); return; }
+    rec.stays.push(s);
+  } else {
+    const title=document.getElementById("itemName").value.trim() || state.pendingLoc.label || "Untitled";
+    const date=document.getElementById("actDate").value;
+    if(!date){ toast("Pick a day"); return; }
+    rec.activities.push({ id:uid(), title, location:state.pendingLoc, date,
+      time:document.getElementById("actTime").value, durationH:document.getElementById("actDur").value,
+      category:document.getElementById("actCat").value, notes:document.getElementById("actNotes").value.trim() });
+  }
+  await saveMe();
+  document.getElementById("itemScrim").classList.remove("show");
+  state._didFit=false;
+  render();
+  toast(kind==="stay"?"Stay added":"Activity added");
+}
+
+/* ---------- location search (curated + OSM geocoder + map click) ---------- */
+let searchTimer=null;
+function onLocInput(){
+  const q=document.getElementById("locInput").value.trim();
+  const box=document.getElementById("locSuggest");
+  if(q.length<2){ box.classList.remove("show"); return; }
+  // instant curated matches
+  const ql=q.toLowerCase();
+  const curated = POINTS.filter(p=>p.name.toLowerCase().includes(ql)).slice(0,6)
+    .map(p=>({label:p.name, lat:p.lat, lng:p.lng, city:p.city, src:"list"}));
+  renderSuggest(curated, true);
+  // debounced geocoder for anything else
+  clearTimeout(searchTimer);
+  searchTimer=setTimeout(()=>geocode(q, curated), 450);
+}
+async function geocode(q, curated){
+  try{
+    const url="https://nominatim.openstreetmap.org/search?format=json&limit=5&countrycodes=jp&q="+encodeURIComponent(q);
+    const res=await fetch(url,{headers:{"Accept":"application/json"}});
+    if(!res.ok) throw 0;
+    const data=await res.json();
+    const geo=data.map(d=>({label:d.display_name.split(",")[0], sub:d.display_name, lat:+d.lat, lng:+d.lon, src:"map"}));
+    renderSuggest([...curated, ...geo], false);
+  }catch{ /* keep curated results; geocoder may be rate-limited */ }
+}
+function renderSuggest(items, partial){
+  const box=document.getElementById("locSuggest");
+  if(!items.length){ box.classList.remove("show"); return; }
+  box.innerHTML="";
+  items.forEach(it=>{
+    const row=document.createElement("div");
+    row.className="loc-opt";
+    row.innerHTML=`<span>${esc(it.label)}</span>${it.city?`<span class="lo-city">${esc(it.city)}</span>`:`<span class="lo-src">${it.src==='list'?'List':'Map'}</span>`}`;
+    row.onclick=()=>{
+      state.pendingLoc={lat:it.lat, lng:it.lng, label:it.label};
+      if(!document.getElementById("itemName").value) document.getElementById("itemName").value=it.label;
+      if(state.editing.kind==="stay" && !document.getElementById("stayCity").value)
+        document.getElementById("stayCity").value = it.city || nearestCity(state.pendingLoc);
+      document.getElementById("locInput").value=it.label;
+      box.classList.remove("show");
+      updatePickedLabel();
+    };
+    box.appendChild(row);
+  });
+  box.classList.add("show");
+}
+function startMapPick(){
+  document.getElementById("itemScrim").classList.remove("show");
+  setView("map");
+  document.querySelectorAll(".tab").forEach(t=>t.classList.toggle("active", t.dataset.view==="map"));
+  state.picking=true;
+  document.getElementById("pinNote").classList.add("show");
+  map.getContainer().style.cursor="crosshair";
+  pickHandler=(e)=>{
+    state.pendingLoc={lat:e.latlng.lat, lng:e.latlng.lng, label:document.getElementById("locInput").value.trim()||"Custom location"};
+    endMapPick();
+    document.getElementById("itemScrim").classList.add("show");
+    updatePickedLabel();
+  };
+  map.on("click", pickHandler);
+}
+function endMapPick(){
+  state.picking=false;
+  document.getElementById("pinNote").classList.remove("show");
+  map.getContainer().style.cursor="";
+  if(pickHandler){ map.off("click", pickHandler); pickHandler=null; }
+}
+
+/* ============================================================
+   Small utilities
+   ============================================================ */
+function uid(){ return Math.random().toString(36).slice(2,9); }
+function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+function shortDate(s){ return parseISO(s).toLocaleDateString("en-US",{month:"short",day:"numeric"}); }
+function shortRange(a,b){ return a&&b ? shortDate(a)+"–"+shortDate(b) : (a?shortDate(a):""); }
+function eyeOn(){ return '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>'; }
+function eyeOff(){ return '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.9 17.9A9.7 9.7 0 0 1 12 19C6 19 2 12 2 12a17 17 0 0 1 4-4.8m3.5-1.9A9.7 9.7 0 0 1 12 5c6 0 10 7 10 7a17 17 0 0 1-2.3 3.2M1 1l22 22"/></svg>'; }
+let toastTimer=null;
+function toast(msg){
+  const n=document.getElementById("notice"); n.textContent=msg; n.classList.add("show");
+  clearTimeout(toastTimer); toastTimer=setTimeout(()=>n.classList.remove("show"),1800);
+}
+
+/* ============================================================
+   Wiring + boot
+   ============================================================ */
+function wire(){
+  document.getElementById("tabs").addEventListener("click", e=>{
+    const t=e.target.closest(".tab"); if(!t) return;
+    document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));
+    t.classList.add("active"); setView(t.dataset.view);
+  });
+  document.getElementById("meChip").onclick = openProfile;
+  document.getElementById("addActivity").onclick = ()=>openItem("activity");
+  document.getElementById("addStay").onclick = ()=>openItem("stay");
+  document.getElementById("clearDay").onclick = ()=>{ state.selectedDate=null; render(); };
+
+  document.getElementById("profileSave").onclick = saveProfile;
+  document.getElementById("profileName").addEventListener("keydown", e=>{ if(e.key==="Enter") saveProfile(); });
+  document.getElementById("interestAdd").onclick = addCustomInterest;
+  document.getElementById("interestInput").addEventListener("keydown", e=>{ if(e.key==="Enter"){ e.preventDefault(); addCustomInterest(); } });
+
+  document.getElementById("itemSave").onclick = saveItem;
+  document.getElementById("itemCancel").onclick = ()=>{ endMapPick(); document.getElementById("itemScrim").classList.remove("show"); };
+  document.getElementById("locInput").addEventListener("input", onLocInput);
+  document.getElementById("pickOnMap").onclick = startMapPick;
+  document.getElementById("pinCancel").onclick = ()=>{ endMapPick(); document.getElementById("itemScrim").classList.add("show"); };
+
+  // dismiss suggestion box on outside click
+  document.addEventListener("click", e=>{
+    if(!e.target.closest(".loc-box")) document.getElementById("locSuggest").classList.remove("show");
+  });
+  // scrim backdrop closes profile only (item modal has explicit buttons)
+  document.getElementById("profileScrim").addEventListener("click", e=>{
+    if(e.target.id==="profileScrim" && state.me) e.currentTarget.classList.remove("show");
+  });
+
+  // trip header edits (debounced save)
+  let tt=null;
+  const push=()=>{ clearTimeout(tt); tt=setTimeout(saveTrip, 500); };
+  document.getElementById("tripTitle").addEventListener("input", e=>{ state.trip.title=e.target.value; push(); });
+  document.getElementById("tripStart").addEventListener("change", e=>{ state.trip.start=e.target.value; saveTrip(); render(); });
+  document.getElementById("tripEnd").addEventListener("change", e=>{ state.trip.end=e.target.value; saveTrip(); render(); });
+}
+
+async function boot(){
+  initMap();
+  wire();
+  // default trip window if unset (spring, a common season) — user can change in header
+  state.trip.start = "2026-04-06"; state.trip.end = "2026-04-19";
+  if(hasStore){
+    const me=await sGet("me", false);
+    if(me && me.value){ try{ state.me=JSON.parse(me.value); }catch{} }
+    await loadEveryone();
+  }
+  render();
+  if(!state.me) openProfile();
+  // gentle background refresh so collaborators' changes appear
+  if(hasStore) setInterval(async()=>{
+    if(document.getElementById("itemScrim").classList.contains("show")) return;
+    if(document.getElementById("profileScrim").classList.contains("show")) return;
+    await loadEveryone(); render();
+  }, 20000);
+}
+boot();
+</script>
+</body>
+</html>
