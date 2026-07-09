@@ -406,6 +406,43 @@
   .ck-sub { font-size: 12px; color: var(--ink-soft); line-height: 1.45; }
   .ck-sub a { color: var(--indigo); }
 
+  /* prep board */
+  .panel-inner.wide { max-width: 1180px; }
+  .prep-tray { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+  .prep-chip { border: 1px dashed var(--line-strong); background: var(--surface); border-radius: 9px; padding: 8px 12px; text-align: left; display: flex; flex-direction: column; gap: 2px; }
+  .prep-chip span { font-size: 11px; color: var(--ink-faint); }
+  .prep-chip:hover { border-color: var(--indigo); }
+  .prep-chip.sel, .prep-item.sel { outline: 2px solid var(--indigo); outline-offset: 1px; }
+  .prep-selbar { position: sticky; top: -26px; background: var(--paper); padding: 9px 2px; font-size: 12.5px; color: var(--ink-soft); display: flex; gap: 10px; align-items: center; flex-wrap: wrap; z-index: 5; }
+  .prep-grid { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 12px; align-items: flex-start; }
+  .prep-col { min-width: 152px; flex: 0 0 152px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 9px; min-height: 130px; }
+  .prep-col.can { border-color: var(--indigo); box-shadow: 0 0 0 1px var(--indigo); cursor: pointer; background: #f7f9fc; }
+  .prep-dh { font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 8px; }
+  .prep-dh b { font-family: var(--serif); font-size: 16px; color: var(--ink); letter-spacing: 0; margin-left: 4px; }
+  .prep-item { border: 1px solid var(--line); border-left: 3px solid var(--line-strong); border-radius: 7px; padding: 6px 8px; font-size: 12px; margin-bottom: 6px; background: var(--surface); }
+  .prep-item.mine { cursor: pointer; }
+  .prep-item.mine:hover { border-color: var(--indigo); }
+  .prep-item.ghost { border-style: dashed; color: var(--ink-soft); background: transparent; }
+  .prep-item em { display: block; font-style: normal; font-size: 10.5px; color: var(--ink-faint); }
+
+  /* expenses */
+  .exp-form { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 15px 16px 12px; margin-bottom: 16px; box-shadow: var(--shadow); }
+  .exp-row { display: flex; align-items: center; gap: 10px; padding: 8px 6px; border-bottom: 1px solid var(--line); font-size: 13px; }
+  .exp-row:last-child { border-bottom: none; }
+  .exp-row .xdesc { flex: 1; min-width: 0; }
+  .exp-row .xmeta { font-size: 11.5px; color: var(--ink-faint); }
+  .exp-row .xamt { font-weight: 600; white-space: nowrap; }
+  .settle-line { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 13px; }
+  .settle-line b { font-weight: 600; }
+  .net-chip { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; margin-right: 16px; }
+  .net-pos { color: #3a6b4a; font-weight: 600; }
+  .net-neg { color: var(--shu); font-weight: 600; }
+
+  /* flights */
+  .flight-grid { display: grid; grid-template-columns: 54px 1fr 1fr; gap: 6px; align-items: center; }
+  .flight-grid input { border: 1px solid var(--line-strong); border-radius: 7px; padding: 7px 9px; font-size: 12.5px; width: 100%; }
+  .fg-cap { font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-faint); font-weight: 600; }
+
   /* day-grouping suggestions */
   .sug-card {
     border: 1px solid var(--line); border-left: 3px solid var(--indigo); border-radius: var(--radius);
@@ -454,8 +491,10 @@
     <nav class="tabs" id="tabs">
       <button class="tab active" data-view="map">Map</button>
       <button class="tab" data-view="itinerary">Itinerary</button>
+      <button class="tab" data-view="prep">Prep</button>
       <button class="tab" data-view="explore">Explore</button>
       <button class="tab" data-view="coord">Coordination</button>
+      <button class="tab" data-view="exp">Expenses</button>
       <button class="tab" data-view="check">Checklist</button>
     </nav>
     <button class="me-chip" id="meChip" title="Edit your profile">
@@ -513,6 +552,8 @@
     <div class="panel" id="stageExplore" style="display:none;"><div class="panel-inner" id="exploreInner"></div></div>
     <div class="panel" id="stageCoord" style="display:none;"><div class="panel-inner" id="coordInner"></div></div>
     <div class="panel" id="stageCheck" style="display:none;"><div class="panel-inner" id="checkInner"></div></div>
+    <div class="panel" id="stagePrep" style="display:none;"><div class="panel-inner wide" id="prepInner"></div></div>
+    <div class="panel" id="stageExp" style="display:none;"><div class="panel-inner" id="expInner"></div></div>
   </div>
 </div>
 
@@ -540,6 +581,20 @@
           <button class="mini-btn" id="interestAdd" type="button">Add</button>
         </div>
         <div class="field-hint">Recommendations get tailored to these, down to niche finds like Pokémon manhole covers and good photo spots.</div>
+      </div>
+      <div class="field">
+        <label>Flights (optional)</label>
+        <div class="flight-grid">
+          <span class="fg-cap">Arrive</span>
+          <input type="date" id="arrDate" aria-label="Arrival date"><input type="time" id="arrTime" aria-label="Arrival time">
+          <span></span>
+          <input type="text" id="arrAp" placeholder="Airport, e.g. NRT" maxlength="18"><input type="text" id="arrFl" placeholder="Flight, e.g. NH105" maxlength="12">
+          <span class="fg-cap">Depart</span>
+          <input type="date" id="depDate" aria-label="Departure date"><input type="time" id="depTime" aria-label="Departure time">
+          <span></span>
+          <input type="text" id="depAp" placeholder="Airport" maxlength="18"><input type="text" id="depFl" placeholder="Flight" maxlength="12">
+        </div>
+        <div class="field-hint">Shows on the Coordination tab so arrivals line up, and lands in your calendar export.</div>
       </div>
     </div>
     <div class="modal-foot">
@@ -586,9 +641,31 @@
       </div>
 
       <div id="actFields">
-        <div class="field-row">
+        <div class="field">
+          <label>When</label>
+          <div class="seg" id="daySeg">
+            <button type="button" data-mode="fixed" class="on">Exact day</button>
+            <button type="button" data-mode="options">A few options</button>
+            <button type="button" data-mode="range">Date range</button>
+          </div>
+        </div>
+        <div class="field-row" id="whenFixed">
           <div class="field"><label>Day</label><input type="date" id="actDate"></div>
           <div class="field"><label>Time (optional)</label><input type="time" id="actTime"></div>
+        </div>
+        <div id="whenOptions" style="display:none;">
+          <div class="field"><label>Possible days</label>
+            <div class="chip-pick" id="optDays"></div>
+            <div class="chip-add"><input type="date" id="optAdd"><button class="mini-btn" id="optAddBtn" type="button">Add day</button></div>
+            <div class="field-hint">Pick the days that could work — decide later on the Prep board.</div>
+          </div>
+        </div>
+        <div id="whenRange" style="display:none;">
+          <div class="field-row">
+            <div class="field"><label>Between</label><input type="date" id="actRangeStart"></div>
+            <div class="field"><label>And</label><input type="date" id="actRangeEnd"></div>
+          </div>
+          <div class="field-hint">Happens once somewhere in this window — place it on the Prep board when you're ready.</div>
         </div>
         <div class="field-row">
           <div class="field">
@@ -866,6 +943,7 @@ const state = {
   editing: null,          // item being edited { kind, id }
   pendingLoc: null,       // { lat, lng, label } chosen in the form
   picking: false,
+  prepSel: null,          // activity id selected on the Prep board
   sharedOK: true
 };
 
@@ -949,6 +1027,26 @@ function dnum(s){ return parseISO(s).getDate(); }
 function prettyDate(s){ const d=parseISO(s); return d.toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric"}); }
 function stayCoversDate(stay, date){ return stay.start && stay.end && date >= stay.start && date <= stay.end; }
 
+/* ---------- flexible activity dates ----------
+   a.date = "" means unscheduled; a.flex holds the window:
+   {type:"options", days:[...]} or {type:"range", start, end} */
+function actWindow(a){
+  if(a.date) return [a.date];
+  if(!a.flex) return [];
+  if(a.flex.type==="options") return (a.flex.days||[]).slice();
+  if(a.flex.type==="range"){
+    const out=[]; let d=parseISO(a.flex.start); const end=parseISO(a.flex.end); let g=0;
+    while(d<=end && g<60){ out.push(iso(d)); d.setDate(d.getDate()+1); g++; }
+    return out;
+  }
+  return [];
+}
+function flexLabel(a){
+  if(!a.flex) return "";
+  if(a.flex.type==="options") return (a.flex.days||[]).map(shortDate).join(" or ");
+  return "sometime "+shortDate(a.flex.start)+"–"+shortDate(a.flex.end);
+}
+
 /* ---------- collecting items ---------- */
 function visiblePeople(){ return Object.values(state.people).filter(p => !state.hidden[p.name]); }
 function allActivities(){
@@ -975,6 +1073,8 @@ function render(){
   if(state.view === "explore") renderExplore();
   if(state.view === "coord") renderCoord();
   if(state.view === "check") renderChecklist();
+  if(state.view === "prep") renderPrep();
+  if(state.view === "exp") renderExpenses();
   renderMeChip();
   document.getElementById("storageWarn").innerHTML =
     (!hasStore || !state.sharedOK) ? '<span class="storage-warn">Sharing offline</span>' :
@@ -1035,7 +1135,7 @@ function renderDateStrip(){
   if(!dates.length){ strip.innerHTML = '<div class="list-empty">Set your trip dates in the header to see a day-by-day view.</div>'; return; }
   // count of items per day across visible people
   const counts = {};
-  for(const a of allActivities()) counts[a.date] = (counts[a.date]||0)+1;
+  for(const a of allActivities()) if(a.date) counts[a.date] = (counts[a.date]||0)+1;
   const myTrips = (state.me && state.people[state.me.name] && state.people[state.me.name].dayTrips) || {};
   strip.innerHTML = "";
   for(const d of dates){
@@ -1055,10 +1155,10 @@ function renderRailList(){
   let acts = allActivities();
   let stays = allStays();
   if(state.selectedDate){
-    acts = acts.filter(a => a.date === state.selectedDate);
+    acts = acts.filter(a => a.date === state.selectedDate || (!a.date && actWindow(a).includes(state.selectedDate)));
     stays = stays.filter(s => stayCoversDate(s, state.selectedDate));
   }
-  acts.sort((a,b)=> (a.date+(a.time||"99")).localeCompare(b.date+(b.time||"99")));
+  acts.sort((a,b)=> ((a.date||"9999")+(a.time||"99")).localeCompare((b.date||"9999")+(b.time||"99")));
   document.getElementById("railCount").textContent = acts.length + stays.length;
   if(!acts.length && !stays.length){
     wrap.innerHTML = '<div class="list-empty">Nothing here yet. Use <b>Activity</b> to add a place you want to visit, or <b>Stay</b> to note where you\'re based.</div>';
@@ -1088,7 +1188,9 @@ function renderRailList(){
   for(const a of acts){
     wrap.appendChild(itemRow({
       color: a.color, title: a.title, tick: a.color,
-      sub: `${a.time?a.time+' · ':''}${a.category||'Activity'}${state.selectedDate?'':' · '+shortDate(a.date)} · ${a.person}`,
+      sub: a.date
+        ? `${a.time?a.time+' · ':''}${a.category||'Activity'}${state.selectedDate?'':' · '+shortDate(a.date)} · ${a.person}`
+        : `Flexible · ${flexLabel(a)} · ${a.person}`,
       onDel: canEdit(a.person) ? () => removeItem("activity", a.person, a.id) : null,
       onEdit: canEdit(a.person) ? () => openEdit("activity", a.person, a.id) : null,
       onClick: () => flyTo(a.location)
@@ -1135,7 +1237,7 @@ function renderMarkers(){
   markerLayer.clearLayers();
   let acts = allActivities(), stays = allStays();
   if(state.selectedDate){
-    acts = acts.filter(a=>a.date===state.selectedDate);
+    acts = acts.filter(a=>a.date===state.selectedDate || (!a.date && actWindow(a).includes(state.selectedDate)));
     stays = stays.filter(s=>stayCoversDate(s,state.selectedDate));
   }
   const pts = [];
@@ -1148,7 +1250,7 @@ function renderMarkers(){
   for(const a of acts){
     if(!a.location) continue;
     const m = L.marker([a.location.lat,a.location.lng], {icon:pinIcon(a.color,false)});
-    m.bindPopup(`<div class="pop"><h4>${esc(a.title)}</h4><div class="pmeta">${a.time?esc(a.time)+' · ':''}${esc(a.category||'Activity')} · ${esc(shortDate(a.date))}</div>${a.notes?'<div class="pmeta" style="margin-top:4px">'+esc(a.notes)+'</div>':''}<div class="who"><span class="dot" style="background:${a.color}"></span>${esc(a.person)}</div></div>`);
+    m.bindPopup(`<div class="pop"><h4>${esc(a.title)}</h4><div class="pmeta">${a.time?esc(a.time)+' · ':''}${esc(a.category||'Activity')} · ${a.date?esc(shortDate(a.date)):esc(flexLabel(a)||"flexible")}</div>${a.notes?'<div class="pmeta" style="margin-top:4px">'+esc(a.notes)+'</div>':''}<div class="who"><span class="dot" style="background:${a.color}"></span>${esc(a.person)}</div></div>`);
     markerLayer.addLayer(m); pts.push([a.location.lat,a.location.lng]);
   }
   if(pts.length && !state._didFit){ map.fitBounds(pts, {padding:[60,60], maxZoom:12}); state._didFit=true; }
@@ -1220,7 +1322,7 @@ function dayPlan(p, date){
 function renderItinerary(){
   const wrap = document.getElementById("itineraryInner");
   const dates = tripDates();
-  let head = `<h2>Itinerary</h2><p class="lede">Each person's day is anchored to their hotel, then read as a route. Travel modes, the day verdict, and costs are estimates — a ~ cost means typical prices filled in where none were entered.</p>`;
+  let head = `<h2>Itinerary <button class="mini-btn" id="icsBtn" style="vertical-align:4px;margin-left:8px">Export my calendar (.ics)</button></h2><p class="lede">Each person's day is anchored to their hotel, then read as a route. Travel modes, the day verdict, and costs are estimates — a ~ cost means typical prices filled in where none were entered.</p>`;
   const totals = visiblePeople().map(p=>({p, t:tripTotalCost(p)})).filter(x=>x.t.v>0);
   if(totals.length){
     head += `<div class="cost-line">Estimated trip cost: ${totals.map(x=>
@@ -1249,6 +1351,8 @@ function renderItinerary(){
 function wireSuggestions(wrap){
   wrap.querySelectorAll("[data-merge]").forEach(b=> b.onclick=()=>applyMergeSuggestion(b.dataset.merge, b.dataset.target));
   wrap.querySelectorAll("[data-dismisssug]").forEach(b=> b.onclick=()=>dismissSuggestion(b.dataset.dismisssug));
+  const ics=wrap.querySelector("#icsBtn");
+  if(ics) ics.onclick=exportICS;
 }
 
 function renderPersonDay(p, date, plan){
@@ -1619,9 +1723,21 @@ async function dismissSuggestion(key){
 }
 
 /* ---------- coordination view ---------- */
+function flightSection(){
+  const rows=Object.values(state.people).filter(p=>p.flights && ((p.flights.arr&&p.flights.arr.date)||(p.flights.dep&&p.flights.dep.date)));
+  if(!rows.length) return "";
+  rows.sort((a,b)=>(((a.flights.arr||{}).date)||"9999").localeCompare(((b.flights.arr||{}).date)||"9999"));
+  const fmt=f=>(f&&f.date) ? `${shortDate(f.date)}${f.time?" "+f.time:""}${f.ap?" · "+esc(f.ap):""}${f.fl?" ("+esc(f.fl)+")":""}` : "—";
+  let html=`<div class="eyebrow" style="margin-top:4px">Arrivals &amp; departures</div><div class="coord-card">`;
+  for(const p of rows){
+    html+=`<div class="cc-line"><span class="dot" style="background:${p.color}"></span><b>${esc(p.name)}</b>&nbsp; lands ${fmt(p.flights.arr)} <span style="color:var(--ink-faint)">·</span> departs ${fmt(p.flights.dep)}</div>`;
+  }
+  return html+`</div>`;
+}
 function renderCoord(){
   const wrap = document.getElementById("coordInner");
   let head = `<h2>Coordination</h2><p class="lede">Where your paths cross. This looks for days you're in the same area and plans that land close together, so overlaps are easy to spot.</p>`;
+  head += flightSection();
   const people = Object.values(state.people);
   if(people.length < 2){
     wrap.innerHTML = head + '<div class="list-empty">Share this trip and once a friend adds their stays and plans, overlaps will show up here. The map link carries everything — anyone who opens it can add their own plans.</div>';
@@ -1751,6 +1867,226 @@ function renderChecklist(){
   });
 }
 
+/* ---------- prep board: place flexible plans, move scheduled ones ---------- */
+function renderPrep(){
+  const wrap=document.getElementById("prepInner");
+  let head=`<h2>Prep board</h2><p class="lede">Everyone's week at a glance. Select one of your plans — flexible ones wait in the tray and appear as dashed "possible" cards on their candidate days — then click a highlighted day to place it. Select a placed plan to move it.</p>`;
+  if(!state.me || !state.people[state.me.name]){ wrap.innerHTML=head+'<div class="list-empty">Add yourself to the trip first.</div>'; return; }
+  const dates=tripDates();
+  if(!dates.length){ wrap.innerHTML=head+'<div class="list-empty">Set your trip dates in the header to lay out the board.</div>'; return; }
+  const me=state.people[state.me.name];
+  const unsched=(me.activities||[]).filter(a=>!a.date);
+
+  let tray=`<div class="eyebrow">To schedule <span class="count">${unsched.length}</span></div><div class="prep-tray">`;
+  if(!unsched.length) tray+='<div class="list-empty">Nothing waiting. Add an activity with "A few options" or "Date range" and it lands here.</div>';
+  for(const a of unsched) tray+=`<button class="prep-chip ${state.prepSel===a.id?"sel":""}" data-psel="${a.id}"><b>${esc(a.title)}</b><span>${esc(flexLabel(a)||"any day")}</span></button>`;
+  tray+=`</div>`;
+
+  const selAct = state.prepSel ? (me.activities||[]).find(a=>a.id===state.prepSel) : null;
+  // a scheduled plan can move anywhere; an unscheduled one only inside its window
+  const allowed = selAct ? (selAct.date ? dates : (actWindow(selAct).length?actWindow(selAct):dates)) : [];
+  let selBar="";
+  if(selAct) selBar=`<div class="prep-selbar">Placing: <b>${esc(selAct.title)}</b> — click a highlighted day
+    ${selAct.date&&selAct.flex?'<button class="mini-btn" id="prepUnsched">Back to flexible</button>':""}
+    <button class="linkish" id="prepCancel">Cancel</button></div>`;
+
+  let grid=`<div class="prep-grid">`;
+  for(const d of dates){
+    const can = selAct && allowed.includes(d);
+    grid+=`<div class="prep-col ${can?"can":""}" data-pday="${d}"><div class="prep-dh">${dow(d)}<b>${dnum(d)}</b></div>`;
+    for(const p of visiblePeople()){
+      const mine = p.name===state.me.name;
+      for(const a of (p.activities||[])){
+        if(a.date===d){
+          grid+=`<div class="prep-item ${mine?"mine":""} ${state.prepSel===a.id?"sel":""}" ${mine?`data-psel="${a.id}"`:""} style="border-left-color:${p.color}"><span>${esc(a.title)}</span><em>${a.time?esc(a.time)+" · ":""}${esc(p.name)}</em></div>`;
+        } else if(mine && !a.date && actWindow(a).includes(d)){
+          grid+=`<div class="prep-item ghost ${state.prepSel===a.id?"sel":""}" data-psel="${a.id}" style="border-left-color:${p.color}"><span>${esc(a.title)}</span><em>possible</em></div>`;
+        }
+      }
+    }
+    grid+=`</div>`;
+  }
+  grid+=`</div>`;
+
+  wrap.innerHTML=head+tray+selBar+grid;
+  const place=async(a, day)=>{
+    a.date=day; state.prepSel=null;
+    await saveMe(); state._didFit=false; render();
+    toast("Scheduled for "+shortDate(day));
+  };
+  wrap.querySelectorAll(".prep-chip[data-psel], .prep-item.mine[data-psel]").forEach(el=>el.onclick=(e)=>{
+    e.stopPropagation();
+    state.prepSel = state.prepSel===el.dataset.psel ? null : el.dataset.psel;
+    render();
+  });
+  // a ghost is that plan's "possible" slot: click selects it, click again right there places it
+  wrap.querySelectorAll(".prep-item.ghost[data-psel]").forEach(el=>el.onclick=async(e)=>{
+    e.stopPropagation();
+    const id=el.dataset.psel;
+    if(state.prepSel===id){
+      const a=(me.activities||[]).find(x=>x.id===id);
+      if(a) await place(a, el.closest(".prep-col").dataset.pday);
+    } else { state.prepSel=id; render(); }
+  });
+  wrap.querySelectorAll(".prep-col.can").forEach(col=>col.onclick=async()=>{
+    const a=(me.activities||[]).find(x=>x.id===state.prepSel);
+    if(a) await place(a, col.dataset.pday);
+  });
+  const un=document.getElementById("prepUnsched");
+  if(un) un.onclick=async()=>{ selAct.date=""; state.prepSel=null; await saveMe(); render(); toast("Back to flexible"); };
+  const pc=document.getElementById("prepCancel");
+  if(pc) pc.onclick=()=>{ state.prepSel=null; render(); };
+}
+
+/* ---------- expenses: who paid what, split, settle up ---------- */
+function allExpenses(){
+  const out=[];
+  for(const p of Object.values(state.people)) for(const e of (p.expenses||[])) out.push({...e, by:p.name, color:p.color});
+  out.sort((a,b)=>(b.date||"").localeCompare(a.date||"") || (b.id||"").localeCompare(a.id||""));
+  return out;
+}
+function expenseBalances(){
+  const names=Object.keys(state.people);
+  const net={}; names.forEach(n=>net[n]=0);
+  for(const e of allExpenses()){
+    const among=(e.for&&e.for.length ? e.for.filter(n=>net[n]!==undefined) : names);
+    if(!among.length || !(+e.amount>0)) continue;
+    net[e.by]+= +e.amount;
+    for(const n of among) net[n]-= e.amount/among.length;
+  }
+  const debt=[], cred=[];
+  for(const n of names){
+    const v=Math.round(net[n]);
+    if(v<0) debt.push([n,-v]); else if(v>0) cred.push([n,v]);
+  }
+  debt.sort((a,b)=>b[1]-a[1]); cred.sort((a,b)=>b[1]-a[1]);
+  const transfers=[]; let i=0,j=0;
+  while(i<debt.length && j<cred.length){
+    const x=Math.min(debt[i][1], cred[j][1]);
+    if(x>0) transfers.push([debt[i][0], cred[j][0], x]);
+    debt[i][1]-=x; cred[j][1]-=x;
+    if(!debt[i][1]) i++;
+    if(!cred[j][1]) j++;
+  }
+  return {net, transfers};
+}
+function renderExpenses(){
+  const wrap=document.getElementById("expInner");
+  // don't rebuild the form under someone's cursor mid-entry
+  if(wrap.contains(document.activeElement) && document.activeElement.tagName==="INPUT") return;
+  let head=`<h2>Expenses</h2><p class="lede">Log what you paid for and who it covered — balances and the simplest way to settle up work themselves out. Amounts are yen.</p>`;
+  if(!state.me || !state.people[state.me.name]){ wrap.innerHTML=head+'<div class="list-empty">Add yourself to the trip first.</div>'; return; }
+  const names=Object.keys(state.people);
+  let form=`<div class="exp-form" id="expForm">
+    <div class="field-row">
+      <div class="field" style="flex:2"><label>What</label><input type="text" id="expDesc" placeholder="e.g. Dinner in Dotonbori" maxlength="60"></div>
+      <div class="field"><label>Amount &yen;</label><input type="text" id="expAmt" inputmode="numeric" placeholder="e.g. 8400"></div>
+      <div class="field"><label>Day</label><input type="date" id="expDate" value="${iso(new Date())}"></div>
+    </div>
+    <div class="field"><label>Split between</label><div class="chip-pick" id="expWho">${names.map(n=>`<button type="button" class="chip on" data-expwho="${esc(n)}">${esc(n)}</button>`).join("")}</div></div>
+    <button class="btn primary" id="expAdd" style="flex:0">Add expense</button>
+  </div>`;
+  const {net, transfers}=expenseBalances();
+  const exps=allExpenses();
+  let bal="";
+  if(exps.length){
+    bal=`<div class="eyebrow explore-sec">Where things stand</div><div class="coord-card">
+      <div style="margin-bottom:8px">${names.map(n=>{
+        const v=Math.round(net[n]);
+        return `<span class="net-chip"><span class="dot" style="background:${state.people[n].color}"></span>${esc(n)} <span class="${v>=0?"net-pos":"net-neg"}">${v>=0?"+":"−"}${fmtYen(Math.abs(v))}</span></span>`;
+      }).join("")}</div>
+      ${transfers.length ? transfers.map(([f,t,x])=>`<div class="settle-line"><span class="dot" style="background:${state.people[f].color}"></span><b>${esc(f)}</b> pays <b>${esc(t)}</b> ${fmtYen(x)}</div>`).join("") : '<div class="settle-line">All square — nobody owes anything.</div>'}
+    </div>`;
+  }
+  let list=`<div class="eyebrow explore-sec">Everything logged <span class="count">${exps.length}</span></div>`;
+  if(!exps.length) list+='<div class="list-empty">No expenses yet. The first ramen run changes that.</div>';
+  else {
+    list+=`<div class="coord-card" style="padding-top:6px;padding-bottom:6px">`;
+    for(const e of exps){
+      const who=(e.for&&e.for.length&&e.for.length<names.length)?` · for ${e.for.map(esc).join(", ")}`:"";
+      list+=`<div class="exp-row"><span class="dot" style="background:${e.color}"></span>
+        <div class="xdesc">${esc(e.desc||"Expense")}<div class="xmeta">${e.date?shortDate(e.date)+" · ":""}paid by ${esc(e.by)}${who}</div></div>
+        <span class="xamt">${fmtYen(+e.amount||0)}</span>
+        ${canEdit(e.by)?`<button class="idel" style="opacity:1" title="Remove" data-expdel="${e.id}">&times;</button>`:""}</div>`;
+    }
+    list+=`</div>`;
+  }
+  wrap.innerHTML=head+form+bal+list;
+  wrap.querySelectorAll("[data-expwho]").forEach(b=>b.onclick=()=>b.classList.toggle("on"));
+  document.getElementById("expAdd").onclick=async()=>{
+    const desc=document.getElementById("expDesc").value.trim();
+    const amount=parseCost(document.getElementById("expAmt").value);
+    if(!desc){ toast("What was it for?"); return; }
+    if(!amount){ toast("Enter an amount"); return; }
+    const who=[...wrap.querySelectorAll("[data-expwho].on")].map(b=>b.dataset.expwho);
+    const rec=state.people[state.me.name];
+    (rec.expenses=rec.expenses||[]).push({ id:uid(), desc, amount, date:document.getElementById("expDate").value,
+      for: who.length===names.length ? null : who });
+    await saveMe(); render(); toast("Expense added");
+  };
+  wrap.querySelectorAll("[data-expdel]").forEach(b=>b.onclick=async()=>{
+    if(!confirm("Remove this expense?")) return;
+    const rec=state.people[state.me.name];
+    rec.expenses=(rec.expenses||[]).filter(e=>e.id!==b.dataset.expdel);
+    await saveMe(); render(); toast("Removed");
+  });
+}
+
+/* ---------- calendar export (.ics, times are Japan-local) ---------- */
+function icsEscape(s){ return String(s).replace(/\\/g,"\\\\").replace(/;/g,"\\;").replace(/,/g,"\\,").replace(/\n/g,"\\n"); }
+function icsDT(date, time){ return date.replace(/-/g,"") + (time ? "T"+time.replace(":","")+"00" : ""); }
+function icsAllDay(date){
+  const nd=parseISO(date); nd.setDate(nd.getDate()+1);
+  return ["DTSTART;VALUE=DATE:"+date.replace(/-/g,""), "DTEND;VALUE=DATE:"+iso(nd).replace(/-/g,"")];
+}
+function buildICS(p){
+  const L=["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//Meridian//Japan Trip//EN","CALSCALE:GREGORIAN",
+           "X-WR-CALNAME:"+icsEscape(state.trip.title||"Japan Trip")];
+  const stamp=new Date().toISOString().replace(/[-:]/g,"").slice(0,15)+"Z";
+  const ev=(uid, lines)=>L.push("BEGIN:VEVENT","UID:"+uid+"@meridian","DTSTAMP:"+stamp,...lines,"END:VEVENT");
+  for(const a of (p.activities||[])){
+    if(!a.date) continue;  // unscheduled flexible plans stay off the calendar
+    const lines=[];
+    if(a.time){
+      const durH=Math.max(0.5, parseFloat(a.durationH)||2);
+      const end=new Date(a.date+"T"+a.time+":00"); end.setMinutes(end.getMinutes()+Math.round(durH*60));
+      lines.push("DTSTART:"+icsDT(a.date,a.time), "DTEND:"+icsDT(iso(end), end.toTimeString().slice(0,5)));
+    } else lines.push(...icsAllDay(a.date));
+    lines.push("SUMMARY:"+icsEscape(a.title));
+    if(a.location) lines.push("LOCATION:"+icsEscape(a.location.label||a.title), "GEO:"+a.location.lat+";"+a.location.lng);
+    if(a.notes) lines.push("DESCRIPTION:"+icsEscape(a.notes));
+    ev(a.id, lines);
+  }
+  for(const s of (p.stays||[])){
+    if(!s.start||!s.end) continue;
+    const nd=parseISO(s.end); nd.setDate(nd.getDate()+1);
+    ev(s.id, ["DTSTART;VALUE=DATE:"+s.start.replace(/-/g,""), "DTEND;VALUE=DATE:"+iso(nd).replace(/-/g,""),
+      "SUMMARY:"+icsEscape("Stay: "+(s.hotelName||s.city)), "LOCATION:"+icsEscape(s.city||"")]);
+  }
+  const fl=p.flights||{};
+  for(const [k,label] of [["arr","Land in Japan"],["dep","Fly home"]]){
+    const f=fl[k]; if(!f||!f.date) continue;
+    const lines=[];
+    if(f.time){ const e=new Date(f.date+"T"+f.time+":00"); e.setHours(e.getHours()+1);
+      lines.push("DTSTART:"+icsDT(f.date,f.time), "DTEND:"+icsDT(iso(e), e.toTimeString().slice(0,5))); }
+    else lines.push(...icsAllDay(f.date));
+    lines.push("SUMMARY:"+icsEscape(label+(f.ap?" · "+f.ap:"")+(f.fl?" ("+f.fl+")":"")));
+    ev("flight-"+k, lines);
+  }
+  L.push("END:VCALENDAR");
+  return L.join("\r\n");
+}
+function exportICS(){
+  if(!state.me || !state.people[state.me.name]){ toast("Set up your profile first"); return; }
+  const blob=new Blob([buildICS(state.people[state.me.name])], {type:"text/calendar;charset=utf-8"});
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(blob);
+  a.download=(state.trip.title||"japan-trip").toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"")+".ics";
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(a.href);
+  toast("Calendar downloaded — import it into Google or Apple Calendar");
+}
+
 /* ============================================================
    Actions
    ============================================================ */
@@ -1772,6 +2108,8 @@ function setView(v){
   document.getElementById("stageExplore").style.display = v==="explore"?"block":"none";
   document.getElementById("stageCoord").style.display = v==="coord"?"block":"none";
   document.getElementById("stageCheck").style.display = v==="check"?"block":"none";
+  document.getElementById("stagePrep").style.display = v==="prep"?"block":"none";
+  document.getElementById("stageExp").style.display = v==="exp"?"block":"none";
   if(v==="map" && map) setTimeout(()=>map.invalidateSize(),50);
   render();
 }
@@ -1784,8 +2122,25 @@ function openProfile(){
   buildSwatches(state.me ? state.me.color : PALETTE[Object.keys(state.people).length % PALETTE.length]);
   const rec = state.me ? state.people[state.me.name] : null;
   buildInterestChips(rec ? (rec.interests||[]) : []);
+  const fl = (rec && rec.flights) || {};
+  for(const [pref, f] of [["arr", fl.arr||{}], ["dep", fl.dep||{}]]){
+    document.getElementById(pref+"Date").value = f.date||"";
+    document.getElementById(pref+"Time").value = f.time||"";
+    document.getElementById(pref+"Ap").value = f.ap||"";
+    document.getElementById(pref+"Fl").value = f.fl||"";
+  }
   scrim.classList.add("show");
   document.getElementById("profileName").focus();
+}
+function readFlights(){
+  const read = pref => ({
+    date: document.getElementById(pref+"Date").value,
+    time: document.getElementById(pref+"Time").value,
+    ap: document.getElementById(pref+"Ap").value.trim(),
+    fl: document.getElementById(pref+"Fl").value.trim()
+  });
+  const arr=read("arr"), dep=read("dep");
+  return (arr.date||dep.date) ? {arr, dep} : null;
 }
 function buildInterestChips(selected){
   const box=document.getElementById("interestChips");
@@ -1840,7 +2195,7 @@ async function saveProfile(){
     if(!state.people[name]) state.people[name]={name, color, stays:[], activities:[], dayTrips:{}, interests:[], updated:Date.now()};
     else state.people[name].color=color;
   }
-  if(state.people[name]) state.people[name].interests=interests;
+  if(state.people[name]){ state.people[name].interests=interests; state.people[name].flights=readFlights(); }
   state.me={name, color};
   if(hasStore) await sSet("me", JSON.stringify(state.me), false);  // personal, identifies this browser
   await saveMe();
@@ -1849,6 +2204,26 @@ async function saveProfile(){
 }
 
 /* ---------- item modal ---------- */
+/* "When" segment of the activity form: exact day / a few options / date range */
+let flexMode="fixed", flexDays=[];
+function setFlexMode(m){
+  flexMode=m;
+  document.querySelectorAll("#daySeg button").forEach(b=>b.classList.toggle("on", b.dataset.mode===m));
+  document.getElementById("whenFixed").style.display = m==="fixed"?"flex":"none";
+  document.getElementById("whenOptions").style.display = m==="options"?"block":"none";
+  document.getElementById("whenRange").style.display = m==="range"?"block":"none";
+}
+function renderOptDays(){
+  const box=document.getElementById("optDays");
+  box.innerHTML = flexDays.length ? "" : '<span class="field-hint">No days picked yet.</span>';
+  flexDays.sort().forEach(d=>{
+    const b=document.createElement("button");
+    b.type="button"; b.className="chip on"; b.textContent=shortDate(d)+" ×";
+    b.onclick=()=>{ flexDays=flexDays.filter(x=>x!==d); renderOptDays(); };
+    box.appendChild(b);
+  });
+}
+
 function openItem(kind, existing){
   if(!state.me){ openProfile(); return; }
   state.editing = {kind, id: existing ? existing.id : null};
@@ -1877,6 +2252,16 @@ function openItem(kind, existing){
   document.getElementById("actCost").value = existing && !isStay && existing.cost!=="" && existing.cost!=null ? existing.cost : "";
   document.getElementById("actNotes").value = existing && !isStay ? (existing.notes||"") : "";
   document.getElementById("actCat").value = existing && !isStay ? (existing.category||"Sightseeing") : "Sightseeing";
+  if(!isStay){
+    const f = existing && existing.flex;
+    flexDays = f && f.type==="options" ? [...(f.days||[])] : [];
+    document.getElementById("actRangeStart").value = f && f.type==="range" ? f.start : "";
+    document.getElementById("actRangeEnd").value = f && f.type==="range" ? f.end : "";
+    document.getElementById("optAdd").value = "";
+    // an unscheduled flexible item opens in its flexible mode; anything dated opens as exact
+    setFlexMode(existing && !existing.date && f ? (f.type==="options"?"options":"range") : "fixed");
+    renderOptDays();
+  }
   updatePickedLabel();
   document.getElementById("itemScrim").classList.add("show");
 }
@@ -1905,14 +2290,27 @@ async function saveItem(){
     else rec.stays.push(s);
   } else {
     const title=document.getElementById("itemName").value.trim() || state.pendingLoc.label || "Untitled";
-    const date=document.getElementById("actDate").value;
-    if(!date){ toast("Pick a day"); return; }
-    const a={ id:editId||uid(), title, location:state.pendingLoc, date,
-      time:document.getElementById("actTime").value, durationH:document.getElementById("actDur").value,
+    let date="", flex=null, time="";
+    if(flexMode==="fixed"){
+      date=document.getElementById("actDate").value;
+      if(!date){ toast("Pick a day"); return; }
+      time=document.getElementById("actTime").value;
+    } else if(flexMode==="options"){
+      if(!flexDays.length){ toast("Add at least one possible day"); return; }
+      flex={type:"options", days:[...flexDays].sort()};
+    } else {
+      const s=document.getElementById("actRangeStart").value, e=document.getElementById("actRangeEnd").value;
+      if(!s||!e){ toast("Set the date window"); return; }
+      if(e<s){ toast("Window ends before it starts"); return; }
+      flex={type:"range", start:s, end:e};
+    }
+    const a={ id:editId||uid(), title, location:state.pendingLoc, date, flex,
+      time, durationH:document.getElementById("actDur").value,
       category:document.getElementById("actCat").value, notes:document.getElementById("actNotes").value.trim(),
       cost: parseCost(document.getElementById("actCost").value) };
     if(editId){ const i=rec.activities.findIndex(x=>x.id===editId); if(i>=0) rec.activities[i]=a; else rec.activities.push(a); }
     else rec.activities.push(a);
+    if(!date){ await saveMe(); document.getElementById("itemScrim").classList.remove("show"); state._didFit=false; render(); toast("Added — pick its day on the Prep board"); return; }
   }
   await saveMe();
   document.getElementById("itemScrim").classList.remove("show");
@@ -2080,6 +2478,14 @@ function wire(){
   document.getElementById("interestInput").addEventListener("keydown", e=>{ if(e.key==="Enter"){ e.preventDefault(); addCustomInterest(); } });
 
   document.getElementById("itemSave").onclick = saveItem;
+  document.getElementById("daySeg").addEventListener("click", e=>{
+    const b=e.target.closest("button"); if(b) setFlexMode(b.dataset.mode);
+  });
+  document.getElementById("optAddBtn").onclick = ()=>{
+    const v=document.getElementById("optAdd").value;
+    if(v && !flexDays.includes(v)){ flexDays.push(v); renderOptDays(); }
+    document.getElementById("optAdd").value="";
+  };
   document.getElementById("itemCancel").onclick = ()=>{ endMapPick(); document.getElementById("itemScrim").classList.remove("show"); };
   document.getElementById("locInput").addEventListener("input", onLocInput);
   document.getElementById("pickOnMap").onclick = startMapPick;
