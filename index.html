@@ -383,6 +383,27 @@
 
   .storage-warn { font-size: 11.5px; color: var(--shu); background: var(--shu-dim); padding: 3px 10px; border-radius: 6px; }
 
+  /* cost estimates */
+  .daycost { font-size: 11.5px; color: var(--ink-soft); background: var(--sky); border: 1px solid var(--line); padding: 2px 9px; border-radius: 999px; margin-left: 8px; white-space: nowrap; }
+  .cost-line { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; font-size: 13px; color: var(--ink-soft); margin: -14px 0 20px; }
+  .cost-chip { display: inline-flex; align-items: center; gap: 6px; }
+  .cost-chip b { color: var(--ink); font-weight: 600; }
+  .cost-note { font-size: 11px; color: var(--ink-faint); border-bottom: 1px dotted var(--ink-faint); cursor: help; }
+
+  /* before-you-go checklist */
+  .ck-progress { display: flex; flex-wrap: wrap; gap: 12px 26px; margin-bottom: 10px; }
+  .ck-person { font-size: 12.5px; display: flex; align-items: center; gap: 7px; font-weight: 500; }
+  .ck-count { color: var(--ink-faint); font-weight: 400; }
+  .ck-bar { width: 90px; height: 5px; background: var(--line); border-radius: 3px; overflow: hidden; }
+  .ck-bar div { height: 100%; background: var(--indigo); border-radius: 3px; transition: width .25s; }
+  .ck-row { display: flex; gap: 12px; padding: 10px 10px; border-radius: 8px; cursor: pointer; align-items: flex-start; }
+  .ck-row:hover { background: var(--sky); }
+  .ck-row input { margin: 3px 0 0; accent-color: var(--indigo); cursor: pointer; }
+  .ck-row.done .ck-title { color: var(--ink-faint); text-decoration: line-through; }
+  .ck-title { font-size: 13.5px; font-weight: 500; }
+  .ck-sub { font-size: 12px; color: var(--ink-soft); line-height: 1.45; }
+  .ck-sub a { color: var(--indigo); }
+
   /* day-grouping suggestions */
   .sug-card {
     border: 1px solid var(--line); border-left: 3px solid var(--indigo); border-radius: var(--radius);
@@ -433,6 +454,7 @@
       <button class="tab" data-view="itinerary">Itinerary</button>
       <button class="tab" data-view="explore">Explore</button>
       <button class="tab" data-view="coord">Coordination</button>
+      <button class="tab" data-view="check">Checklist</button>
     </nav>
     <button class="me-chip" id="meChip" title="Edit your profile">
       <span class="dot" id="meDot"></span><span id="meName">Set up</span>
@@ -488,6 +510,7 @@
     <div class="panel" id="stageItinerary" style="display:none;"><div class="panel-inner" id="itineraryInner"></div></div>
     <div class="panel" id="stageExplore" style="display:none;"><div class="panel-inner" id="exploreInner"></div></div>
     <div class="panel" id="stageCoord" style="display:none;"><div class="panel-inner" id="coordInner"></div></div>
+    <div class="panel" id="stageCheck" style="display:none;"><div class="panel-inner" id="checkInner"></div></div>
   </div>
 </div>
 
@@ -557,6 +580,7 @@
           <div class="field"><label>Arrive</label><input type="date" id="stayStart"></div>
           <div class="field"><label>Depart</label><input type="date" id="stayEnd"></div>
         </div>
+        <div class="field"><label>Cost per night &yen; (optional)</label><input type="text" id="stayCost" inputmode="numeric" placeholder="e.g. 12000"></div>
       </div>
 
       <div id="actFields">
@@ -573,6 +597,7 @@
             </select>
           </div>
           <div class="field"><label>Hours (optional)</label><input type="text" id="actDur" placeholder="e.g. 2"></div>
+          <div class="field"><label>Est. cost &yen; (optional)</label><input type="text" id="actCost" inputmode="numeric" placeholder="e.g. 2000"></div>
         </div>
         <div class="field"><label>Notes (optional)</label><textarea id="actNotes" placeholder="Reservations, who's keen, alternatives..."></textarea></div>
       </div>
@@ -847,6 +872,9 @@ async function loadEveryone(){
     const r = await sGet(k, true);
     if(r && r.value){ try { const p = JSON.parse(r.value); if(!p.deleted) fresh[p.name] = p; } catch {} }
   }
+  // repair reversed stay dates (older records could be saved with depart before arrive)
+  for(const p of Object.values(fresh)) for(const s of (p.stays||[]))
+    if(s.start && s.end && s.end < s.start){ const t=s.start; s.start=s.end; s.end=t; }
   state.people = fresh;
   if(state.me && !state.people[state.me.name]){
     state.people[state.me.name] = { name: state.me.name, color: state.me.color, stays: [], activities: [], dayTrips: {}, interests: [], updated: Date.now() };
@@ -870,10 +898,10 @@ function nearestCity(loc){
 }
 /* translate a leg distance into a plausible travel mode + rough minutes */
 function classifyLeg(km){
-  if(km <= 1.5) return { mode:"walk", label:"Walk", cls:"mode-walk", min: Math.max(4, Math.round(km/4.8*60)) };
-  if(km <= 12) return { mode:"local", label:"Local transit", cls:"mode-local", min: Math.round(km/18*60 + 8) };
-  if(km <= 120) return { mode:"regional", label:"Regional train", cls:"mode-regional", min: Math.round(km/70*60 + 20) };
-  return { mode:"shink", label:"Shinkansen / long haul", cls:"mode-shink", min: Math.round(km/180*60 + 45) };
+  if(km <= 1.5) return { mode:"walk", label:"Walk", cls:"mode-walk", min: Math.max(4, Math.round(km/4.8*60)), cost: 0 };
+  if(km <= 12) return { mode:"local", label:"Local transit", cls:"mode-local", min: Math.round(km/18*60 + 8), cost: 250 };
+  if(km <= 120) return { mode:"regional", label:"Regional train", cls:"mode-regional", min: Math.round(km/70*60 + 20), cost: Math.round(km*18/10)*10 };
+  return { mode:"shink", label:"Shinkansen / long haul", cls:"mode-shink", min: Math.round(km/180*60 + 45), cost: Math.round(km*24/100)*100 };
 }
 function fmtMin(m){ return m >= 60 ? `${Math.floor(m/60)}h ${m%60}m` : `${m}m`; }
 
@@ -920,6 +948,7 @@ function render(){
   if(state.view === "itinerary") renderItinerary();
   if(state.view === "explore") renderExplore();
   if(state.view === "coord") renderCoord();
+  if(state.view === "check") renderChecklist();
   renderMeChip();
   document.getElementById("storageWarn").innerHTML =
     (!hasStore || !state.sharedOK) ? '<span class="storage-warn">Sharing offline</span>' :
@@ -1095,36 +1124,35 @@ function flyTo(loc){
 }
 
 /* ---------- itinerary view (feasibility per person-day) ---------- */
-function renderItinerary(){
-  const wrap = document.getElementById("itineraryInner");
-  const dates = tripDates();
-  let head = `<h2>Itinerary</h2><p class="lede">Each person's day is anchored to their hotel, then read as a route. Travel modes and the day verdict are estimates from straight-line distance — real transit times vary.</p>`;
-  if(state.me && state.people[state.me.name]) head += suggestionCards(state.people[state.me.name]);
-  if(!dates.length){ wrap.innerHTML = head + '<div class="list-empty">Set your trip dates in the header to build the day-by-day itinerary.</div>'; wireSuggestions(wrap); return; }
-  const people = visiblePeople();
-  const shownDates = state.selectedDate ? [state.selectedDate] : dates;
-  let body = "";
-  for(const date of shownDates){
-    let dayHtml = "";
-    for(const p of people){
-      const acts = (p.activities||[]).filter(a=>a.date===date && a.location);
-      const stay = (p.stays||[]).find(s=>stayCoversDate(s,date) && s.location);
-      const trip = (p.dayTrips||{})[date];
-      if(!acts.length && !stay && !trip) continue;
-      dayHtml += renderPersonDay(p, date, acts, stay);
-    }
-    if(!dayHtml) continue;
-    body += `<div class="day-block"><div class="day-head"><span class="dh-num">${prettyDate(date)}</span><span class="dh-dow">Day</span></div>${dayHtml}</div>`;
+/* ---------- daily cost estimates ---------- */
+/* typical entry/ticket prices per category, used when no cost was entered */
+const CAT_COST = {"Sightseeing":2000, "Food & drink":2500, "Culture":1500, "Nature":500, "Shopping":0, "Nightlife":4000, "Travel":0, "Other":0};
+function fmtYen(n){ return "¥" + Math.round(n).toLocaleString("en-US"); }
+function hasCost(x){ return x.cost !== undefined && x.cost !== null && x.cost !== "" && !isNaN(+x.cost); }
+function dayCost(p, date, plan){
+  plan = plan || dayPlan(p, date);
+  let v = 0, est = false;
+  for(const a of plan.acts){
+    if(hasCost(a)) v += +a.cost;
+    else { const d = CAT_COST[a.category] || 0; v += d; if(d) est = true; }
   }
-  wrap.innerHTML = head + (body || '<div class="list-empty">No plans on the selected day(s) yet.</div>');
-  wireSuggestions(wrap);
+  for(const lg of plan.legs){ v += lg.cost; if(lg.cost) est = true; }
+  if(plan.stay && hasCost(plan.stay)) v += +plan.stay.cost;   // nightly rate, per covered day
+  return { v, est };
 }
-function wireSuggestions(wrap){
-  wrap.querySelectorAll("[data-merge]").forEach(b=> b.onclick=()=>applyMergeSuggestion(b.dataset.merge, b.dataset.target));
-  wrap.querySelectorAll("[data-dismisssug]").forEach(b=> b.onclick=()=>dismissSuggestion(b.dataset.dismisssug));
+function tripTotalCost(p){
+  let v = 0, est = false;
+  for(const date of tripDates()){
+    const c = dayCost(p, date);
+    v += c.v; est = est || c.est;
+  }
+  return { v, est };
 }
 
-function renderPersonDay(p, date, acts, stay){
+/* the shape of one person's day: hotel anchor, ordered stops, and travel legs */
+function dayPlan(p, date){
+  const acts = (p.activities||[]).filter(a=>a.date===date && a.location);
+  const stay = (p.stays||[]).find(s=>stayCoversDate(s,date) && s.location);
   // order the day: by explicit time when given, otherwise nearest-neighbour from the hotel
   const anchor = stay ? {name: stay.hotelName||stay.city, loc: stay.location, anchor:true} : null;
   let stops = acts.map(a=>({name:a.title, loc:a.location, time:a.time}));
@@ -1144,21 +1172,61 @@ function renderPersonDay(p, date, acts, stay){
     stops = [...timed, ...untimed];
   }
   const sequence = anchor ? [anchor, ...stops] : stops;
-
-  // compute legs + verdict
-  let legs=[], maxLeg=0, totalMin=0;
-  const cities = new Set();
-  for(const s of sequence) if(s.loc) cities.add(nearestCity(s.loc));
+  const legs=[];
   for(let i=1;i<sequence.length;i++){
     const km = haversine(sequence[i-1].loc, sequence[i].loc);
-    const c = classifyLeg(km);
-    legs.push({km, ...c}); maxLeg=Math.max(maxLeg,km); totalMin+=c.min;
+    legs.push({km, ...classifyLeg(km)});
   }
+  return { acts, stay, anchor, sequence, legs };
+}
+
+function renderItinerary(){
+  const wrap = document.getElementById("itineraryInner");
+  const dates = tripDates();
+  let head = `<h2>Itinerary</h2><p class="lede">Each person's day is anchored to their hotel, then read as a route. Travel modes, the day verdict, and costs are estimates — a ~ cost means typical prices filled in where none were entered.</p>`;
+  const totals = visiblePeople().map(p=>({p, t:tripTotalCost(p)})).filter(x=>x.t.v>0);
+  if(totals.length){
+    head += `<div class="cost-line">Estimated trip cost: ${totals.map(x=>
+      `<span class="cost-chip"><span class="dot" style="background:${x.p.color}"></span>${esc(x.p.name)} <b>${x.t.est?"~":""}${fmtYen(x.t.v)}</b></span>`).join("")}
+      <span class="cost-note" title="Activity costs use the amount you entered, or a typical price for the category when blank. Transit legs use rough fares. Hotels count only when a nightly cost is set on the stay.">what's counted?</span></div>`;
+  }
+  if(state.me && state.people[state.me.name]) head += suggestionCards(state.people[state.me.name]);
+  if(!dates.length){ wrap.innerHTML = head + '<div class="list-empty">Set your trip dates in the header to build the day-by-day itinerary.</div>'; wireSuggestions(wrap); return; }
+  const people = visiblePeople();
+  const shownDates = state.selectedDate ? [state.selectedDate] : dates;
+  let body = "";
+  for(const date of shownDates){
+    let dayHtml = "";
+    for(const p of people){
+      const plan = dayPlan(p, date);
+      const trip = (p.dayTrips||{})[date];
+      if(!plan.acts.length && !plan.stay && !trip) continue;
+      dayHtml += renderPersonDay(p, date, plan);
+    }
+    if(!dayHtml) continue;
+    body += `<div class="day-block"><div class="day-head"><span class="dh-num">${prettyDate(date)}</span><span class="dh-dow">Day</span></div>${dayHtml}</div>`;
+  }
+  wrap.innerHTML = head + (body || '<div class="list-empty">No plans on the selected day(s) yet.</div>');
+  wireSuggestions(wrap);
+}
+function wireSuggestions(wrap){
+  wrap.querySelectorAll("[data-merge]").forEach(b=> b.onclick=()=>applyMergeSuggestion(b.dataset.merge, b.dataset.target));
+  wrap.querySelectorAll("[data-dismisssug]").forEach(b=> b.onclick=()=>dismissSuggestion(b.dataset.dismisssug));
+}
+
+function renderPersonDay(p, date, plan){
+  const { sequence, legs, anchor } = plan;
+  let maxLeg = 0;
+  const cities = new Set();
+  for(const s of sequence) if(s.loc) cities.add(nearestCity(s.loc));
+  for(const lg of legs) maxLeg = Math.max(maxLeg, lg.km);
   const trip = (p.dayTrips||{})[date];
   const stopCount = sequence.filter(s=>!s.anchor).length;
   const verdict = trip ? {cls:"trip", text:"Day trip to "+trip} : dayVerdict(stopCount, cities.size, maxLeg);
+  const cost = dayCost(p, date, plan);
+  const costChip = cost.v > 0 ? `<span class="daycost" title="Entered costs plus typical prices for the rest; hotel counts when its nightly cost is set">${cost.est?"~":""}${fmtYen(cost.v)}</span>` : "";
 
-  let html = `<div class="person-day"><div class="pd-head"><span class="swatch" style="background:${p.color}"></span><span class="pdn">${esc(p.name)}</span><span class="verdict ${verdict.cls}">${esc(verdict.text)}</span></div>`;
+  let html = `<div class="person-day"><div class="pd-head"><span class="swatch" style="background:${p.color}"></span><span class="pdn">${esc(p.name)}</span><span class="verdict ${verdict.cls}">${esc(verdict.text)}</span>${costChip}</div>`;
   if(stopCount === 0){
     const msg = trip ? `Day trip to ${esc(trip)} planned — add spots from the Explore tab.`
                      : `Based in ${esc(anchor.name)} — no activities planned.`;
@@ -1172,7 +1240,7 @@ function renderPersonDay(p, date, acts, stay){
       <div class="stop"><div class="sname">${esc(s.name)}${s.anchor?' <span style="color:var(--ink-faint);font-weight:400">· base</span>':''}</div>${s.time?`<div class="stime">${esc(s.time)}</div>`:''}</div></div>`;
     if(!last){
       const lg = legs[i];
-      html += `<div class="leg-travel"><span class="mode-tag ${lg.cls}">${lg.label}</span>${lg.km.toFixed(1)} km · ~${fmtMin(lg.min)}</div>`;
+      html += `<div class="leg-travel"><span class="mode-tag ${lg.cls}">${lg.label}</span>${lg.km.toFixed(1)} km · ~${fmtMin(lg.min)}${lg.cost?` · ~${fmtYen(lg.cost)}`:""}</div>`;
     }
   });
   html += `</div></div>`;
@@ -1570,6 +1638,70 @@ function groupRanges(days){
 }
 function consecutive(a,b){ const da=parseISO(a); da.setDate(da.getDate()+1); return iso(da)===b; }
 
+/* ---------- before-you-go checklist ---------- */
+const CHECKLIST = [
+  ["Documents", [
+    ["passport","Passport is valid","Valid for your whole stay — renew now if it expires soon after the trip."],
+    ["visa","Visa rules checked","Many nationalities (US, UK, EU, CA, AU…) get 90 visa-free days for tourism — confirm yours on the official list.","https://www.mofa.go.jp/j_info/visit/visa/short/novisa.html"],
+    ["vjw","Visit Japan Web filled in","Pre-register immigration and customs online to get QR codes that skip the paper forms on arrival.","https://services.digital.go.jp/en/visit-japan-web/"],
+    ["insurance","Travel insurance sorted","Japanese healthcare is excellent but not free for visitors — check what your policy covers abroad."]
+  ]],
+  ["Money", [
+    ["bank","Bank knows you're traveling","So your card isn't frozen on the first konbini run; check foreign transaction fees while you're at it."],
+    ["cash","Some yen in cash","Smaller restaurants, shrines, and markets are often cash-only. 7-Eleven and post-office ATMs take foreign cards."],
+    ["ic","IC card ready (Suica / PASMO)","Add one to Apple or Google Wallet before you land — it pays for trains, buses, vending machines, and konbini."]
+  ]],
+  ["Phone & apps", [
+    ["esim","eSIM or pocket WiFi arranged","Buy a Japan eSIM before flying so you have data the moment you land."],
+    ["offline","Offline maps & translation downloaded","Grab the Japan area in Google Maps and the Japanese pack in Google Translate for tunnels and dead zones."]
+  ]],
+  ["Getting around", [
+    ["railpass","Rail passes compared","The nationwide JR Pass only pays off with lots of long-haul travel — regional passes are often better value. Do the math against your itinerary."],
+    ["shink","Shinkansen luggage rule checked","Suitcases over 160&thinsp;cm combined (H+W+D) need a reserved oversized-baggage seat on Tokaido/Sanyo/Kyushu shinkansen."]
+  ]],
+  ["Health & extras", [
+    ["meds","Medications checked","Some common medicines (e.g. pseudoephedrine, ADHD stimulants) are restricted in Japan — check the rules and carry prescriptions.","https://www.mhlw.go.jp/english/policy/health-medical/pharmaceuticals/01.html"],
+    ["plug","Plug adapter packed","Japan uses flat two-prong Type A plugs at 100V — US plugs fit; most others need an adapter."],
+    ["extras","Little extras packed","A coin pouch and a small hand towel go a long way — change piles up fast and many restrooms have no dryers."]
+  ]]
+];
+const CHECKLIST_TOTAL = CHECKLIST.reduce((n,[,items])=>n+items.length, 0);
+function checklistDone(p){
+  const c = p.checklist||{};
+  return CHECKLIST.reduce((n,[,items])=>n+items.filter(([id])=>c[id]).length, 0);
+}
+function renderChecklist(){
+  const wrap = document.getElementById("checkInner");
+  let head = `<h2>Before you go</h2><p class="lede">The boring-but-important stuff, so nobody hits the airport unprepared. Tick things off as you sort them — everyone on the trip can see each other's progress.</p>`;
+  const people = Object.values(state.people);
+  if(people.length){
+    head += `<div class="ck-progress">` + people.map(p=>{
+      const done = checklistDone(p);
+      const pct = Math.round(done/CHECKLIST_TOTAL*100);
+      return `<div class="ck-person"><span class="dot" style="background:${p.color}"></span>${esc(p.name)} <span class="ck-count">${done}/${CHECKLIST_TOTAL}</span><div class="ck-bar"><div style="width:${pct}%"></div></div></div>`;
+    }).join("") + `</div>`;
+  }
+  if(!state.me || !state.people[state.me.name]){
+    wrap.innerHTML = head + '<div class="list-empty">Add yourself to the trip to start ticking things off.</div>';
+    return;
+  }
+  const mine = state.people[state.me.name].checklist || {};
+  let body = "";
+  for(const [group, items] of CHECKLIST){
+    body += `<div class="eyebrow explore-sec">${esc(group)}</div>`;
+    for(const [id, title, sub, link] of items){
+      body += `<label class="ck-row ${mine[id]?'done':''}"><input type="checkbox" data-check="${id}" ${mine[id]?'checked':''}>
+        <div><div class="ck-title">${esc(title)}</div><div class="ck-sub">${sub}${link?` <a href="${link}" target="_blank" rel="noopener">Official info</a>`:''}</div></div></label>`;
+    }
+  }
+  wrap.innerHTML = head + body;
+  wrap.querySelectorAll("[data-check]").forEach(cb=> cb.onchange = async()=>{
+    const rec = state.people[state.me.name];
+    (rec.checklist = rec.checklist||{})[cb.dataset.check] = cb.checked;
+    await saveMe(); render();
+  });
+}
+
 /* ============================================================
    Actions
    ============================================================ */
@@ -1590,6 +1722,7 @@ function setView(v){
   document.getElementById("stageItinerary").style.display = v==="itinerary"?"block":"none";
   document.getElementById("stageExplore").style.display = v==="explore"?"block":"none";
   document.getElementById("stageCoord").style.display = v==="coord"?"block":"none";
+  document.getElementById("stageCheck").style.display = v==="check"?"block":"none";
   if(v==="map" && map) setTimeout(()=>map.invalidateSize(),50);
   render();
 }
@@ -1689,6 +1822,8 @@ function openItem(kind){
   document.getElementById("actDate").value = state.selectedDate || state.trip.start || "";
   document.getElementById("actTime").value="";
   document.getElementById("actDur").value="";
+  document.getElementById("actCost").value="";
+  document.getElementById("stayCost").value="";
   document.getElementById("actNotes").value="";
   document.getElementById("actCat").value="Sightseeing";
   updatePickedLabel();
@@ -1710,8 +1845,10 @@ async function saveItem(){
   if(kind==="stay"){
     const city=document.getElementById("stayCity").value.trim() || nearestCity(state.pendingLoc);
     const s={ id:uid(), city, hotelName:(document.getElementById("locInput").value.trim()||city),
-      location:state.pendingLoc, start:document.getElementById("stayStart").value, end:document.getElementById("stayEnd").value };
+      location:state.pendingLoc, start:document.getElementById("stayStart").value, end:document.getElementById("stayEnd").value,
+      cost: parseCost(document.getElementById("stayCost").value) };
     if(!s.start||!s.end){ toast("Set arrive and depart dates"); return; }
+    if(s.end < s.start){ toast("Depart is before arrive — check the dates"); return; }
     rec.stays.push(s);
   } else {
     const title=document.getElementById("itemName").value.trim() || state.pendingLoc.label || "Untitled";
@@ -1719,7 +1856,8 @@ async function saveItem(){
     if(!date){ toast("Pick a day"); return; }
     rec.activities.push({ id:uid(), title, location:state.pendingLoc, date,
       time:document.getElementById("actTime").value, durationH:document.getElementById("actDur").value,
-      category:document.getElementById("actCat").value, notes:document.getElementById("actNotes").value.trim() });
+      category:document.getElementById("actCat").value, notes:document.getElementById("actNotes").value.trim(),
+      cost: parseCost(document.getElementById("actCost").value) });
   }
   await saveMe();
   document.getElementById("itemScrim").classList.remove("show");
@@ -1801,6 +1939,7 @@ function endMapPick(){
    Small utilities
    ============================================================ */
 function uid(){ return Math.random().toString(36).slice(2,9); }
+function parseCost(s){ s=String(s).replace(/[^\d]/g,""); return s ? +s : ""; }
 function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
 function shortDate(s){ return parseISO(s).toLocaleDateString("en-US",{month:"short",day:"numeric"}); }
 function shortRange(a,b){ return a&&b ? shortDate(a)+"–"+shortDate(b) : (a?shortDate(a):""); }
