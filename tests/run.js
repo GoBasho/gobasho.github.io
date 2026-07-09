@@ -223,6 +223,45 @@ async function setupProfile(page, name) {
     await page.context().close();
   }
 
+  console.log("\n== e2e: stay search & map region filter ==");
+  {
+    const page = await newPage(browser, "region-test");
+    let photonURL = "";
+    await page.route("https://photon.komoot.io/**", r => { photonURL = r.request().url(); r.fulfill({ contentType: "application/json", body: '{"features":[]}' }); }, { times: 99 });
+    await page.goto("http://localhost:18899/", { waitUntil: "domcontentloaded" });
+    await setupProfile(page, "Zach");
+    // stay search: no curated attractions, hotel/place tags requested
+    await page.click("#addStay");
+    await page.fill("#locInput", "fushimi");
+    await page.waitForTimeout(700);
+    check("stay search hides curated attractions", !(await page.$(".loc-suggest .loc-opt")));
+    check("stay search asks for hotels/places", /osm_tag=tourism%3Ahotel/.test(photonURL) && /osm_tag=place/.test(photonURL));
+    await page.click("#itemCancel");
+    // transit search asks for stations
+    await page.click("#addTransit");
+    await page.fill("#locInput", "shinagawa");
+    await page.waitForTimeout(700);
+    check("transit search asks for stations", /osm_tag=railway%3Astation/.test(photonURL));
+    await page.click("#itemCancel");
+    // map filter: Tokyo pin shows on a Japan-home trip, Paris pin hidden with a note
+    await page.evaluate(async () => {
+      state.trip.countries = ["JP"];
+      const rec = state.people[state.me.name];
+      rec.activities.push(
+        { id:"t1", title:"Senso-ji", location:{lat:35.7148,lng:139.7967}, date:"", flex:null },
+        { id:"p1", title:"Louvre", location:{lat:48.8606,lng:2.3376}, date:"", flex:null });
+      await saveMe(); render();
+    });
+    await page.waitForTimeout(300);
+    const m = await page.evaluate(() => ({
+      markers: markerLayer.getLayers().length,
+      note: document.getElementById("legendFar").textContent
+    }));
+    check("far pins filtered off the map", m.markers === 1, m.markers);
+    check("legend explains hidden pins", /1 plan outside Japan/.test(m.note), m.note);
+    await page.context().close();
+  }
+
   console.log("\n== e2e: two-user sync ==");
   {
     const a = await newPage(browser, "sync-test", { shared: true });

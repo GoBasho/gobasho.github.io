@@ -582,6 +582,7 @@
         <div style="height:8px"></div>
         <div class="legrow type"><span class="marker-pin" style="width:14px;height:14px;background:#9aa0ab"><span></span></span> Activity</div>
         <div class="legrow type"><span class="marker-pin stay" style="width:13px;height:13px;background:#9aa0ab"><span></span></span> Hotel / stay</div>
+        <div class="legrow type" id="legendFar" style="display:none;"></div>
       </div>
     </div>
 
@@ -1504,19 +1505,28 @@ function renderMarkers(){
     stays = stays.filter(s=>stayCoversDate(s,state.selectedDate));
   }
   const pts = [];
+  let hiddenFar = 0;  // pins outside the trip's home region stay off this map
   for(const s of stays){
     if(!s.location) continue;
+    if(!inHomeBox(s.location.lat, s.location.lng)){ hiddenFar++; continue; }
     const m = L.marker([s.location.lat,s.location.lng], {icon:pinIcon(s.color,true)});
     m.bindPopup(`<div class="pop"><h4>${esc(s.hotelName||s.city)}</h4><div class="pmeta">Stay · ${esc(s.city)} · ${shortRange(s.start,s.end)}</div><div class="who"><span class="dot" style="background:${s.color}"></span>${esc(s.person)}</div></div>`);
     markerLayer.addLayer(m); pts.push([s.location.lat,s.location.lng]);
   }
   for(const a of acts){
     if(!a.location) continue;
+    if(!inHomeBox(a.location.lat, a.location.lng)){ hiddenFar++; continue; }
     const m = L.marker([a.location.lat,a.location.lng], {icon:pinIcon(a.color,false)});
     m.bindPopup(`<div class="pop"><h4>${esc(a.title)}</h4><div class="pmeta">${a.time?esc(a.time)+' · ':''}${esc(a.category||'Activity')} · ${a.date?esc(shortDate(a.date)):esc(flexLabel(a)||"flexible")}</div>${a.notes?'<div class="pmeta" style="margin-top:4px">'+linkify(esc(a.notes))+'</div>':''}<div class="who"><span class="dot" style="background:${a.color}"></span>${esc(a.person)}</div></div>`);
     markerLayer.addLayer(m); pts.push([a.location.lat,a.location.lng]);
   }
   if(pts.length && !state._didFit){ map.fitBounds(pts, {padding:[60,60], maxZoom:12}); state._didFit=true; }
+  const far = document.getElementById("legendFar");
+  if(hiddenFar){
+    const h = homeDef(tripHome());
+    far.style.display = "flex";
+    far.textContent = hiddenFar + " plan" + (hiddenFar>1?"s":"") + " outside " + (h?h[1]:"this region") + " hidden — change the trip's home in the Trips menu to see them";
+  } else far.style.display = "none";
 }
 function flyTo(loc){
   if(!loc) return;
@@ -2992,11 +3002,13 @@ function onLocInput(){
   const q=document.getElementById("locInput").value.trim();
   const box=document.getElementById("locSuggest");
   if(q.length<2){ box.classList.remove("show"); return; }
-  const curated = curatedMatches(q);
+  const kind=state.editing && state.editing.kind;
+  // curated places are attractions — only offer them for activities
+  const curated = (kind==="stay"||kind==="transit") ? [] : curatedMatches(q);
   renderSuggest(curated, true);
   // debounced geocoder for anything else
   clearTimeout(searchTimer);
-  searchTimer=setTimeout(()=>geocode(q, curated), 450);
+  searchTimer=setTimeout(()=>geocode(q, curated, kind), 450);
 }
 /* map OSM tags to a readable type and one of the app's categories */
 const OSM_KIND = { restaurant:"Restaurant", cafe:"Café", fast_food:"Quick eats", bar:"Bar", pub:"Pub", food_court:"Food court",
@@ -3024,9 +3036,19 @@ function osmCategory(key, value){
 }
 /* Photon: typo-tolerant OSM autocomplete that understands POIs (resorts,
    restaurants, shrines); bbox keeps results inside Japan */
-async function photonSearch(q){
+/* what kind of place each item type wants from the geocoder:
+   stays get cities/regions, hotels, and addresses — not shrines;
+   transit gets stations, airports, and terminals */
+const PHOTON_TAGS = {
+  stay: ["place","tourism:hotel","tourism:hostel","tourism:guest_house","tourism:apartment","tourism:motel","building"],
+  transit: ["railway:station","railway:halt","aeroway:aerodrome","amenity:bus_station","amenity:ferry_terminal","place"]
+};
+async function photonSearch(q, kind){
   const bb=homeBbox();
-  const url="https://photon.komoot.io/api/?limit=7&lang=en"+(bb?"&bbox="+bb.join(","):"")+"&q="+encodeURIComponent(q);
+  const tags=PHOTON_TAGS[kind];
+  const url="https://photon.komoot.io/api/?limit=7&lang=en"+(bb?"&bbox="+bb.join(","):"")
+    +(tags?tags.map(t=>"&osm_tag="+encodeURIComponent(t)).join(""):"")
+    +"&q="+encodeURIComponent(q);
   const res=await fetch(url);
   if(!res.ok) throw 0;
   const data=await res.json();
@@ -3039,9 +3061,9 @@ async function photonSearch(q){
     })
     .filter(x=>x.label && isFinite(x.lat) && isFinite(x.lng));
 }
-async function geocode(q, curated){
+async function geocode(q, curated, kind){
   try{
-    const items=await photonSearch(q);
+    const items=await photonSearch(q, kind);
     if(items.length){ renderSuggest([...curated, ...items], false); return; }
   }catch{ /* fall through to Nominatim */ }
   try{
