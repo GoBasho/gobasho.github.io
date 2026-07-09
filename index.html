@@ -383,6 +383,23 @@
 
   .storage-warn { font-size: 11.5px; color: var(--shu); background: var(--shu-dim); padding: 3px 10px; border-radius: 6px; }
 
+  /* day-grouping suggestions */
+  .sug-card {
+    border: 1px solid var(--line); border-left: 3px solid var(--indigo); border-radius: var(--radius);
+    padding: 13px 16px; margin-bottom: 12px; background: var(--surface); box-shadow: var(--shadow);
+  }
+  .sug-line { font-size: 13px; line-height: 1.7; }
+  .sug-line .sg-when { color: var(--ink-faint); font-size: 11.5px; margin-left: 3px; }
+  .sg-sep { color: var(--ink-faint); margin: 0 8px; }
+  .sug-note { font-size: 12px; color: var(--ink-soft); margin-top: 5px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .sug-actions { display: flex; gap: 8px; margin-top: 10px; align-items: center; flex-wrap: wrap; }
+  .rail-hint {
+    display: flex; align-items: center; gap: 8px; width: 100%; text-align: left;
+    border: 1px solid var(--line); border-left: 3px solid var(--indigo); border-radius: 8px;
+    background: var(--sky); color: var(--ink-soft); font-size: 12px; padding: 8px 11px; margin-bottom: 8px;
+  }
+  .rail-hint:hover { border-color: var(--indigo); color: var(--ink); }
+
   /* scrollbars */
   ::-webkit-scrollbar { width: 9px; height: 9px; }
   ::-webkit-scrollbar-thumb { background: var(--line-strong); border-radius: 6px; border: 2px solid var(--surface); }
@@ -993,6 +1010,17 @@ function renderRailList(){
     return;
   }
   wrap.innerHTML = "";
+  // nudge toward day-grouping suggestions without leaving the map
+  if(state.me && state.people[state.me.name]){
+    const n = mergeSuggestions(state.people[state.me.name]).length;
+    if(n){
+      const hint = document.createElement("button");
+      hint.className = "rail-hint";
+      hint.innerHTML = `<span>&#128161;</span> ${n===1?"Some plans could":n+" groups of plans could each"} share a day — see Itinerary`;
+      hint.onclick = ()=>{ document.querySelectorAll(".tab").forEach(t=>t.classList.toggle("active", t.dataset.view==="itinerary")); setView("itinerary"); };
+      wrap.appendChild(hint);
+    }
+  }
   for(const s of stays){
     wrap.appendChild(itemRow({
       color: s.color, title: s.hotelName || s.city, tick: s.color,
@@ -1071,7 +1099,8 @@ function renderItinerary(){
   const wrap = document.getElementById("itineraryInner");
   const dates = tripDates();
   let head = `<h2>Itinerary</h2><p class="lede">Each person's day is anchored to their hotel, then read as a route. Travel modes and the day verdict are estimates from straight-line distance — real transit times vary.</p>`;
-  if(!dates.length){ wrap.innerHTML = head + '<div class="list-empty">Set your trip dates in the header to build the day-by-day itinerary.</div>'; return; }
+  if(state.me && state.people[state.me.name]) head += suggestionCards(state.people[state.me.name]);
+  if(!dates.length){ wrap.innerHTML = head + '<div class="list-empty">Set your trip dates in the header to build the day-by-day itinerary.</div>'; wireSuggestions(wrap); return; }
   const people = visiblePeople();
   const shownDates = state.selectedDate ? [state.selectedDate] : dates;
   let body = "";
@@ -1088,6 +1117,11 @@ function renderItinerary(){
     body += `<div class="day-block"><div class="day-head"><span class="dh-num">${prettyDate(date)}</span><span class="dh-dow">Day</span></div>${dayHtml}</div>`;
   }
   wrap.innerHTML = head + (body || '<div class="list-empty">No plans on the selected day(s) yet.</div>');
+  wireSuggestions(wrap);
+}
+function wireSuggestions(wrap){
+  wrap.querySelectorAll("[data-merge]").forEach(b=> b.onclick=()=>applyMergeSuggestion(b.dataset.merge, b.dataset.target));
+  wrap.querySelectorAll("[data-dismisssug]").forEach(b=> b.onclick=()=>dismissSuggestion(b.dataset.dismisssug));
 }
 
 function renderPersonDay(p, date, acts, stay){
@@ -1389,6 +1423,82 @@ async function addRecommendation(place, date){
   rec.activities.push({ id:uid(), title:place.name, location:{lat:place.lat, lng:place.lng, label:place.name},
     date, time:"", durationH:"", category:place.cat, notes:"" });
   await saveMe(); state._didFit=false; render(); toast("Added "+place.name);
+}
+
+/* ---------- smart day suggestions: nearby plans on different days ---------- */
+const NEAR_KM = 12;   // one local-transit hop; anything closer is comfortably one day
+function mergeSuggestions(p){
+  const acts=(p.activities||[]).filter(a=>a.location&&a.date);
+  const dismissed=p.dismissedSuggestions||{};
+  const byDate={};
+  for(const a of acts) (byDate[a.date]=byDate[a.date]||[]).push(a);
+  const dates=Object.keys(byDate).sort();
+  const out=[];
+  for(let i=0;i<dates.length;i++) for(let j=i+1;j<dates.length;j++){
+    const A=byDate[dates[i]], B=byDate[dates[j]];
+    const aInv=new Set(), bInv=new Set(); let minKm=Infinity;
+    for(const a of A) for(const b of B){
+      const km=haversine(a.location,b.location);
+      if(km<=NEAR_KM){ aInv.add(a); bInv.add(b); minKm=Math.min(minKm,km); }
+    }
+    if(!aInv.size) continue;
+    const key=[...aInv,...bInv].map(x=>x.id).sort().join("|");
+    if(dismissed[key]) continue;
+    // a merge direction is only offered if the combined day stays reasonable
+    const fitA=A.length+bInv.size<=5, fitB=B.length+aInv.size<=5;
+    if(!fitA && !fitB) continue;
+    out.push({key, d1:dates[i], d2:dates[j], a:[...aInv], b:[...bInv], minKm, fitA, fitB});
+  }
+  // one suggestion per activity: keep the biggest/tightest groupings, drop overlapping ones
+  out.sort((x,y)=>(y.a.length+y.b.length)-(x.a.length+x.b.length) || x.minKm-y.minKm);
+  const used=new Set(), keep=[];
+  for(const s of out){
+    if([...s.a,...s.b].some(x=>used.has(x.id))) continue;
+    [...s.a,...s.b].forEach(x=>used.add(x.id));
+    keep.push(s);
+  }
+  return keep;
+}
+/* which day to recommend: move fewer plans, and avoid moving anything with a set time
+   (a tournament or reservation is anchored; a store visit is flexible) */
+function mergeDirection(s){
+  const timed=list=>list.filter(x=>x.time).length;
+  const costToD1 = s.b.length + timed(s.b)*10 + (s.fitA?0:100);  // moving B's plans onto d1
+  const costToD2 = s.a.length + timed(s.a)*10 + (s.fitB?0:100);
+  return costToD1<=costToD2 ? "d1" : "d2";
+}
+function suggestionCards(p){
+  let sugg=mergeSuggestions(p);
+  if(state.selectedDate) sugg=sugg.filter(s=>s.d1===state.selectedDate||s.d2===state.selectedDate);
+  if(!sugg.length) return "";
+  let html=`<div class="eyebrow" style="margin-top:2px">Suggestions <span class="count">${sugg.length}</span></div>`;
+  for(const s of sugg){
+    const leg=classifyLeg(s.minKm);
+    const pref=mergeDirection(s);
+    const item=x=>`<b>${esc(x.title)}</b> <span class="sg-when">${shortDate(x.date)}${x.time?" · "+esc(x.time):""}</span>`;
+    html+=`<div class="sug-card">
+      <div class="sug-line">${[...s.a,...s.b].map(item).join('<span class="sg-sep">+</span>')}</div>
+      <div class="sug-note">Only ${s.minKm.toFixed(1)} km apart <span class="mode-tag ${leg.cls}">${leg.label}</span> ~${fmtMin(leg.min)} — but planned on different days. Group them?</div>
+      <div class="sug-actions">
+        ${s.fitA?`<button class="mini-btn ${pref==="d1"?"on":""}" data-merge="${s.key}" data-target="${s.d1}">Do these ${shortDate(s.d1)}</button>`:""}
+        ${s.fitB?`<button class="mini-btn ${pref==="d2"?"on":""}" data-merge="${s.key}" data-target="${s.d2}">Do these ${shortDate(s.d2)}</button>`:""}
+        <button class="linkish" data-dismisssug="${s.key}">Dismiss</button>
+      </div></div>`;
+  }
+  return html;
+}
+async function applyMergeSuggestion(key, target){
+  const rec=state.people[state.me.name];
+  const ids=key.split("|");
+  let moved=0;
+  for(const a of rec.activities){ if(ids.includes(a.id) && a.date!==target){ a.date=target; moved++; } }
+  await saveMe(); render();
+  toast("Moved "+moved+" plan"+(moved!==1?"s":"")+" to "+shortDate(target));
+}
+async function dismissSuggestion(key){
+  const rec=state.people[state.me.name];
+  (rec.dismissedSuggestions=rec.dismissedSuggestions||{})[key]=true;
+  await saveMe(); render();
 }
 
 /* ---------- coordination view ---------- */
