@@ -6,14 +6,19 @@
  * non-shared data (your own profile pointer) always stays in this browser.
  *
  * Shared data goes to a Firebase Realtime Database when config.js provides
- * a firebaseUrl; otherwise it falls back to localStorage so the planner
- * still works for a single person with zero setup.
+ * one; otherwise it falls back to localStorage so the planner still works
+ * for a single person with zero setup.
+ *
+ * config.js accepts EITHER the database's own URL
+ * (https://<name>.firebaseio.com or https://<name>.<region>.firebasedatabase.app)
+ * OR a Firebase console link (https://console.firebase.google.com/...) —
+ * for console links the database name is extracted and Firebase itself is
+ * asked for the correct regional address on first load, then cached.
  */
 (function () {
   const cfg = window.MERIDIAN_CONFIG || {};
-  const dbUrl = String(cfg.firebaseUrl || "").replace(/\/+$/, "");
+  const raw = String(cfg.firebaseUrl || "").trim();
   const tripId = cfg.tripId || "our-japan-trip";
-  const useFirebase = /^https:\/\//.test(dbUrl) || /^http:\/\/localhost[:/]/.test(dbUrl);
 
   // Firebase paths can't contain . $ # [ ] or /, so keys are URI-encoded
   // (with "." encoded too, since encodeURIComponent leaves it alone).
@@ -42,15 +47,66 @@
     return { keys };
   }
 
-  const base = dbUrl + "/trips/" + encodeKey(tripId);
+  /* ---- work out the real database URL from whatever was pasted ---- */
+  let dbUrl = null; // e.g. "https://name.firebaseio.com", no trailing slash
+  let mode = "local";
+
+  function originOf(u) {
+    const m = u.match(/^(https?:\/\/[^/]+)/i);
+    return m ? m[1] : null;
+  }
+  function consoleDbName(u) {
+    let m = u.match(/console\.firebase\.google\.com\/.*?\bdatabase\/([A-Za-z0-9-]+)/i);
+    if (m) return m[1];
+    m = u.match(/console\.firebase\.google\.com\/(?:u\/\d+\/)?project\/([A-Za-z0-9-]+)/i);
+    if (m) return m[1] + "-default-rtdb";
+    return null;
+  }
+
+  const ready = (async function init() {
+    if (!raw) return;
+    const origin = originOf(raw);
+    if (origin && /(\.firebaseio\.com|\.firebasedatabase\.app)$/i.test(origin) ||
+        /^http:\/\/localhost[:/]/.test(raw)) {
+      dbUrl = (origin || raw).replace(/\/+$/, "");
+      mode = "shared";
+      return;
+    }
+    const dbName = consoleDbName(raw);
+    if (!dbName) return; // unrecognized — stay local rather than guess
+    const cached = localStorage.getItem("meridian:resolved-db:" + dbName);
+    if (cached) { dbUrl = cached; mode = "shared"; return; }
+    // ask the default (US) endpoint; if the database lives elsewhere,
+    // Firebase's error message contains the correct regional URL
+    const guess = "https://" + dbName + ".firebaseio.com";
+    try {
+      const res = await fetch(guess + "/.json?shallow=true");
+      const body = await res.text();
+      if (res.ok) dbUrl = guess;
+      else {
+        const m = body.match(/https:\/\/[a-z0-9.-]+\.firebasedatabase\.app/i);
+        if (m) dbUrl = m[0];
+        else if (res.status === 401 || /permission/i.test(body)) dbUrl = guess; // right host, locked rules
+      }
+    } catch { /* offline or blocked — stay local this session */ }
+    if (dbUrl) {
+      localStorage.setItem("meridian:resolved-db:" + dbName, dbUrl);
+      mode = "shared";
+    }
+  })();
+
+  /* ---- Firebase REST operations ---- */
+  function base() {
+    return dbUrl + "/trips/" + encodeKey(tripId);
+  }
   async function fbGet(key) {
-    const res = await fetch(base + "/" + encodeKey(key) + ".json");
+    const res = await fetch(base() + "/" + encodeKey(key) + ".json");
     if (!res.ok) throw new Error("Sync read failed (" + res.status + ")");
     const value = await res.json();
     return value === null ? null : { key, value };
   }
   async function fbSet(key, value) {
-    const res = await fetch(base + "/" + encodeKey(key) + ".json", {
+    const res = await fetch(base() + "/" + encodeKey(key) + ".json", {
       method: "PUT",
       body: JSON.stringify(value)
     });
@@ -58,22 +114,25 @@
     return { key, value };
   }
   async function fbList(prefix) {
-    const res = await fetch(base + ".json?shallow=true");
+    const res = await fetch(base() + ".json?shallow=true");
     if (!res.ok) throw new Error("Sync list failed (" + res.status + ")");
     const obj = (await res.json()) || {};
     return { keys: Object.keys(obj).map(decodeKey).filter((k) => k.startsWith(prefix)) };
   }
 
   window.storage = {
-    mode: useFirebase ? "shared" : "local",
+    get mode() { return mode; },
     async get(key, shared) {
-      return shared && useFirebase ? fbGet(key) : localGet(key);
+      await ready;
+      return shared && mode === "shared" ? fbGet(key) : localGet(key);
     },
     async set(key, value, shared) {
-      return shared && useFirebase ? fbSet(key, value) : localSet(key, value);
+      await ready;
+      return shared && mode === "shared" ? fbSet(key, value) : localSet(key, value);
     },
     async list(prefix, shared) {
-      return shared && useFirebase ? fbList(prefix) : localList(prefix);
+      await ready;
+      return shared && mode === "shared" ? fbList(prefix) : localList(prefix);
     }
   };
 })();

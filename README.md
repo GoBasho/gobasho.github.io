@@ -54,6 +54,8 @@ the same map, connect a free Firebase database:
 
 5. Back on the **Data** tab, copy the database URL shown at the top — it looks
    like `https://japan-trip-default-rtdb.asia-southeast1.firebasedatabase.app`.
+   (Pasting the console page's address from your browser bar works too — the
+   site figures out the real database URL from it.)
 6. Open `config.js` in this repo and paste that URL as the `firebaseUrl`
    value, then commit/push (or just save, if you're running it locally).
 

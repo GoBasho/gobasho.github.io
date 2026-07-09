@@ -8,8 +8,10 @@
  * instructions are in README.md.
  */
 window.MERIDIAN_CONFIG = {
-  // Paste your Firebase Realtime Database URL here to turn on live sharing,
-  // e.g. "https://our-japan-trip-default-rtdb.asia-southeast1.firebasedatabase.app"
+  // Paste your Firebase Realtime Database URL here to turn on live sharing —
+  // either the database URL itself (shown at the top of the Data tab, e.g.
+  // "https://our-japan-trip-default-rtdb.asia-southeast1.firebasedatabase.app")
+  // or simply the console page link (console.firebase.google.com/...) — both work.
   // Leave as "" to keep everything local to each person's browser.
   firebaseUrl: "https://console.firebase.google.com/project/gojapan-2e7da/database/gojapan-2e7da-default-rtdb/data/~2F",
 
