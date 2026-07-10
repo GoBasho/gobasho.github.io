@@ -479,6 +479,74 @@ async function setupProfile(page, name) {
     await page.context().close();
   }
 
+  console.log("\n== e2e: smarter stays, transit times, explore radius ==");
+  {
+    const page = await newPage(browser, "smart-test");
+    // Photon: stations for transit queries; nothing for stays (forces Nominatim merge)
+    await page.route("https://photon.komoot.io/**", r => {
+      const u = new URL(r.request().url());
+      const q = (u.searchParams.get("q") || "").toLowerCase();
+      const feat = (name, lat, lng, key, val) => ({ properties: { name, osm_key: key, osm_value: val, city: "Sapporo", countrycode: "JP" }, geometry: { coordinates: [lng, lat] } });
+      let features = [];
+      if (/station/.test(q)) features = [feat(q.includes("otaru") ? "Otaru Station" : "Sapporo Station", q.includes("otaru") ? 43.1971 : 43.0686, q.includes("otaru") ? 140.9946 : 141.3508, "railway", "station")];
+      page._lastPhoton = u.href;
+      r.fulfill({ contentType: "application/json", body: JSON.stringify({ features }) });
+    });
+    await page.route("https://nominatim.openstreetmap.org/**", r => r.fulfill({ contentType: "application/json",
+      body: JSON.stringify([{ display_name: "3 Chome-7 Kita 5 Jonishi, Chuo Ward, Sapporo", lat: "43.068", lon: "141.35" }]) }));
+    await page.route("https://api.transitous.org/**", r => r.fulfill({ contentType: "application/json",
+      body: JSON.stringify({ itineraries: [
+        { startTime: "2026-12-05T09:12:00+09:00", endTime: "2026-12-05T09:58:00+09:00", legs: [{ routeShortName: "Airport Rapid" }] },
+        { startTime: "2026-12-05T09:40:00+09:00", endTime: "2026-12-05T10:26:00+09:00", legs: [{ routeShortName: "Local 342" }] }
+      ] }) }));
+    await page.goto("http://localhost:18899/", { waitUntil: "domcontentloaded" });
+    await setupProfile(page, "Zach");
+    await page.fill("#tripStart", "2026-12-01");
+    await page.fill("#tripEnd", "2026-12-10");
+    // stay by street address (Nominatim merge path)
+    await page.click("#addStay");
+    await page.fill("#locInput", "3 Chome-7 Kita 5 Jonishi Sapporo");
+    await page.waitForTimeout(700);
+    check("stay search returns street addresses", /Kita 5 Jonishi/.test(await page.textContent("#locSuggest")));
+    await page.click(".loc-opt");
+    await page.fill("#stayStart", "2026-12-01");
+    await page.fill("#stayEnd", "2026-12-10");
+    await page.click("#itemSave");
+    await page.waitForTimeout(400);
+    // transit purely by from → to, with live times
+    await page.click("#addTransit");
+    await page.fill("#transFrom", "Sapporo Station");
+    await page.fill("#transTo", "Otaru Station");
+    await page.fill("#actDate", "2026-12-05");
+    await page.click("#transFind");
+    await page.waitForTimeout(600);
+    check("connections listed", /09:12 → 09:58/.test(await page.textContent("#transTimes")));
+    check("photon carries map-center bias", /lat=-?\d/.test(page._lastPhoton) && /lon=-?\d/.test(page._lastPhoton));
+    await page.click(".trans-opt");
+    await page.waitForTimeout(200);
+    check("tapping a connection fills time/duration/name", await page.evaluate(() =>
+      document.getElementById("actTime").value === "09:12" && document.getElementById("itemName").value === "Airport Rapid"));
+    await page.click("#itemSave");
+    await page.waitForTimeout(500);
+    const tr = await page.evaluate(() => state.people.Zach.activities.find(a => a.transit));
+    check("transit saved with auto arrival pin", !!tr && !!tr.location && Math.abs(tr.location.lat - 43.1971) < 0.01);
+    // explore radius: Sapporo stay must not surface Tokyo at 25 km, but Otaru appears at 100 km
+    await page.click(".tab[data-view=explore]");
+    await page.waitForTimeout(600);
+    let exp = await page.textContent("#exploreInner");
+    check("25 km: no Tokyo or Korea recommendations", !/Senso-ji|Gyeongbokgung|Shibuya/.test(exp));
+    check("25 km: farther-afield browser hidden", !/Farther afield|Photo spots farther/.test(exp));
+    await page.click("[data-radius='100']");
+    await page.waitForTimeout(600);
+    exp = await page.textContent("#exploreInner");
+    check("100 km: Otaru & Niseko surface, Tokyo still absent", /Otaru Canal/.test(exp) && /Niseko/.test(exp) && !/Senso-ji/.test(exp));
+    await page.click("[data-radius='any']");
+    await page.waitForTimeout(600);
+    exp = await page.textContent("#exploreInner");
+    check("anywhere: the far-flung browser returns", /Farther afield|Photo spots farther/.test(exp));
+    await page.context().close();
+  }
+
   console.log("\n== e2e: first-run welcome ==");
   {
     // brand-new visitor: welcome screen, not someone else's trip

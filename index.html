@@ -805,9 +805,12 @@
 
       <div id="transitFields" style="display:none;">
         <div class="field-row">
-          <div class="field"><label>From (optional)</label><input type="text" id="transFrom" placeholder="e.g. Tokyo Station" maxlength="40"></div>
-          <div class="field"><label>To (optional)</label><input type="text" id="transTo" placeholder="e.g. Kyoto Station" maxlength="40"></div>
+          <div class="field"><label>From</label><input type="text" id="transFrom" placeholder="e.g. Tokyo Station" maxlength="40"></div>
+          <div class="field"><label>To</label><input type="text" id="transTo" placeholder="e.g. Kyoto Station" maxlength="40"></div>
         </div>
+        <div class="loc-actions" style="margin-bottom:10px"><button class="mini-btn" id="transFind" type="button">&#128337; Find departure times</button></div>
+        <div class="field" id="transTimes" style="display:none;"></div>
+        <div class="field-hint" style="margin:-4px 0 12px">Name and pin are optional — From → To is enough; the pin lands on the arrival stop automatically.</div>
       </div>
 
       <div id="stayFields" style="display:none;">
@@ -2027,6 +2030,11 @@ function dayVerdict(stopCount, cityCount, maxLeg){
 }
 
 /* ---------- explore view: day trips + area recommendations ---------- */
+/* how far afield Explore looks, per browser */
+const RADII=[["5","Walkable · 5 km"],["25","Local · 25 km"],["100","Day trip · 100 km"],["any","Anywhere"]];
+function exploreRadius(){ try { return localStorage.getItem("meridian:explore-radius") || "25"; } catch { return "25"; } }
+function radiusKm(){ const r=exploreRadius(); return r==="any" ? Infinity : +r; }
+function withinRadius(loc, pt){ return !loc || !isFinite(radiusKm()) ? true : haversine(loc, {lat:pt.lat, lng:pt.lng}) <= radiusKm(); }
 function baseCityForDate(p, date){ const s=(p.stays||[]).find(x=>stayCoversDate(x,date)); return s?s.city:null; }
 function hotelLocForDate(p, date){ const s=(p.stays||[]).find(x=>stayCoversDate(x,date)); return s?s.location:null; }
 function uniqueBaseCities(p){ return [...new Set((p.stays||[]).map(s=>s.city))]; }
@@ -2073,9 +2081,11 @@ function forYouInCity(city, p, date){
 }
 
 function forYouSection(title, city, targetDate, p){
-  const items=forYouInCity(city, p, targetDate);
+  const hotelLoc=targetDate?hotelLocForDate(p,targetDate):null;
+  const anchorLoc=hotelLoc||cityCentroid(city);
+  const items=forYouInCity(city, p, targetDate).filter(x=>withinRadius(anchorLoc, x.pt));
   if(!items.length) return "";
-  const hotel=targetDate?hotelLocForDate(p,targetDate):null;
+  const hotel=hotelLoc;
   let html=`<div class="eyebrow explore-sec">${esc(title)} <span class="count">${items.length}</span></div><div class="rec-grid">`;
   for(const {pt,hits} of items){
     const dist = hotel ? ` &middot; ${haversine(hotel,{lat:pt.lat,lng:pt.lng}).toFixed(1)} km from base` : "";
@@ -2090,9 +2100,11 @@ function forYouSection(title, city, targetDate, p){
 
 function recSection(title, city, targetDate, p){
   if(!POINTS.some(pt=>pt.mainstream && pt.city===city)) return "";  // uncurated city: the Wikipedia section covers it
-  const recs=recsForCity(city, p, targetDate);
-  if(!recs.length) return `<div class="eyebrow explore-sec">${esc(title)}</div><div class="list-empty">Everything here is already on your list.</div>`;
-  const hotel=targetDate?hotelLocForDate(p,targetDate):null;
+  const hotelLoc=targetDate?hotelLocForDate(p,targetDate):null;
+  const anchorLoc=hotelLoc||cityCentroid(city);
+  const recs=recsForCity(city, p, targetDate).filter(pt=>withinRadius(anchorLoc, pt));
+  if(!recs.length) return `<div class="eyebrow explore-sec">${esc(title)}</div><div class="list-empty">Nothing within your Explore radius that isn't already on your list.</div>`;
+  const hotel=hotelLoc;
   let html=`<div class="eyebrow explore-sec">${esc(title)} <span class="count">${recs.length}</span></div><div class="rec-grid">`;
   for(const r of recs){
     const dist = hotel ? ` &middot; ${haversine(hotel,{lat:r.lat,lng:r.lng}).toFixed(1)} km from base` : "";
@@ -2104,8 +2116,30 @@ function recSection(title, city, targetDate, p){
   return html+`</div>`;
 }
 
+/* curated places within the radius but beyond the base city — Sapporo at 100 km
+   surfaces Otaru and Niseko without ever suggesting Tokyo */
+function nearSection(loc, baseCity, targetDate, p){
+  if(!loc || !isFinite(radiusKm())) return "";
+  const have=new Set((p.activities||[]).map(a=>a.title.toLowerCase()));
+  const items=POINTS
+    .filter(pt=>pt.city!==baseCity && !have.has(pt.name.toLowerCase()))
+    .map(pt=>({pt, km:haversine(loc,{lat:pt.lat,lng:pt.lng})}))
+    .filter(x=>x.km<=radiusKm() && x.km>2)
+    .sort((a,b)=>a.km-b.km).slice(0,12);
+  if(!items.length) return "";
+  let html=`<div class="eyebrow explore-sec">Farther out, within ${radiusKm()} km <span class="count">${items.length}</span></div><div class="rec-grid">`;
+  for(const {pt,km} of items){
+    html+=`<div class="rec-card"><div class="rec-thumb" data-thumb="${esc(pt.wiki||pt.name)}"></div><div class="rec-cat">${esc(pt.cat)}</div><div class="rec-name">${esc(pt.name)}</div>
+      <div class="rec-blurb">${esc(pt.blurb)}</div>
+      <div class="rec-foot"><span class="rec-dist">${esc(pt.city)} &middot; ${km.toFixed(0)} km away</span>
+      <button class="mini-btn" data-addrec="${pt._i}" data-recdate="${targetDate||''}">Add${targetDate?'':'…'}</button></div></div>`;
+  }
+  return html+`</div>`;
+}
+
 /* nationwide spots (those with a region) grouped by area, filtered to interests */
 function acrossJapanSection(p){
+  if(isFinite(radiusKm())) return "";  // only when Explore is set to "Anywhere"
   const interests = p.interests||[];
   const have = new Set((p.activities||[]).map(a=>a.title.toLowerCase()));
   const pool = POINTS.filter(pt=>pt.region && !have.has(pt.name.toLowerCase()));
@@ -2134,7 +2168,8 @@ function acrossJapanSection(p){
 
 function renderExplore(){
   const wrap=document.getElementById("exploreInner");
-  let head=`<h2>Explore</h2><p class="lede">Assign a day to your base city or a day trip, then add recommendations for either area. Picks are tailored to each traveler's interests. Travel times are rough estimates.</p>`;
+  let head=`<h2>Explore</h2><p class="lede">Assign a day to your base city or a day trip, then add recommendations for either area. Picks are tailored to each traveler's interests and stay within the range you choose.</p>`;
+  head+=`<div class="chip-pick" style="margin:-14px 0 20px">${RADII.map(([v,l])=>`<button class="chip ${exploreRadius()===v?"on":""}" data-radius="${v}">${l}</button>`).join("")}</div>`;
   if(!state.me){ wrap.innerHTML=head+'<div class="list-empty">Add yourself to the trip first.</div>'; return; }
   const me=state.people[state.me.name];
   const interests=me.interests||[];
@@ -2155,10 +2190,11 @@ function renderExplore(){
     } else {
       body+='<div class="explore-hint" style="margin-top:12px">Pick a day on the left to plan a day trip. Meanwhile, ideas around where you\'re based:</div>';
       for(const city of bases){
+        const sLoc=((me.stays||[]).find(s=>s.city===city)||{}).location || cityCentroid(city);
         body+=forYouSection("For your interests in "+city, city, firstDateInCity(me,city), me);
         body+=recSection("Popular in "+city, city, firstDateInCity(me,city), me);
-        const sLoc=((me.stays||[]).find(s=>s.city===city)||{}).location || cityCentroid(city);
         body+=wikiSection("Near your stay in "+city+" — live from Wikipedia", sLoc, firstDateInCity(me,city));
+        body+=nearSection(sLoc, city, firstDateInCity(me,city), me);
       }
     }
     body+=acrossJapanSection(me);
@@ -2192,6 +2228,7 @@ function renderExplore(){
   if(base) body+=recSection("Popular in "+base, base, date, me);
   if(trip) body+=wikiSection("Near "+trip+" — live from Wikipedia", cityCentroid(trip), date);
   if(base) body+=wikiSection("Near your stay — live from Wikipedia", hotelLocForDate(me,date)||cityCentroid(base), date);
+  if(base) body+=nearSection(hotelLocForDate(me,date)||cityCentroid(base), base, date, me);
 
   wrap.innerHTML=head+body;
   wireExplore(wrap);
@@ -2256,11 +2293,12 @@ function cityCentroid(name){ const c=CITIES.find(x=>x[0]===name); return c?{lat:
 const wikiNearCache = new Map();
 const WIKI_SKIP = /footballer|politician|company|organization|corporation|school|university|college|hospital|radio|television|conference|album|film|band|newspaper|magazine|constituency|ward\b|electoral|municipality|prefecture|province|county|district of|neighbourhood|neighborhood|suburb|railway station|metro station|subway station|train station|bus station|airport|airline|embassy|office building|headquarters/i;
 async function wikiNearby(loc){
-  const key = loc.lat.toFixed(2)+","+loc.lng.toFixed(2);
+  const radM = Math.round(Math.min(isFinite(radiusKm())?radiusKm():10, 10) * 1000);  // API caps at 10 km
+  const key = loc.lat.toFixed(2)+","+loc.lng.toFixed(2)+","+radM;
   if(wikiNearCache.has(key)) return wikiNearCache.get(key);
   const url = "https://en.wikipedia.org/w/api.php?action=query&format=json&origin=*"
     + "&generator=geosearch&ggscoord=" + loc.lat + "%7C" + loc.lng
-    + "&ggsradius=10000&ggslimit=30&prop=pageimages%7Cdescription%7Ccoordinates&piprop=thumbnail&pithumbsize=400";
+    + "&ggsradius=" + radM + "&ggslimit=30&prop=pageimages%7Cdescription%7Ccoordinates&piprop=thumbnail&pithumbsize=400";
   let out = [];
   try {
     const res = await fetch(url);
@@ -2355,6 +2393,10 @@ async function hydrateWikiNear(el, p){
 
 function wireExplore(wrap){
   hydrateThumbs(wrap);
+  wrap.querySelectorAll("[data-radius]").forEach(b=>b.onclick=()=>{
+    try { localStorage.setItem("meridian:explore-radius", b.dataset.radius); } catch {}
+    render();
+  });
   const me = state.me && state.people[state.me.name];
   if(me) wrap.querySelectorAll(".wiki-near").forEach(el=>hydrateWikiNear(el, me));
   wrap.querySelectorAll(".edit-interests").forEach(b=> b.onclick=openProfile);
@@ -3845,6 +3887,8 @@ function openItem(kind, existing){
   document.getElementById("locInput").placeholder = isTransit?"Arrival station or stop":"Search a place, or click the map";
   document.getElementById("transFrom").value = existing && existing.from ? existing.from : "";
   document.getElementById("transTo").value = existing && existing.to ? existing.to : "";
+  document.getElementById("transTimes").style.display = "none";
+  document.getElementById("transTimes").innerHTML = "";
   // reset fields, or prefill when editing
   document.getElementById("itemName").value = existing && !isStay ? existing.title : "";
   document.getElementById("locInput").value = existing ? (isStay ? (existing.hotelName||"") : ((existing.location||{}).label||"")) : "";
@@ -3885,11 +3929,61 @@ function updatePickedLabel(){
     el.className="loc-picked none"; el.textContent="No location set";
   }
 }
+/* live departures for a from→to leg (Transitous: free, open GTFS routing) */
+async function findTransitTimes(){
+  const from=document.getElementById("transFrom").value.trim();
+  const to=document.getElementById("transTo").value.trim();
+  const box=document.getElementById("transTimes");
+  if(!from || !to){ toast("Fill in From and To first"); return; }
+  const date=document.getElementById("actDate").value || state.trip.start || iso(new Date());
+  const time=document.getElementById("actTime").value || "09:00";
+  box.style.display="block";
+  box.innerHTML='<div class="list-empty">Looking up connections&hellip;</div>';
+  try {
+    const [f,t]=await Promise.all([photonSearch(from,"transit"), photonSearch(to,"transit")]);
+    if(!f.length || !t.length) throw 0;
+    const url=`https://api.transitous.org/api/v1/plan?fromPlace=${f[0].lat},${f[0].lng}&toPlace=${t[0].lat},${t[0].lng}&time=${encodeURIComponent(date+"T"+time+":00")}&arriveBy=false&numItineraries=4`;
+    const res=await fetch(url);
+    if(!res.ok) throw 0;
+    const data=await res.json();
+    const its=(data.itineraries||[]).slice(0,4);
+    if(!its.length) throw 0;
+    // show the timetable's own wall-clock (never the planner's timezone)
+    const hm=v=>{
+      if(typeof v==="string"){ const m=v.match(/T(\d{2}:\d{2})/); if(m) return m[1]; }
+      const d=new Date(v);
+      return String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0");
+    };
+    box.innerHTML='<label>Connections on '+esc(shortDate(date))+' — tap one to fill the form</label><div class="chip-pick">'
+      + its.map(it=>{
+        const names=[...new Set((it.legs||[]).map(l=>l.routeShortName||l.routeName).filter(Boolean))].slice(0,3).join(" + ");
+        const durMin=Math.max(1, Math.round((new Date(it.endTime)-new Date(it.startTime))/60000));
+        return `<button type="button" class="chip trans-opt" data-dep="${hm(it.startTime)}" data-dur="${(durMin/60).toFixed(1)}" data-names="${esc(names)}">${hm(it.startTime)} → ${hm(it.endTime)} · ${fmtMin(durMin)}${names?" · "+esc(names):""}</button>`;
+      }).join("")+'</div>';
+    box.querySelectorAll(".trans-opt").forEach(b=>b.onclick=()=>{
+      document.getElementById("actTime").value=b.dataset.dep;
+      document.getElementById("actDur").value=b.dataset.dur;
+      const nm=document.getElementById("itemName");
+      if(!nm.value.trim() && b.dataset.names) nm.value=b.dataset.names;
+      toast("Departure filled in");
+    });
+  } catch {
+    box.innerHTML='<div class="list-empty">No timetable data for that route (coverage varies by country) — set the time manually.</div>';
+  }
+}
+
 async function saveItem(){
   const kind = state.editing.kind;
   const editId = state.editing.id;
   const rec = state.people[state.me.name];
-  if(!state.pendingLoc){ toast("Set a location first"); return; }
+  // transit needs no pin: drop it on the arrival stop automatically
+  if(kind==="transit" && !state.pendingLoc){
+    const to=document.getElementById("transTo").value.trim();
+    if(to){
+      try { const g=await photonSearch(to, "transit"); if(g.length) state.pendingLoc={lat:g[0].lat, lng:g[0].lng, label:g[0].label}; } catch {}
+    }
+  }
+  if(!state.pendingLoc){ toast(kind==="transit"?"Fill in To (or set a pin) first":"Set a location first"); return; }
   if(kind==="stay"){
     const city=document.getElementById("stayCity").value.trim() || nearestCity(state.pendingLoc);
     const s={ id:editId||uid(), city, hotelName:(document.getElementById("locInput").value.trim()||city),
@@ -3900,7 +3994,11 @@ async function saveItem(){
     if(editId){ const i=rec.stays.findIndex(x=>x.id===editId); if(i>=0) rec.stays[i]=s; else rec.stays.push(s); }
     else rec.stays.push(s);
   } else {
-    const title=document.getElementById("itemName").value.trim() || state.pendingLoc.label || "Untitled";
+    const trFrom=document.getElementById("transFrom").value.trim();
+    const trTo=document.getElementById("transTo").value.trim();
+    const title=document.getElementById("itemName").value.trim()
+      || (kind==="transit" && (trFrom||trTo) ? `${trFrom||"…"} → ${trTo||"…"}` : "")
+      || state.pendingLoc.label || "Untitled";
     let date="", flex=null, time="";
     if(flexMode==="fixed"){
       date=document.getElementById("actDate").value;
@@ -4009,7 +4107,10 @@ const PHOTON_TAGS = {
 async function photonSearch(q, kind){
   const bb=homeBbox();
   const tags=PHOTON_TAGS[kind];
+  // bias results toward where the user is looking on the map
+  const c = map ? map.getCenter() : null;
   const url="https://photon.komoot.io/api/?limit=7&lang=en"+(bb?"&bbox="+bb.join(","):"")
+    +(c?`&lat=${c.lat.toFixed(3)}&lon=${c.lng.toFixed(3)}`:"")
     +(tags?tags.map(t=>"&osm_tag="+encodeURIComponent(t)).join(""):"")
     +"&q="+encodeURIComponent(q);
   const res=await fetch(url);
@@ -4024,21 +4125,31 @@ async function photonSearch(q, kind){
     })
     .filter(x=>x.label && isFinite(x.lat) && isFinite(x.lng));
 }
+async function nominatimSearch(q){
+  const bb=homeBbox();
+  const url="https://nominatim.openstreetmap.org/search?format=json&limit=5"
+    +(bb?`&viewbox=${bb[0]},${bb[3]},${bb[2]},${bb[1]}&bounded=1`:"")
+    +"&q="+encodeURIComponent(q);
+  const res=await fetch(url,{headers:{"Accept":"application/json"}});
+  if(!res.ok) throw 0;
+  const data=await res.json();
+  return data.map(d=>({label:d.display_name.split(",")[0], sub:d.display_name.split(",").slice(1,3).join(","), lat:+d.lat, lng:+d.lon, src:"map"}));
+}
 async function geocode(q, curated, kind){
+  if(kind==="stay"){
+    // hotels come from Photon, street addresses often only from Nominatim — run both
+    const [ph, nm]=await Promise.all([photonSearch(q, kind).catch(()=>[]), nominatimSearch(q).catch(()=>[])]);
+    const merged=[...ph];
+    for(const n of nm) if(!merged.some(m=>Math.abs(m.lat-n.lat)<0.002 && Math.abs(m.lng-n.lng)<0.002)) merged.push(n);
+    if(merged.length){ renderSuggest([...curated, ...merged.slice(0,8)], false); return; }
+  } else {
+    try{
+      const items=await photonSearch(q, kind);
+      if(items.length){ renderSuggest([...curated, ...items], false); return; }
+    }catch{ /* fall through to Nominatim */ }
+  }
   try{
-    const items=await photonSearch(q, kind);
-    if(items.length){ renderSuggest([...curated, ...items], false); return; }
-  }catch{ /* fall through to Nominatim */ }
-  try{
-    const bb=homeBbox();
-    const url="https://nominatim.openstreetmap.org/search?format=json&limit=5"
-      +(bb?`&viewbox=${bb[0]},${bb[3]},${bb[2]},${bb[1]}&bounded=1`:"")
-      +"&q="+encodeURIComponent(q);
-    const res=await fetch(url,{headers:{"Accept":"application/json"}});
-    if(!res.ok) throw 0;
-    const data=await res.json();
-    const geo=data.map(d=>({label:d.display_name.split(",")[0], sub:d.display_name.split(",").slice(1,3).join(","), lat:+d.lat, lng:+d.lon, src:"map"}));
-    renderSuggest([...curated, ...geo], false);
+    renderSuggest([...curated, ...await nominatimSearch(q)], false);
   }catch{ /* keep curated results; geocoders may be rate-limited */ }
 }
 function renderSuggest(items, partial){
@@ -4139,6 +4250,7 @@ function wire(){
   document.getElementById("daySeg").addEventListener("click", e=>{
     const b=e.target.closest("button"); if(b) setFlexMode(b.dataset.mode);
   });
+  document.getElementById("transFind").onclick = findTransitTimes;
   document.getElementById("actBook").onchange = e=>{
     document.getElementById("fldBookRef").style.display = e.target.value==="booked" ? "" : "none";
   };
