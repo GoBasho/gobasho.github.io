@@ -64,6 +64,11 @@ async function newPage(browser, tripId, opts = {}) {
   page.on("pageerror", e => { fail++; console.log("  FAIL pageerror: " + e.message); });
   await page.route("**/config.js", r => r.fulfill({ contentType: "application/javascript",
     body: `window.MERIDIAN_CONFIG={firebaseUrl:"${opts.shared ? "https://mock-rtdb.firebaseio.com" : ""}",tripId:"${tripId}"};` }));
+  // most tests simulate a returning visitor who already picked this trip
+  // (set-if-unset so in-app trip switches survive reloads)
+  if (!opts.firstRun) await page.addInitScript(t => {
+    if (!localStorage.getItem("meridian:active-trip")) localStorage.setItem("meridian:active-trip", t);
+  }, tripId);
   await page.route("https://mock-rtdb.firebaseio.com/**", async r => {
     const u = new URL(r.request().url());
     const res = await fetch("http://localhost:18898" + u.pathname + u.search,
@@ -402,6 +407,42 @@ async function setupProfile(page, name) {
     await swCtx.close();
   }
 
+  console.log("\n== e2e: first-run welcome ==");
+  {
+    // brand-new visitor: welcome screen, not someone else's trip
+    const page = await newPage(browser, "our-japan-trip", { shared: true, firstRun: true });
+    db["/trips/fam-abc12/trip%3Ameta"] = JSON.stringify({ title: "Family Reunion", start: "", end: "" });
+    await page.goto("http://localhost:18899/", { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(600);
+    check("welcome shows for new visitors", await page.$eval("#welcomeScrim", el => el.classList.contains("show")));
+    check("profile modal held back", !(await page.$eval("#profileScrim", el => el.classList.contains("show"))));
+    // create their own trip
+    await page.fill("#wName", "Family Reunion 2027");
+    await page.selectOption("#wHome", "GB");
+    await page.click("#wCreate");
+    await page.waitForTimeout(1200);
+    const t = await page.evaluate(() => ({ id: window.storage.tripId, title: state.trip.title }));
+    check("own trip created with unguessable id", /^family-reunion-2027-[a-z0-9]{5}$/.test(t.id) && t.title === "Family Reunion 2027", t);
+    check("profile modal follows creation", await page.$eval("#profileScrim", el => el.classList.contains("show")));
+    await page.context().close();
+    // second visitor joins by pasting an invite link on the welcome screen
+    const p2 = await newPage(browser, "our-japan-trip", { shared: true, firstRun: true });
+    await p2.goto("http://localhost:18899/", { waitUntil: "domcontentloaded" });
+    await p2.waitForTimeout(600);
+    await p2.fill("#wJoin", "https://example.com/Itinerary/?trip=fam-abc12");
+    await p2.click("#wJoinBtn");
+    await p2.waitForTimeout(1200);
+    check("pasted invite link joins the trip", await p2.evaluate(() => window.storage.tripId) === "fam-abc12");
+    await p2.context().close();
+    // returning visitor with a profile skips the welcome
+    const p3 = await newPage(browser, "our-japan-trip", { shared: true, firstRun: true });
+    await p3.addInitScript(() => localStorage.setItem("meridian:our-japan-trip:me", JSON.stringify({ name: "Zach", color: "#c8483c" })));
+    await p3.goto("http://localhost:18899/", { waitUntil: "domcontentloaded" });
+    await p3.waitForTimeout(700);
+    check("returning visitor skips welcome", !(await p3.$eval("#welcomeScrim", el => el.classList.contains("show"))));
+    await p3.context().close();
+  }
+
   console.log("\n== e2e: demo trip, first steps, name collision, export ==");
   {
     // ?demo=1 seeds a sandboxed sample trip
@@ -465,6 +506,7 @@ async function setupProfile(page, name) {
     m.on("pageerror", e => { fail++; console.log("  FAIL mobile pageerror: " + e.message); });
     await m.route("**/config.js", r => r.fulfill({ contentType: "application/javascript",
       body: 'window.MERIDIAN_CONFIG={firebaseUrl:"",tripId:"mob-test"};' }));
+    await m.addInitScript(() => localStorage.setItem("meridian:active-trip", "mob-test"));
     await m.route("https://open.er-api.com/**", r => r.fulfill({ contentType: "application/json", body: '{"rates":{}}' }));
     await m.route("https://photon.komoot.io/**", r => r.fulfill({ contentType: "application/json", body: '{"features":[]}' }));
     await m.goto("http://localhost:18899/", { waitUntil: "domcontentloaded" });

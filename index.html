@@ -837,6 +837,28 @@
   </div>
 </div>
 
+<!-- first-run welcome -->
+<div class="scrim" id="welcomeScrim">
+  <div class="modal">
+    <div class="modal-head">
+      <h3>Plan a trip together</h3>
+      <p>Make your own trip, or hop into one you've been invited to. Everything is free.</p>
+    </div>
+    <div class="modal-body">
+      <div class="field"><label>Trip name</label><input type="text" id="wName" placeholder="e.g. Japan 2027, Family Reunion" maxlength="48"></div>
+      <div class="field"><label>Where to</label><select id="wHome"></select></div>
+      <button class="btn primary wide" id="wCreate">Create the trip</button>
+      <div class="field-hint" style="text-align:center; margin:12px 0 10px;">— or —</div>
+      <div class="field"><label>Got an invite?</label>
+        <div class="chip-add"><input type="text" id="wJoin" placeholder="Paste the invite link here"><button class="mini-btn" id="wJoinBtn" type="button">Join</button></div>
+      </div>
+    </div>
+    <div class="modal-foot" style="justify-content:center;">
+      <button class="linkish" id="wDemo" type="button">Just looking? Explore a demo trip</button>
+    </div>
+  </div>
+</div>
+
 <!-- comments modal -->
 <div class="scrim" id="commentScrim">
   <div class="modal">
@@ -2690,7 +2712,7 @@ function wxFor(d){ return (state._wx||{})[d]; }
 /* ---------- live sync: Firebase's SSE stream, with the poll as fallback ---------- */
 let liveES=null;
 function anyModalOpen(){
-  return ["itemScrim","profileScrim","commentScrim"].some(id=>{
+  return ["itemScrim","profileScrim","commentScrim","welcomeScrim"].some(id=>{
     const el=document.getElementById(id); return el && el.classList.contains("show");
   });
 }
@@ -2753,6 +2775,19 @@ function enterDemo(){
 }
 function isDemo(){ return window.storage.tripId.startsWith("demo-"); }
 
+/* ---------- first run: don't drop new visitors into someone else's trip ---------- */
+function isFirstRun(){
+  try {
+    return !localStorage.getItem("meridian:active-trip")
+        && !localStorage.getItem("meridian:"+window.storage.tripId+":me");
+  } catch { return false; }
+}
+function openWelcome(){
+  const sel=document.getElementById("wHome");
+  sel.innerHTML=HOMES.map(h=>`<option value="${h[0]}" ${h[0]==="WORLD"?"selected":""}>${h[1]}</option>`).join("");
+  document.getElementById("welcomeScrim").classList.add("show");
+}
+
 /* ---------- take your data with you ---------- */
 async function exportTripJSON(){
   const all = await window.storage.getAll("", true);
@@ -2771,20 +2806,35 @@ function switchTrip(id){
   window.storage.switchTrip(id);
   location.reload();
 }
+async function createNewTrip(name, home){
+  // new trips get an unguessable id — shared via the invite link
+  const id=slugTrip(name)+"-"+Math.random().toString(36).slice(2,7);
+  const meta={title:name, start:"", end:"", home};
+  if(COUNTRIES.some(c=>c[0]===home)) meta.countries=[home];
+  await window.storage.putIn(id, "trip:meta", JSON.stringify(meta));
+  switchTrip(id);
+}
+function parseTripRef(v){
+  // accepts a pasted invite link or a bare trip id
+  const m=String(v).match(/[?&]trip=([^&\s]+)/);
+  return m ? decodeURIComponent(m[1]) : String(v).trim();
+}
+async function joinTrip(ref){
+  const id=parseTripRef(ref);
+  if(!id){ toast("Paste the invite link first"); return; }
+  try {
+    if(await window.storage.getFrom(id, "trip:meta")){ switchTrip(id); return; }
+    toast("Couldn't find that trip — check the link");
+  } catch { toast("Couldn't reach the shared database"); }
+}
 async function createOrJoinTrip(){
   const name=document.getElementById("tmName").value.trim();
   if(!name){ toast("Give the trip a name"); return; }
-  const home=document.getElementById("tmNewHome").value;
   try {
-    // typing an existing trip's exact ID joins it (old-style ids included)
+    if(/[?&]trip=/.test(name)){ await joinTrip(name); return; }         // pasted an invite link
     const asId=slugTrip(name);
-    if(await window.storage.getFrom(asId, "trip:meta")){ switchTrip(asId); return; }
-    // new trips get an unguessable id — share it via the invite link
-    const id=asId+"-"+Math.random().toString(36).slice(2,7);
-    const meta={title:name, start:"", end:"", home};
-    if(COUNTRIES.some(c=>c[0]===home)) meta.countries=[home];
-    await window.storage.putIn(id, "trip:meta", JSON.stringify(meta));
-    switchTrip(id);
+    if(await window.storage.getFrom(asId, "trip:meta")){ switchTrip(asId); return; }  // exact id joins
+    await createNewTrip(name, document.getElementById("tmNewHome").value);
   } catch { toast("Couldn't reach the shared database"); }
 }
 function inviteLink(){
@@ -3695,6 +3745,16 @@ function wire(){
   document.getElementById("cmClose").onclick = ()=>document.getElementById("commentScrim").classList.remove("show");
   document.getElementById("cmPost").onclick = postComment;
   document.getElementById("demoBtn").onclick = enterDemo;
+  document.getElementById("wDemo").onclick = enterDemo;
+  document.getElementById("wCreate").onclick = async()=>{
+    const name=document.getElementById("wName").value.trim();
+    if(!name){ toast("Give the trip a name"); return; }
+    try { await createNewTrip(name, document.getElementById("wHome").value); }
+    catch { toast("Couldn't reach the shared database"); }
+  };
+  document.getElementById("wJoinBtn").onclick = ()=>joinTrip(document.getElementById("wJoin").value);
+  document.getElementById("wJoin").addEventListener("keydown", e=>{ if(e.key==="Enter") joinTrip(e.target.value); });
+  document.getElementById("wName").addEventListener("keydown", e=>{ if(e.key==="Enter") document.getElementById("wCreate").click(); });
   // free-tier care: drop the live stream while the tab is hidden
   document.addEventListener("visibilitychange", ()=>{
     if(document.hidden){ if(liveES){ try{ liveES.close(); }catch{} liveES=null; } }
@@ -3758,7 +3818,7 @@ async function boot(){
   render();
   // frame the trip's home region unless existing pins already framed the map
   if(!state._didFit) applyHomeView();
-  if(!state.me) openProfile();
+  if(!state.me){ if(isFirstRun()) openWelcome(); else openProfile(); }
   // gentle background refresh so collaborators' changes appear
   if(hasStore) setInterval(async()=>{
     if(document.hidden || anyModalOpen()) return;

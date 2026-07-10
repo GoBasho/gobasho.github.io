@@ -15,11 +15,12 @@ no server of your own to run.
 
 The deployed site is all anyone needs — no setup on their end:
 
-1. Send them `about.html` (the landing page) or straight to
-   `index.html?demo=1` — a sandboxed **demo trip** they can safely poke at,
-   living only in their browser.
-2. When they're ready, they create a trip (or you send them your trip's
-   **invite link** from the Trips menu) and follow the **First steps** card.
+1. Send them the site (or `about.html`, the landing page). First-time
+   visitors get a welcome screen where they **create their own trip** —
+   name it, pick a destination, done — or **paste an invite link** to join
+   someone else's. A sandboxed demo trip is one click away for the curious.
+2. The **First steps** card walks them through adding themselves, a stay,
+   a plan, and copying their trip's invite link to share with each other.
 
 Privacy in one sentence: trip data is visible to anyone with that trip's
 invite link and nobody else, so share links only with your group and keep
