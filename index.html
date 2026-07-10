@@ -64,7 +64,9 @@
     --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
   }
 
+  :root { color-scheme: light; }
   :root[data-theme="dark"] {
+    color-scheme: dark;  /* native date/time pickers, selects, scrollbars follow */
     --ink: #e7e9ef;
     --ink-soft: #b8bcc8;
     --ink-faint: #828795;
@@ -452,7 +454,7 @@
   .notice { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: var(--ink); color: var(--paper); padding: 10px 18px; border-radius: 999px; font-size: 12.5px; z-index: 1300; box-shadow: var(--shadow); opacity: 0; transition: opacity .2s; pointer-events: none; }
   .notice.show { opacity: 1; }
 
-  .storage-warn { font-size: 11.5px; color: var(--shu); background: var(--shu-dim); padding: 3px 10px; border-radius: 6px; }
+  .storage-warn { font-size: 11.5px; color: var(--shu); background: var(--shu-dim); padding: 3px 10px; border-radius: 6px; white-space: nowrap; cursor: help; }
 
   /* cost estimates */
   .daycost { font-size: 11.5px; color: var(--ink-soft); background: var(--sky); border: 1px solid var(--line); padding: 2px 9px; border-radius: 999px; margin-left: 8px; white-space: nowrap; }
@@ -606,6 +608,14 @@
   [data-theme="dark"] .leg .rail-dot .rd.transit { background: #22303c; }
   [data-theme="dark"] .prep-col.can { background: #202a3a; }
   [data-theme="dark"] .swatch-grid button.sel { box-shadow: 0 0 0 2px var(--surface) inset; }
+  [data-theme="dark"] .net-pos { color: #8fc9a0; }
+  [data-theme="dark"] .net-neg { color: var(--shu); }
+  .pin-pick-note button { color: inherit; }
+  [data-theme="dark"] .leaflet-control-attribution { background: rgba(28,32,41,.85); color: var(--ink-faint); }
+  [data-theme="dark"] .leaflet-control-attribution a { color: var(--indigo); }
+  [data-theme="dark"] .leaflet-popup-close-button { color: var(--ink-faint) !important; }
+  [data-theme="dark"] ::placeholder { color: var(--ink-faint); opacity: 1; }
+  [data-theme="dark"] .rec-thumb.no-img { background: var(--sky); color: var(--ink-faint); }
 
   @media print {
     header.bar, aside.rail, .stage, .sug-card, .rail-hint, .mini-btn, .linkish, .idel, .iedit, .notice, .trips-menu { display: none !important; }
@@ -808,7 +818,7 @@
           <div class="field"><label>From</label><input type="text" id="transFrom" placeholder="e.g. Tokyo Station" maxlength="40"></div>
           <div class="field"><label>To</label><input type="text" id="transTo" placeholder="e.g. Kyoto Station" maxlength="40"></div>
         </div>
-        <div class="loc-actions" style="margin-bottom:10px"><button class="mini-btn" id="transFind" type="button">&#128337; Find departure times</button></div>
+        <div class="loc-actions" style="margin-bottom:10px"><button class="mini-btn" id="transFind" type="button">Find departure times</button></div>
         <div class="field" id="transTimes" style="display:none;"></div>
         <div class="field-hint" style="margin:-4px 0 12px">Name and pin are optional — From → To is enough; the pin lands on the arrival stop automatically.</div>
       </div>
@@ -1554,8 +1564,8 @@ function render(){
   renderMeChip();
   document.getElementById("storageWarn").innerHTML =
     isDemo() ? "" :
-    (!hasStore || !state.sharedOK) ? '<span class="storage-warn">Sharing offline</span>' :
-    (window.storage.mode === "local" ? '<span class="storage-warn" title="See README.md — hook up a free Firebase database to share plans with friends">Saved to this browser only</span>' : "");
+    (!hasStore || !state.sharedOK) ? '<span class="storage-warn" title="Changes aren\'t syncing right now — they\'ll catch up when the connection returns">Offline</span>' :
+    (window.storage.mode === "local" ? '<span class="storage-warn" title="Plans are saved in this browser only — hook up a free shared database (see README) to sync with friends">Local only</span>' : "");
 }
 
 function renderMeChip(){
@@ -1660,7 +1670,7 @@ function renderRailList(){
     const db = document.createElement("div");
     db.className = "rail-hint";
     db.style.cursor = "default";
-    db.innerHTML = `<span>&#129514;</span> Demo trip — sandboxed to this browser, so play freely. <button class="mini-btn" style="margin-left:auto">Start your own trip</button>`;
+    db.innerHTML = `<span>${icon("beaker")}</span> Demo trip — sandboxed to this browser, so play freely. <button class="mini-btn" style="margin-left:auto">Start your own trip</button>`;
     db.querySelector("button").onclick = openTripsMenu;
     wrap.appendChild(db);
   }
@@ -1685,7 +1695,7 @@ function renderRailList(){
     const dg = document.createElement("div");
     dg.className = "rail-hint";
     dg.style.cursor = "default";
-    dg.innerHTML = `<span>&#128075;</span> ${esc(state._digest)} <button class="linkish" style="margin-left:auto">Got it</button>`;
+    dg.innerHTML = `<span>${icon("bell")}</span> ${esc(state._digest)} <button class="linkish" style="margin-left:auto">Got it</button>`;
     dg.querySelector("button").onclick = ()=>{ state._digest=null; render(); };
     wrap.appendChild(dg);
   }
@@ -1697,14 +1707,14 @@ function renderRailList(){
       const bk = document.createElement("div");
       bk.className = "rail-hint";
       bk.style.cursor = "default";
-      bk.innerHTML = `<span>&#127903;&#65039;</span> ${toBook} plan${toBook>1?"s":""} still need${toBook>1?"":"s"} booking — marked in the Itinerary`;
+      bk.innerHTML = `<span>${icon("ticket")}</span> ${toBook} plan${toBook>1?"s":""} still need${toBook>1?"":"s"} booking — marked in the Itinerary`;
       wrap.appendChild(bk);
     }
     const n = mergeSuggestions(me).length + dayPlanIdeas(me).length;
     if(n){
       const hint = document.createElement("button");
       hint.className = "rail-hint";
-      hint.innerHTML = `<span>&#128161;</span> ${n===1?"There's a day-planning idea":n+" day-planning ideas"} waiting — see Itinerary`;
+      hint.innerHTML = `<span>${icon("bulb")}</span> ${n===1?"There's a day-planning idea":n+" day-planning ideas"} waiting — see Itinerary`;
       hint.onclick = ()=>{ document.querySelectorAll(".tab").forEach(t=>t.classList.toggle("active", t.dataset.view==="itinerary")); setView("itinerary"); };
       wrap.appendChild(hint);
     }
@@ -1725,7 +1735,7 @@ function renderRailList(){
       color: a.color, title: a.title, tick: a.color,
       sub: (a.status==="done"?'✓ ':a.status==="skipped"?'✗ ':'') + (a.date
         ? `${a.time?a.time+' · ':''}${a.transit?('Transit'+(a.from||a.to?` · ${a.from||'…'} → ${a.to||'…'}`:'')):(a.category||'Activity')}${state.selectedDate?'':' · '+shortDate(a.date)} · ${a.person}`
-        : `Flexible · ${flexLabel(a)} · ${a.person}`) + (joiners.length?` · ${joiners.length} in`:'') + (a.booking==="needed"?' · 🎟️ book!':''),
+        : `Flexible · ${flexLabel(a)} · ${a.person}`) + (joiners.length?` · ${joiners.length} in`:'') + (a.booking==="needed"?' · needs booking':''),
       onDel: canEdit(a.person) ? () => removeItem("activity", a.person, a.id) : null,
       onEdit: canEdit(a.person) ? () => openEdit("activity", a.person, a.id) : null,
       onJoin: state.me && a.person!==state.me.name ? () => toggleJoin(a.person, a.id) : null,
@@ -1756,7 +1766,7 @@ function itemRow({color,title,sub,tick,onDel,onClick,onEdit,onJoin,joined,onComm
   el.innerHTML = `<span class="tick" style="background:${tick}"></span>
     <div class="ibody"><div class="ititle">${esc(title)}</div><div class="isub">${esc(sub)}</div></div>
     ${onJoin?`<button class="ijoin ${joined?'on':''}" title="${joined?"You're in — tap to leave":"I'm in!"}">${joined?'&#10003;':'+'}</button>`:''}
-    ${onComment?`<button class="icmt ${commentCount?'on':''}" title="Comments">&#128172;${commentCount||''}</button>`:''}
+    ${onComment?`<button class="icmt ${commentCount?'on':''}" title="Comments">${icon("chat",12)}${commentCount||''}</button>`:''}
     ${onEdit?'<button class="iedit" title="Edit">&#9998;</button>':''}
     ${onDel?'<button class="idel" title="Remove">&times;</button>':''}`;
   if(onClick) el.querySelector(".ibody").onclick = onClick;
@@ -2009,7 +2019,7 @@ function renderPersonDay(p, date, plan){
     const trMeta = tr ? [ [s.act.from,s.act.to].filter(Boolean).join(" → "), s.time, hasCost(s.act)?fmtYen(+s.act.cost):"" ].filter(Boolean).join(" · ") : "";
     const who = s.withWho ? ` <span style="color:var(--ink-faint);font-weight:400">· with ${esc(s.withWho)}</span>`
       : (s.act && !s.act.transit ? (j=>j.length?` <span style="color:var(--ink-faint);font-weight:400">· ${esc(j.join(", "))} in</span>`:"")(joinersOf(p.name, s.act.id)) : "");
-    const badge = s.act && s.act.booking==="needed" ? ' <span title="Needs booking">&#127903;&#65039;</span>' : "";
+    const badge = s.act && s.act.booking==="needed" ? ` <span title="Needs booking">${icon("ticket",12)}</span>` : "";
     const doneStyle = s.act && s.act.status==="done" ? ' style="text-decoration:line-through;opacity:.6"' : "";
     html += `<div class="leg"><div class="rail-dot"><span class="rd ${s.anchor?'anchor':''} ${tr?'transit':''}"></span>${last?'':'<span class="rline"></span>'}</div>
       <div class="stop"><div class="sname"${doneStyle}>${tr?'<span class="mode-tag mode-local">Transit</span> ':''}${esc(s.name)}${badge}${s.anchor?' <span style="color:var(--ink-faint);font-weight:400">· base</span>':''}${who}</div>${tr?(trMeta?`<div class="stime">${esc(trMeta)}</div>`:''):(s.time?`<div class="stime">${esc(s.time)}</div>`:'')}</div></div>`;
@@ -3305,15 +3315,15 @@ function renderToday(){
   const meet=sharingLoc();
   head+=`<p class="lede" style="margin-bottom:14px">Check things off as you go — skipped plans can hop to another day.</p>
     <div class="sug-actions" style="margin-bottom:18px">
-      ${nav?`<a class="mini-btn" href="${nav}" target="_blank" rel="noopener">&#129517; Navigate this day</a>`:""}
-      <button class="mini-btn ${meet?"on":""}" id="meetBtn">${meet?"&#128225; Sharing location — stop":"&#128225; Share my location (2h)"}</button>
+      ${nav?`<a class="mini-btn" href="${nav}" target="_blank" rel="noopener">${icon("nav",13)} Navigate this day</a>`:""}
+      <button class="mini-btn ${meet?"on":""}" id="meetBtn">${icon("signal",13)} ${meet?"Sharing location — stop":"Share my location (2h)"}</button>
     </div>`;
   let body="";
   const stops=plan.sequence.filter(s=>!s.anchor);
   if(!stops.length && !plan.stay){
     body='<div class="list-empty">Nothing planned today. The Prep board or day ideas can fix that.</div>';
   } else {
-    if(plan.anchor) body+=`<div class="td-row done-na"><span class="td-ico">&#127968;</span><div class="td-body"><b>${esc(plan.anchor.name)}</b><span class="td-sub">your base</span></div></div>`;
+    if(plan.anchor) body+=`<div class="td-row done-na"><span class="td-ico">${icon("home",15)}</span><div class="td-body"><b>${esc(plan.anchor.name)}</b><span class="td-sub">your base</span></div></div>`;
     let nextMarked=false;
     stops.forEach((s,i)=>{
       const a=s.act;
@@ -3323,8 +3333,8 @@ function renderToday(){
       const dist=i>0 && plan.legs[plan.anchor?i:i-1] ? plan.legs[plan.anchor?i:i-1] : null;
       if(dist) body+=`<div class="td-leg"><span class="mode-tag ${dist.cls}">${dist.label}</span> ${dist.km.toFixed(1)} km · ~${fmtMin(dist.min)}</div>`;
       body+=`<div class="td-row ${done?"is-done":""} ${isNext?"is-next":""}">
-        <span class="td-ico">${done?"&#9989;":a&&a.transit?"&#128646;":"&#128205;"}</span>
-        <div class="td-body"><b>${esc(s.name)}</b><span class="td-sub">${[s.time, a&&a.transit&&(a.from||a.to)?`${a.from||"…"} → ${a.to||"…"}`:"", s.withWho?"with "+esc(s.withWho):"", a&&a.booking==="needed"?"&#127903;&#65039; needs booking":"", a&&a.booking==="booked"&&a.bookRef?"&#127903;&#65039; "+esc(a.bookRef):""].filter(Boolean).join(" · ")}${isNext?' <span class="td-next">next up</span>':""}</span></div>
+        <span class="td-ico">${icon(done?"check":a&&a.transit?"train":"pin",15)}</span>
+        <div class="td-body"><b>${esc(s.name)}</b><span class="td-sub">${[s.time, a&&a.transit&&(a.from||a.to)?`${a.from||"…"} → ${a.to||"…"}`:"", s.withWho?"with "+esc(s.withWho):"", a&&a.booking==="needed"?icon("ticket",11)+" needs booking":"", a&&a.booking==="booked"&&a.bookRef?icon("ticket",11)+" "+esc(a.bookRef):""].filter(Boolean).join(" · ")}${isNext?' <span class="td-next">next up</span>':""}</span></div>
         ${own?`<span class="td-actions">${done?`<button class="mini-btn" data-tundo="${a.id}">Undo</button>`:`<button class="mini-btn" data-tdone="${a.id}">Done</button><button class="linkish" data-tskip="${a.id}">Skip</button>`}</span>`:""}
       </div>`;
     });
@@ -3332,7 +3342,7 @@ function renderToday(){
   const skipped=(me.activities||[]).filter(a=>a.date===today && a.status==="skipped");
   if(skipped.length){
     body+=`<div class="eyebrow explore-sec">Skipped today</div>`;
-    for(const a of skipped) body+=`<div class="td-row is-skipped"><span class="td-ico">&#10060;</span><div class="td-body"><b>${esc(a.title)}</b></div>
+    for(const a of skipped) body+=`<div class="td-row is-skipped"><span class="td-ico">${icon("skip",15)}</span><div class="td-body"><b>${esc(a.title)}</b></div>
       <span class="td-actions"><button class="mini-btn" data-treme="${a.id}">Another day</button><button class="linkish" data-tundo="${a.id}">Un-skip</button></span></div>`;
   }
   // where everyone else is headed today
@@ -4208,6 +4218,26 @@ function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;",
 function linkify(escaped){ return escaped.replace(/(https?:\/\/[^\s<&]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>'); }
 function shortDate(s){ return parseISO(s).toLocaleDateString("en-US",{month:"short",day:"numeric"}); }
 function shortRange(a,b){ return a&&b ? shortDate(a)+"–"+shortDate(b) : (a?shortDate(a):""); }
+/* inline SVG icons — buttons never use emoji */
+const ICON_PATHS = {
+  bulb:  '<path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 1 4 10.5c-.8.7-1 1.3-1 2.5h-6c0-1.2-.2-1.8-1-2.5A6 6 0 0 1 12 3z"/>',
+  bell:  '<path d="M18 8a6 6 0 1 0-12 0c0 7-3 8-3 8h18s-3-1-3-8"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/>',
+  ticket:'<path d="M3 9V6a1 1 0 0 1 1-1h16a1 1 0 0 1 1 1v3a2.5 2.5 0 0 0 0 6v3a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-3a2.5 2.5 0 0 0 0-6z"/><path d="M13 5v2m0 4v2m0 4v2"/>',
+  beaker:'<path d="M9 3h6M10 3v5l-5 9a2 2 0 0 0 1.8 3h10.4a2 2 0 0 0 1.8-3l-5-9V3"/><path d="M7 15h10"/>',
+  chat:  '<path d="M21 12a8 8 0 0 1-8 8H4l2-3a8 8 0 1 1 15-5z"/>',
+  home:  '<path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/>',
+  check: '<path d="M20 6L9 17l-5-5"/>',
+  train: '<rect x="5" y="3" width="14" height="14" rx="3"/><path d="M5 11h14M9 17l-2 4M15 17l2 4"/>',
+  pin:   '<circle cx="12" cy="10" r="3"/><path d="M12 21s-7-6.5-7-11a7 7 0 0 1 14 0c0 4.5-7 11-7 11z"/>',
+  skip:  '<circle cx="12" cy="12" r="9"/><path d="M9 9l6 6M15 9l-6 6"/>',
+  signal:'<path d="M2 20a16 16 0 0 1 20 0M6 16a10 10 0 0 1 12 0M10 12a4 4 0 0 1 4 0"/><circle cx="12" cy="19" r="1"/>',
+  nav:   '<path d="M3 11l18-8-8 18-2-8-8-2z"/>',
+  clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/>'
+};
+function icon(n, s){
+  s = s || 14;
+  return `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px">${ICON_PATHS[n]||""}</svg>`;
+}
 function eyeOn(){ return '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>'; }
 function eyeOff(){ return '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.9 17.9A9.7 9.7 0 0 1 12 19C6 19 2 12 2 12a17 17 0 0 1 4-4.8m3.5-1.9A9.7 9.7 0 0 1 12 5c6 0 10 7 10 7a17 17 0 0 1-2.3 3.2M1 1l22 22"/></svg>'; }
 let toastTimer=null, undoFn=null;
@@ -4251,6 +4281,7 @@ function wire(){
     const b=e.target.closest("button"); if(b) setFlexMode(b.dataset.mode);
   });
   document.getElementById("transFind").onclick = findTransitTimes;
+  document.getElementById("transFind").innerHTML = icon("clock",12)+" Find departure times";
   document.getElementById("actBook").onchange = e=>{
     document.getElementById("fldBookRef").style.display = e.target.value==="booked" ? "" : "none";
   };
