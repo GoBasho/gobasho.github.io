@@ -3789,6 +3789,8 @@ function wire(){
 }
 
 async function boot(){
+  // register the offline shell first — it shouldn't wait on data sync
+  if("serviceWorker" in navigator){ try { navigator.serviceWorker.register("sw.js"); } catch {} }
   try { if(localStorage.getItem("meridian:want-demo")==="1"){ localStorage.removeItem("meridian:want-demo"); seedDemo(); } } catch {}
   initMap();
   wire();
@@ -3820,7 +3822,6 @@ async function boot(){
   }
   loadFx().then(()=>{ if(fxRates) render(); });  // second-currency rates, async
   loadWeather().then(()=>{ if(state._wx) render(); });
-  if("serviceWorker" in navigator){ try { navigator.serviceWorker.register("sw.js"); } catch {} }
   startLiveSync();
   render();
   // frame the trip's home region unless existing pins already framed the map
