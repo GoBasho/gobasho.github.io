@@ -99,26 +99,82 @@
     }
   })();
 
-  /* ---- Firebase REST operations ---- */
+  /* ---- invisible identity: Firebase anonymous auth over REST ----
+     The Web API key is a public identifier. Each browser silently gets a
+     stable anonymous user; the id token rides along on every database
+     request so security rules can enforce per-record ownership. */
+  const apiKey = cfg.apiKey || "";
+  let authUid = null, authToken = null, authExp = 0, refreshTok;
+  function persistAuth() {
+    try { localStorage.setItem("meridian:auth", JSON.stringify({ r: refreshTok, u: authUid })); } catch {}
+  }
+  async function ensureAuth() {
+    if (!apiKey || mode !== "shared") return null;
+    if (authToken && Date.now() < authExp - 300000) return authToken;
+    if (refreshTok === undefined) {
+      refreshTok = null;
+      try { const s = JSON.parse(localStorage.getItem("meridian:auth") || "null"); if (s) { refreshTok = s.r; authUid = s.u; } } catch {}
+    }
+    try {
+      if (refreshTok) {
+        const res = await fetch("https://securetoken.googleapis.com/v1/token?key=" + apiKey, {
+          method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: "grant_type=refresh_token&refresh_token=" + encodeURIComponent(refreshTok)
+        });
+        if (res.ok) {
+          const d = await res.json();
+          authToken = d.id_token; authUid = d.user_id; refreshTok = d.refresh_token;
+          authExp = Date.now() + (+d.expires_in || 3600) * 1000;
+          persistAuth();
+          return authToken;
+        }
+        refreshTok = null;  // stale — mint a fresh identity below
+      }
+      const res = await fetch("https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=" + apiKey, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ returnSecureToken: true })
+      });
+      if (res.ok) {
+        const d = await res.json();
+        authToken = d.idToken; authUid = d.localId; refreshTok = d.refreshToken;
+        authExp = Date.now() + (+d.expiresIn || 3600) * 1000;
+        persistAuth();
+        return authToken;
+      }
+    } catch {}
+    return null;  // auth unavailable — requests go plain (works with open rules)
+  }
+  async function authed(url) {
+    const t = await ensureAuth();
+    return t ? url + (url.includes("?") ? "&" : "?") + "auth=" + encodeURIComponent(t) : url;
+  }
+
+  /* ---- Firebase REST operations ----
+     Values arrive as JSON strings from the app; they're stored as real
+     objects so security rules can inspect the uid field. Older records
+     stored as strings still read back fine. */
+  function asAppValue(v) {
+    return v === null || v === undefined ? null : (typeof v === "string" ? v : JSON.stringify(v));
+  }
   function base() {
     return dbUrl + "/trips/" + encodeKey(tripId);
   }
   async function fbGet(key) {
-    const res = await fetch(base() + "/" + encodeKey(key) + ".json");
+    const res = await fetch(await authed(base() + "/" + encodeKey(key) + ".json"));
     if (!res.ok) throw new Error("Sync read failed (" + res.status + ")");
-    const value = await res.json();
+    const value = asAppValue(await res.json());
     return value === null ? null : { key, value };
   }
   async function fbSet(key, value) {
-    const res = await fetch(base() + "/" + encodeKey(key) + ".json", {
+    const res = await fetch(await authed(base() + "/" + encodeKey(key) + ".json"), {
       method: "PUT",
-      body: JSON.stringify(value)
+      body: typeof value === "string" ? value : JSON.stringify(value)
     });
     if (!res.ok) throw new Error("Sync write failed (" + res.status + ")");
     return { key, value };
   }
   async function fbList(prefix) {
-    const res = await fetch(base() + ".json?shallow=true");
+    const res = await fetch(await authed(base() + ".json?shallow=true"));
     if (!res.ok) throw new Error("Sync list failed (" + res.status + ")");
     const obj = (await res.json()) || {};
     return { keys: Object.keys(obj).map(decodeKey).filter((k) => k.startsWith(prefix)) };
@@ -144,7 +200,7 @@
       try { JSON.parse(localStorage.getItem("meridian:known-trips") || "[]").forEach(x => ids.add(x)); } catch {}
       if (mode === "shared") {
         try {
-          const res = await fetch(dbUrl + "/trips.json?shallow=true");
+          const res = await fetch(await authed(dbUrl + "/trips.json?shallow=true"));
           if (res.ok) Object.keys((await res.json()) || {}).forEach(k => ids.add(decodeKey(k)));
         } catch {}
       } else {
@@ -156,14 +212,19 @@
       return [...ids];
     },
     /* live-update stream endpoint (Firebase supports EventSource on REST) */
-    get streamUrl() { return mode === "shared" ? base() + ".json" : null; },
+    async getStreamUrl() {
+      await ready;
+      return mode === "shared" ? authed(base() + ".json") : null;
+    },
+    /* this browser's stable anonymous identity (null before first auth) */
+    get uid() { return authUid; },
     /* read/write a key in a trip other than the active one */
     async getFrom(tid, key) {
       await ready;
       if (mode === "shared") {
-        const res = await fetch(dbUrl + "/trips/" + encodeKey(tid) + "/" + encodeKey(key) + ".json");
+        const res = await fetch(await authed(dbUrl + "/trips/" + encodeKey(tid) + "/" + encodeKey(key) + ".json"));
         if (!res.ok) return null;
-        const value = await res.json();
+        const value = asAppValue(await res.json());
         return value === null ? null : { key, value };
       }
       const v = localStorage.getItem("meridian:" + tid + ":" + key);
@@ -172,8 +233,8 @@
     async putIn(tid, key, value) {
       await ready;
       if (mode === "shared") {
-        const res = await fetch(dbUrl + "/trips/" + encodeKey(tid) + "/" + encodeKey(key) + ".json", {
-          method: "PUT", body: JSON.stringify(value)
+        const res = await fetch(await authed(dbUrl + "/trips/" + encodeKey(tid) + "/" + encodeKey(key) + ".json"), {
+          method: "PUT", body: typeof value === "string" ? value : JSON.stringify(value)
         });
         if (!res.ok) throw new Error("Trip write failed (" + res.status + ")");
         return { key, value };
@@ -190,13 +251,13 @@
     async getAll(prefix, shared) {
       await ready;
       if (shared && mode === "shared") {
-        const res = await fetch(base() + ".json");
+        const res = await fetch(await authed(base() + ".json"));
         if (!res.ok) throw new Error("Sync read failed (" + res.status + ")");
         const obj = (await res.json()) || {};
         const out = {};
         for (const k of Object.keys(obj)) {
           const dk = decodeKey(k);
-          if (dk.startsWith(prefix)) out[dk] = obj[k];
+          if (dk.startsWith(prefix)) out[dk] = asAppValue(obj[k]);
         }
         return out;
       }

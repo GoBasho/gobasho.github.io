@@ -1377,6 +1377,7 @@ async function saveMe(){
   const rec = state.people[state.me.name];
   if(!rec) return;
   rec.updated = Date.now();
+  if(window.storage.uid) rec.uid = window.storage.uid;  // ownership stamp for security rules
   if(hasStore) await sSet("person:"+state.me.name, JSON.stringify(rec), true);
 }
 async function saveTrip(){
@@ -2716,10 +2717,12 @@ function anyModalOpen(){
     const el=document.getElementById(id); return el && el.classList.contains("show");
   });
 }
-function startLiveSync(){
-  if(liveES || !window.storage.streamUrl || typeof EventSource==="undefined") return;
+async function startLiveSync(){
+  if(liveES || typeof EventSource==="undefined" || !window.storage.getStreamUrl) return;
+  const su=await window.storage.getStreamUrl();
+  if(!su || liveES) return;
   try {
-    liveES=new EventSource(window.storage.streamUrl);
+    liveES=new EventSource(su);
     let t=null;
     const kick=()=>{ clearTimeout(t); t=setTimeout(async()=>{
       if(document.hidden || anyModalOpen()) return;
@@ -3379,6 +3382,10 @@ async function saveProfile(){
   const oldName = state.me && state.me.name;
   // taking a name that's already on the trip merges into that traveler — make sure it's really them
   if((!oldName || oldName!==name) && state.people[name]){
+    const theirs = state.people[name].uid;
+    if(theirs && window.storage.uid && theirs !== window.storage.uid){
+      toast('"'+name+'" belongs to someone else on this trip — pick a different name'); return;
+    }
     if(!confirm('"'+name+'" is already a traveler on this trip. Continue only if that is you — otherwise pick a different name.')) return;
   }
   if(oldName && oldName!==name){

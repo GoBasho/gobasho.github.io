@@ -69,27 +69,36 @@ the same map, connect a free Firebase database:
 3. In the left sidebar open **Build → Realtime Database**, click
    **Create database**, pick the location closest to you, and choose
    **Start in locked mode**.
-4. Open the **Rules** tab, replace the contents with the following, and click
-   **Publish**:
+4. Enable invisible identities: in the Firebase console go to
+   **Build → Authentication → Get started → Sign-in method** and enable
+   **Anonymous**. Then register a web app (Project settings → General →
+   Your apps → web) and put its `apiKey` into `config.js`. Nobody ever sees
+   a login screen — each browser just gets a stable hidden identity.
+5. Open the **Rules** tab, replace the contents with the following, and click
+   **Publish** (only after step 4, or writes will start failing):
 
    ```json
    {
      "rules": {
        "trips": {
          "$trip": {
-           ".read": true,
-           ".write": true
+           ".read": "auth != null",
+           "trip%3Ameta": { ".write": "auth != null" },
+           "$record": {
+             ".write": "auth != null && (!data.exists() || !data.child('uid').exists() || data.child('uid').val() === auth.uid)"
+           }
          }
        }
      }
    }
    ```
 
-   These rules allow access to a trip only if you know its exact ID — nobody
-   can list all trips in the database. New trips get unguessable IDs, so the
-   **Copy invite** link in the Trips menu is how friends get in. (If you used
-   the older rules with `.read`/`.write` directly under `trips`, switch to
-   these.)
+   What these enforce: a trip is reachable only with its exact ID (no
+   listing the database), only the app's signed-in visitors can read or
+   write at all, anyone on the trip can edit the shared trip settings, and
+   **each traveler's own record can only be modified by the browser that
+   created it**. Records saved before this upgrade have no owner stamp yet;
+   they become owned the next time that person saves anything.
 
 5. Back on the **Data** tab, copy the database URL shown at the top — it looks
    like `https://japan-trip-default-rtdb.asia-southeast1.firebasedatabase.app`.

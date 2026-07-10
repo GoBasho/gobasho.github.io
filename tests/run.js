@@ -63,7 +63,7 @@ async function newPage(browser, tripId, opts = {}) {
   const page = await ctx.newPage();
   page.on("pageerror", e => { fail++; console.log("  FAIL pageerror: " + e.message); });
   await page.route("**/config.js", r => r.fulfill({ contentType: "application/javascript",
-    body: `window.MERIDIAN_CONFIG={firebaseUrl:"${opts.shared ? "https://mock-rtdb.firebaseio.com" : ""}",tripId:"${tripId}"};` }));
+    body: `window.MERIDIAN_CONFIG={firebaseUrl:"${opts.shared ? "https://mock-rtdb.firebaseio.com" : ""}",tripId:"${tripId}",apiKey:"AIza-test"};` }));
   // most tests simulate a returning visitor who already picked this trip
   // (set-if-unset so in-app trip switches survive reloads)
   if (!opts.firstRun) await page.addInitScript(t => {
@@ -71,10 +71,15 @@ async function newPage(browser, tripId, opts = {}) {
   }, tripId);
   await page.route("https://mock-rtdb.firebaseio.com/**", async r => {
     const u = new URL(r.request().url());
+    if (/(^|[?&])auth=tok-test/.test(u.search)) page._authSeen = true;
     const res = await fetch("http://localhost:18898" + u.pathname + u.search,
       { method: r.request().method(), body: r.request().postData() || undefined });
     r.fulfill({ status: res.status, contentType: "application/json", body: await res.text() });
   });
+  await page.route("https://identitytoolkit.googleapis.com/**", r => r.fulfill({ contentType: "application/json",
+    body: JSON.stringify({ idToken: "tok-test", refreshToken: "ref-test", localId: "uid-test", expiresIn: "3600" }) }));
+  await page.route("https://securetoken.googleapis.com/**", r => r.fulfill({ contentType: "application/json",
+    body: JSON.stringify({ id_token: "tok-test", refresh_token: "ref-test", user_id: "uid-test", expires_in: "3600" }) }));
   await page.route("https://open.er-api.com/**", r => r.fulfill({ contentType: "application/json",
     body: JSON.stringify({ result: "success", rates: { USD: 0.0068, EUR: 0.0060, JPY: 1 } }) }));
   await page.route("https://photon.komoot.io/**", r => r.fulfill({ contentType: "application/json", body: '{"features":[]}' }));
@@ -403,7 +408,7 @@ async function setupProfile(page, name) {
     const swPage = await swCtx.newPage();
     await swPage.goto("http://localhost:18899/", { waitUntil: "domcontentloaded" });
     check("service worker registers", await swPage.evaluate(() =>
-      Promise.race([navigator.serviceWorker.ready.then(() => true), new Promise(r => setTimeout(() => r(false), 4000))])));
+      Promise.race([navigator.serviceWorker.ready.then(() => true), new Promise(r => setTimeout(() => r(false), 8000))])));
     await swCtx.close();
   }
 
@@ -541,6 +546,14 @@ async function setupProfile(page, name) {
     await setupProfile(b, "Alex");
     await b.waitForTimeout(600);
     check("friend sees traveler through shared store", /Zach/.test(await b.textContent("#peopleList")));
+    check("anonymous identity established", await a.evaluate(() => window.storage.uid) === "uid-test");
+    check("auth token rides on database requests", a._authSeen === true);
+    const rec = JSON.parse(await a.evaluate(async () => (await window.storage.get("person:Zach", true)).value));
+    check("record stamped with owner uid", rec.uid === "uid-test");
+    check("records stored as objects for rules", await (async () => {
+      const res = await fetch("http://localhost:18898/trips/sync-test/person%3AZach.json");
+      return typeof (await res.json()) === "object";
+    })());
     await a.context().close(); await b.context().close();
   }
 

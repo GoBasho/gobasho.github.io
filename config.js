@@ -15,6 +15,10 @@ window.MERIDIAN_CONFIG = {
   // Leave as "" to keep everything local to each person's browser.
   firebaseUrl: "https://gojapan-2e7da-default-rtdb.firebaseio.com",
 
+  // Web API key (public identifier, not a secret) — enables invisible
+  // anonymous sign-in so database rules can enforce per-person ownership.
+  apiKey: "AIzaSyAbY_uK-revIDNRSaycqfkdO5NJoETZ1V0",
+
   // A name that keeps your trip's data separate from anything else in the
   // database. Change it if you ever want to start a fresh trip.
   tripId: "our-japan-trip"
