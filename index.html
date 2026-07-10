@@ -1499,11 +1499,12 @@ function renderRailList(){
   wrap.innerHTML = "";
   // nudge toward day-grouping suggestions without leaving the map
   if(state.me && state.people[state.me.name]){
-    const n = mergeSuggestions(state.people[state.me.name]).length;
+    const me = state.people[state.me.name];
+    const n = mergeSuggestions(me).length + dayPlanIdeas(me).length;
     if(n){
       const hint = document.createElement("button");
       hint.className = "rail-hint";
-      hint.innerHTML = `<span>&#128161;</span> ${n===1?"Some plans could":n+" groups of plans could each"} share a day — see Itinerary`;
+      hint.innerHTML = `<span>&#128161;</span> ${n===1?"There's a day-planning idea":n+" day-planning ideas"} waiting — see Itinerary`;
       hint.onclick = ()=>{ document.querySelectorAll(".tab").forEach(t=>t.classList.toggle("active", t.dataset.view==="itinerary")); setView("itinerary"); };
       wrap.appendChild(hint);
     }
@@ -1732,6 +1733,7 @@ function renderItinerary(){
 }
 function wireSuggestions(wrap){
   wrap.querySelectorAll("[data-merge]").forEach(b=> b.onclick=()=>applyMergeSuggestion(b.dataset.merge, b.dataset.target));
+  wrap.querySelectorAll("[data-dayidea]").forEach(b=> b.onclick=()=>applyDayIdea(b.dataset.dayidea, b.dataset.target));
   wrap.querySelectorAll("[data-dismisssug]").forEach(b=> b.onclick=()=>dismissSuggestion(b.dataset.dismisssug));
   const ics=wrap.querySelector("#icsBtn");
   if(ics) ics.onclick=exportICS;
@@ -2181,11 +2183,77 @@ function mergeDirection(s){
   const costToD2 = s.a.length + timed(s.a)*10 + (s.fitB?0:100);
   return costToD1<=costToD2 ? "d1" : "d2";
 }
+/* ---------- day-plan ideas: cluster unscheduled plans into whole days ---------- */
+function dayPlanIdeas(p){
+  const pool=(p.activities||[]).filter(a=>!a.date && a.location && !a.transit);
+  if(pool.length<2) return [];
+  const dismissed=p.dismissedSuggestions||{};
+  // single-linkage clustering: an item joins a cluster it's within one hop of
+  const clusters=[];
+  for(const a of pool){
+    const home=clusters.find(c=>c.some(x=>haversine(x.location,a.location)<=NEAR_KM));
+    if(home) home.push(a); else clusters.push([a]);
+  }
+  const dates=tripDates();
+  const out=[];
+  for(const c of clusters){
+    if(c.length<2) continue;
+    const key=c.map(x=>x.id).sort().join("|");
+    if(dismissed[key]) continue;
+    // score candidate days: how many of the cluster fit, how empty the day is,
+    // whether you're based nearby, whether existing plans that day are in the same area
+    const options=dates.map(d=>{
+      const allowed=c.filter(a=>{ const w=actWindow(a); return !w.length || w.includes(d); });
+      if(!allowed.length) return null;
+      const dayActs=(p.activities||[]).filter(a=>a.date===d);
+      if(dayActs.length + allowed.length > 6) return null;
+      let score=allowed.length*10 - dayActs.length;
+      const hotel=hotelLocForDate(p,d);
+      if(hotel && haversine(hotel, c[0].location)<=25) score+=5;
+      const nearExisting=dayActs.some(x=>x.location && haversine(x.location, c[0].location)<=NEAR_KM);
+      if(nearExisting) score+=8;
+      return {d, allowed, score, nearExisting};
+    }).filter(Boolean).sort((a,b)=>b.score-a.score || a.d.localeCompare(b.d));
+    if(!options.length) continue;
+    let maxKm=0;
+    for(let i=0;i<c.length;i++) for(let j=i+1;j<c.length;j++)
+      maxKm=Math.max(maxKm, haversine(c[i].location, c[j].location));
+    out.push({key, cluster:c, options:options.slice(0,3), maxKm});
+  }
+  return out;
+}
+async function applyDayIdea(key, target){
+  const idea=(state._dayIdeas||[]).find(i=>i.key===key);
+  if(!idea) return;
+  const opt=idea.options.find(o=>o.d===target);
+  const ids=new Set((opt?opt.allowed:idea.cluster).map(x=>x.id));
+  const rec=state.people[state.me.name];
+  let n=0;
+  for(const a of rec.activities) if(ids.has(a.id) && a.date!==target){ a.date=target; n++; }
+  await saveMe(); state._didFit=false; render();
+  toast("Planned "+n+" thing"+(n!==1?"s":"")+" for "+shortDate(target));
+}
+
 function suggestionCards(p){
   let sugg=mergeSuggestions(p);
-  if(state.selectedDate) sugg=sugg.filter(s=>s.d1===state.selectedDate||s.d2===state.selectedDate);
-  if(!sugg.length) return "";
-  let html=`<div class="eyebrow" style="margin-top:2px">Suggestions <span class="count">${sugg.length}</span></div>`;
+  let ideas=dayPlanIdeas(p);
+  if(state.selectedDate){
+    sugg=sugg.filter(s=>s.d1===state.selectedDate||s.d2===state.selectedDate);
+    ideas=ideas.filter(i=>i.options.some(o=>o.d===state.selectedDate));
+  }
+  state._dayIdeas=ideas;
+  if(!sugg.length && !ideas.length) return "";
+  let html=`<div class="eyebrow" style="margin-top:2px">Suggestions <span class="count">${sugg.length+ideas.length}</span></div>`;
+  for(const idea of ideas){
+    const names=idea.cluster.map(x=>`<b>${esc(x.title)}</b>`).join('<span class="sg-sep">+</span>');
+    const top=idea.options[0];
+    html+=`<div class="sug-card"><div class="sug-line">${names}</div>
+      <div class="sug-note">${idea.cluster.length} unscheduled plans within ${idea.maxKm.toFixed(1)} km of each other — make a day of it?${top.nearExisting?" The top pick lands beside plans you already have that day.":""}</div>
+      <div class="sug-actions">
+        ${idea.options.map((o,i)=>`<button class="mini-btn ${i===0?"on":""}" data-dayidea="${idea.key}" data-target="${o.d}">${o.allowed.length<idea.cluster.length?o.allowed.length+" of them":"Do these"} ${shortDate(o.d)}</button>`).join("")}
+        <button class="linkish" data-dismisssug="${idea.key}">Dismiss</button>
+      </div></div>`;
+  }
   for(const s of sugg){
     const leg=classifyLeg(s.minKm);
     const pref=mergeDirection(s);

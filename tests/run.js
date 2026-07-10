@@ -118,6 +118,21 @@ async function setupProfile(page, name) {
       r.wikiMiss = wikiMatches("office tower", ["food"]).length;
       r.eventCost = CAT_COST["Event / show"] > 0;
       r.linkified = /<a href="https:\/\/x.jp"/.test(linkify(esc("book https://x.jp now")));
+      // day-plan ideas: 3 unscheduled Tokyo spots cluster; a Kyoto one stays out;
+      // the scheduled Sep 8 Tokyo activity should attract the cluster to Sep 8
+      state.trip = {title:"T", start:"2026-09-07", end:"2026-09-12", countries:["JP"]};
+      state.people = { A:{name:"A", stays:[], dayTrips:{}, activities:[
+        {id:"s1", title:"Sumo", date:"2026-09-08", location:{lat:35.6966,lng:139.7932}},
+        {id:"u1", title:"Pokemon Center", date:"", flex:{type:"range",start:"2026-09-07",end:"2026-09-12"}, location:{lat:35.6617,lng:139.7003}},
+        {id:"u2", title:"Shibuya Sky", date:"", flex:{type:"range",start:"2026-09-07",end:"2026-09-12"}, location:{lat:35.6580,lng:139.7016}},
+        {id:"u3", title:"Meiji Shrine", date:"", flex:{type:"options",days:["2026-09-08","2026-09-10"]}, location:{lat:35.6764,lng:139.6993}},
+        {id:"u4", title:"Kinkaku-ji", date:"", flex:{type:"range",start:"2026-09-07",end:"2026-09-12"}, location:{lat:35.0394,lng:135.7292}}
+      ]} };
+      const ideas = dayPlanIdeas(state.people.A);
+      r.ideaCount = ideas.length;                       // Tokyo cluster only (Kyoto is a lone item)
+      r.ideaSize = ideas[0] && ideas[0].cluster.length; // 3
+      r.ideaTopDay = ideas[0] && ideas[0].options[0].d; // Sep 8, pulled by the sumo anchor
+      r.ideaAnchorFlag = ideas[0] && ideas[0].options[0].nearExisting;
       // merge suggestions: two nearby acts on different days
       state.people = { A:{name:"A", activities:[
         {id:"x", date:"2026-09-08", location:{lat:35.69,lng:139.79}, time:"15:00"},
@@ -139,6 +154,8 @@ async function setupProfile(page, name) {
     check("curated search falls back globally", u.curatedFallback === true);
     check("expense settlement B→A ¥3000", u.settle === "B/A/3000", u.settle);
     check("merge suggestion keeps timed day", u.sugg === true);
+    check("day ideas: one Tokyo cluster of 3", u.ideaCount === 1 && u.ideaSize === 3, {n:u.ideaCount, size:u.ideaSize});
+    check("day ideas: anchored to the sumo day", u.ideaTopDay === "2026-09-08" && u.ideaAnchorFlag === true, u.ideaTopDay);
     check("autoTag theme parks & beaches", u.tagPark && u.tagBeach);
     check("wikiMatches finds interest in description", u.wikiHit === "Temples & shrines", u.wikiHit);
     check("wikiMatches ignores non-matches", u.wikiMiss === 0);
@@ -259,6 +276,35 @@ async function setupProfile(page, name) {
     }));
     check("far pins filtered off the map", m.markers === 1, m.markers);
     check("legend explains hidden pins", /1 plan outside Japan/.test(m.note), m.note);
+    await page.context().close();
+  }
+
+  console.log("\n== e2e: day-plan ideas ==");
+  {
+    const page = await newPage(browser, "idea-test");
+    await page.addInitScript(() => {
+      const P = "meridian:idea-test:";
+      localStorage.setItem(P+"me", JSON.stringify({name:"Zach", color:"#c8483c"}));
+      localStorage.setItem(P+"person:Zach", JSON.stringify({ name:"Zach", color:"#c8483c", stays:[], dayTrips:{}, interests:[], updated:Date.now(), activities:[
+        {id:"u1", title:"Pokemon Center", date:"", flex:{type:"range",start:"2026-09-07",end:"2026-09-12"}, location:{lat:35.6617,lng:139.7003}, category:"Shopping", time:"", notes:""},
+        {id:"u2", title:"Shibuya Sky", date:"", flex:{type:"range",start:"2026-09-07",end:"2026-09-12"}, location:{lat:35.6580,lng:139.7016}, category:"Sightseeing", time:"", notes:""},
+        {id:"u3", title:"Meiji Shrine", date:"", flex:{type:"options",days:["2026-09-08","2026-09-10"]}, location:{lat:35.6764,lng:139.6993}, category:"Culture", time:"", notes:""}
+      ]}));
+      localStorage.setItem(P+"trip:meta", JSON.stringify({title:"T", start:"2026-09-07", end:"2026-09-12", countries:["JP"]}));
+    });
+    await page.goto("http://localhost:18899/", { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(700);
+    check("rail hint counts day ideas", /day-planning idea/.test(await page.textContent("#railList")));
+    await page.click(".tab[data-view=itinerary]");
+    await page.waitForTimeout(400);
+    const card = await page.textContent(".sug-card");
+    check("idea card lists the cluster", /Pokemon Center/.test(card) && /Shibuya Sky/.test(card) && /Meiji Shrine/.test(card));
+    check("idea card proposes a day", /Do these Sep/.test(card));
+    await page.click("[data-dayidea].on");
+    await page.waitForTimeout(500);
+    const acts = await page.evaluate(() => state.people.Zach.activities.map(a => a.date));
+    check("one click schedules the whole cluster", acts.filter(d => d === acts[0] && d).length === 3, acts);
+    check("cards clear once planned", !(await page.$(".sug-card")));
     await page.context().close();
   }
 
