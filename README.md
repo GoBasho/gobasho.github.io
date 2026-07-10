@@ -85,13 +85,18 @@ the same map, connect a free Firebase database:
            ".read": "auth != null",
            "trip%3Ameta": { ".write": "auth != null" },
            "$record": {
-             ".write": "auth != null && (!data.exists() || !data.child('uid').exists() || data.child('uid').val() === auth.uid)"
+             ".write": "auth != null && (!data.exists() || !data.child('uid').exists() || data.child('uid').val() === auth.uid || root.child('trips').child($trip).child('trip%3Ameta').child('ownerUid').val() === auth.uid)"
            }
          }
        }
      }
    }
    ```
+
+   The last clause lets a trip's creator remove stray travelers (the ✕ next
+   to names in the sidebar). It only activates on trips created after the
+   ownership feature, and requires the trip settings to have been saved in
+   the new object format.
 
    What these enforce: a trip is reachable only with its exact ID (no
    listing the database), only the app's signed-in visitors can read or

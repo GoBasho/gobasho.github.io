@@ -21,6 +21,12 @@
   var t = localStorage.getItem("meridian:theme") || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
   document.documentElement.dataset.theme = t;
   var q = new URLSearchParams(location.search);
+  var adopt = q.get("adopt");
+  if(adopt){
+    localStorage.setItem("meridian:auth", JSON.stringify({r: adopt, u: null}));
+    history.replaceState(null, "", location.pathname + (q.get("trip") ? "?trip=" + encodeURIComponent(q.get("trip")) : ""));
+    q = new URLSearchParams(location.search);
+  }
   if(q.get("demo")){
     localStorage.setItem("meridian:active-trip", "demo-tour");
     localStorage.setItem("meridian:want-demo", "1");
@@ -490,6 +496,32 @@
   .prep-item em { display: block; font-style: normal; font-size: 10.5px; color: var(--ink-faint); }
   .prep-lane { font-size: 8.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-faint); margin: 7px 0 4px; border-bottom: 1px dashed var(--line); padding-bottom: 2px; }
 
+  .season-line { display: flex; flex-wrap: wrap; gap: 6px 0; font-size: 12.5px; color: var(--ink-soft); background: var(--sky); border: 1px solid var(--line); border-radius: 9px; padding: 9px 13px; margin: -12px 0 18px; }
+
+  /* budget bars */
+  .bud-row { display: flex; align-items: center; gap: 10px; padding: 4px 0; font-size: 12.5px; }
+  .bud-label { flex: 0 0 150px; color: var(--ink-soft); }
+  .bud-bar { flex: 1; height: 9px; background: var(--line); border-radius: 5px; overflow: hidden; }
+  .bud-bar div { height: 100%; background: var(--indigo); border-radius: 5px; }
+  .bud-bar div.over { background: var(--shu); }
+  .bud-val { flex: 0 0 auto; font-size: 11.5px; color: var(--ink-faint); }
+
+  /* Today mode */
+  .td-row { display: flex; gap: 11px; align-items: flex-start; padding: 11px 10px; border: 1px solid var(--line); border-radius: 10px; margin-bottom: 8px; background: var(--surface); }
+  .td-row.is-next { border-color: var(--indigo); box-shadow: 0 0 0 1px var(--indigo); }
+  .td-row.is-done { opacity: .55; }
+  .td-row.is-done b { text-decoration: line-through; }
+  .td-row.is-skipped { opacity: .7; border-style: dashed; }
+  .td-row.done-na { border-style: dashed; background: transparent; }
+  .td-ico { font-size: 15px; line-height: 1.4; }
+  .td-body { flex: 1; min-width: 0; font-size: 14px; }
+  .td-sub { display: block; font-size: 12px; color: var(--ink-faint); margin-top: 1px; }
+  .td-next { color: var(--indigo); font-weight: 600; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; }
+  .td-actions { display: flex; gap: 7px; align-items: center; flex-shrink: 0; }
+  .td-leg { font-size: 11.5px; color: var(--ink-soft); padding: 0 0 8px 14px; display: flex; gap: 8px; align-items: center; }
+  .live-dot { width: 16px; height: 16px; border-radius: 50%; border: 3px solid #fff; box-shadow: 0 0 0 2px rgba(0,0,0,.15); animation: pulse 1.6s ease-out infinite; }
+  @keyframes pulse { 0%{ box-shadow: 0 0 0 0 rgba(200,72,60,.5);} 100%{ box-shadow: 0 0 0 14px rgba(200,72,60,0);} }
+
   /* expenses */
   .exp-form { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 15px 16px 12px; margin-bottom: 16px; box-shadow: var(--shadow); }
   .exp-row { display: flex; align-items: center; gap: 10px; padding: 8px 6px; border-bottom: 1px solid var(--line); font-size: 13px; }
@@ -624,6 +656,7 @@
     </div>
     <nav class="tabs" id="tabs">
       <button class="tab active" data-view="map">Map</button>
+      <button class="tab" data-view="today" id="todayTab" style="display:none;">Today</button>
       <button class="tab" data-view="itinerary">Itinerary</button>
       <button class="tab" data-view="prep">Prep</button>
       <button class="tab" data-view="explore">Explore</button>
@@ -693,6 +726,7 @@
     <div class="panel" id="stageCoord" style="display:none;"><div class="panel-inner" id="coordInner"></div></div>
     <div class="panel" id="stageCheck" style="display:none;"><div class="panel-inner" id="checkInner"></div></div>
     <div class="panel" id="stagePrep" style="display:none;"><div class="panel-inner wide" id="prepInner"></div></div>
+    <div class="panel" id="stageToday" style="display:none;"><div class="panel-inner" id="todayInner"></div></div>
     <div class="panel" id="stageExp" style="display:none;"><div class="panel-inner" id="expInner"></div></div>
   </div>
 </div>
@@ -826,6 +860,12 @@
           </div>
           <div class="field"><label>Hours (optional)</label><input type="text" id="actDur" placeholder="e.g. 2"></div>
           <div class="field"><label id="lblActCost">Est. cost (optional)</label><input type="text" id="actCost" inputmode="numeric" placeholder="e.g. 2000"></div>
+        </div>
+        <div class="field-row">
+          <div class="field"><label>Booking</label>
+            <select id="actBook"><option value="">No booking needed</option><option value="needed">Needs booking</option><option value="booked">Booked</option></select>
+          </div>
+          <div class="field" id="fldBookRef" style="display:none;"><label>Confirmation (optional)</label><input type="text" id="actBookRef" maxlength="40" placeholder="e.g. #TL-88421"></div>
         </div>
         <div class="field"><label>Notes (optional)</label><textarea id="actNotes" placeholder="Reservations, who's keen, alternatives..."></textarea></div>
       </div>
@@ -1506,6 +1546,8 @@ function render(){
   if(state.view === "check") renderChecklist();
   if(state.view === "prep") renderPrep();
   if(state.view === "exp") renderExpenses();
+  if(state.view === "today") renderToday();
+  document.getElementById("todayTab").style.display = tripDates().includes(iso(new Date())) ? "" : "none";
   renderMeChip();
   document.getElementById("storageWarn").innerHTML =
     isDemo() ? "" :
@@ -1543,14 +1585,23 @@ function renderPeople(){
     const hidden = state.hidden[p.name];
     const acts = (p.activities||[]).length, stays = (p.stays||[]).length;
     const ints = (p.interests||[]).slice(0,3).map(interestLabel).join(" · ");
+    const iAmOwner = state.trip.ownerUid && window.storage.uid === state.trip.ownerUid;
     const row = document.createElement("div");
     row.className = "person" + (hidden ? " hidden" : "");
     row.innerHTML = `
       <span class="swatch" style="background:${p.color}"></span>
       <div class="pcol"><div class="pname">${esc(p.name)} ${isMe?'<span class="you-tag">You</span>':''}</div>${ints?`<div class="pinterests">${esc(ints)}</div>`:''}</div>
       <span class="pmeta">${acts} plan${acts!==1?'s':''}</span>
+      ${iAmOwner && !isMe ? '<button class="vis prem" title="Remove this traveler from the trip">&times;</button>' : ''}
       <button class="vis" title="Toggle on map">${hidden?eyeOff():eyeOn()}</button>`;
-    row.querySelector(".vis").onclick = () => { state.hidden[p.name] = !state.hidden[p.name]; render(); };
+    row.querySelector(".vis:not(.prem)").onclick = () => { state.hidden[p.name] = !state.hidden[p.name]; render(); };
+    const rm = row.querySelector(".prem");
+    if(rm) rm.onclick = async () => {
+      if(!confirm("Remove "+p.name+" and all their plans from this trip? They can rejoin with the invite link.")) return;
+      await sSet("person:"+p.name, JSON.stringify({name:p.name, deleted:true, removedBy:window.storage.uid}), true);
+      delete state.people[p.name];
+      render(); toast(p.name+" removed");
+    };
     wrap.appendChild(row);
   }
   // legend mirrors visible travelers
@@ -1638,6 +1689,14 @@ function renderRailList(){
   // nudge toward day-grouping suggestions without leaving the map
   if(state.me && state.people[state.me.name]){
     const me = state.people[state.me.name];
+    const toBook=(me.activities||[]).filter(a=>a.booking==="needed").length;
+    if(toBook){
+      const bk = document.createElement("div");
+      bk.className = "rail-hint";
+      bk.style.cursor = "default";
+      bk.innerHTML = `<span>&#127903;&#65039;</span> ${toBook} plan${toBook>1?"s":""} still need${toBook>1?"":"s"} booking — marked in the Itinerary`;
+      wrap.appendChild(bk);
+    }
     const n = mergeSuggestions(me).length + dayPlanIdeas(me).length;
     if(n){
       const hint = document.createElement("button");
@@ -1661,9 +1720,9 @@ function renderRailList(){
     const cmts = actComments(a.person, a.id).length;
     wrap.appendChild(itemRow({
       color: a.color, title: a.title, tick: a.color,
-      sub: (a.date
+      sub: (a.status==="done"?'✓ ':a.status==="skipped"?'✗ ':'') + (a.date
         ? `${a.time?a.time+' · ':''}${a.transit?('Transit'+(a.from||a.to?` · ${a.from||'…'} → ${a.to||'…'}`:'')):(a.category||'Activity')}${state.selectedDate?'':' · '+shortDate(a.date)} · ${a.person}`
-        : `Flexible · ${flexLabel(a)} · ${a.person}`) + (joiners.length?` · ${joiners.length} in`:''),
+        : `Flexible · ${flexLabel(a)} · ${a.person}`) + (joiners.length?` · ${joiners.length} in`:'') + (a.booking==="needed"?' · 🎟️ book!':''),
       onDel: canEdit(a.person) ? () => removeItem("activity", a.person, a.id) : null,
       onEdit: canEdit(a.person) ? () => openEdit("activity", a.person, a.id) : null,
       onJoin: state.me && a.person!==state.me.name ? () => toggleJoin(a.person, a.id) : null,
@@ -1750,6 +1809,14 @@ function renderMarkers(){
     m.bindPopup(`<div class="pop"><h4>${esc(a.title)}</h4><div class="pmeta">${a.time?esc(a.time)+' · ':''}${esc(a.category||'Activity')} · ${a.date?esc(shortDate(a.date)):esc(flexLabel(a)||"flexible")}</div>${a.notes?'<div class="pmeta" style="margin-top:4px">'+linkify(esc(a.notes))+'</div>':''}<div class="who"><span class="dot" style="background:${a.color}"></span>${esc(a.person)}</div></div>`);
     markerLayer.addLayer(m); pts.push([a.location.lat,a.location.lng]);
   }
+  // live positions from meet-up mode (fresh within 15 min, not expired)
+  for(const p of visiblePeople()){
+    if(!p.loc || p.loc.until < Date.now() || Date.now()-p.loc.ts > 15*60000) continue;
+    if(!inHomeBox(p.loc.lat, p.loc.lng)) continue;
+    const m = L.marker([p.loc.lat, p.loc.lng], {icon: L.divIcon({className:"", html:`<div class="live-dot" style="background:${p.color}"></div>`, iconSize:[18,18], iconAnchor:[9,9]})});
+    m.bindPopup(`<div class="pop"><h4>${esc(p.name)} is here</h4><div class="pmeta">live · ${Math.round((Date.now()-p.loc.ts)/60000)} min ago</div></div>`);
+    markerLayer.addLayer(m);
+  }
   if(pts.length && !state._didFit){ map.fitBounds(pts, {padding:[60,60], maxZoom:12}); state._didFit=true; }
   const far = document.getElementById("legendFar");
   if(hiddenFar){
@@ -1831,9 +1898,10 @@ function tripTotalCost(p){
   return { v, est };
 }
 
-/* the shape of one person's day: hotel anchor, ordered stops, and travel legs */
+/* the shape of one person's day: hotel anchor, ordered stops, and travel legs.
+   Skipped plans drop out of the route (Today mode lists them separately). */
 function dayPlan(p, date){
-  const acts = (p.activities||[]).filter(a=>a.date===date && a.location);
+  const acts = (p.activities||[]).filter(a=>a.date===date && a.location && a.status!=="skipped");
   const stay = (p.stays||[]).find(s=>stayCoversDate(s,date) && s.location);
   // order the day: by explicit time when given, otherwise nearest-neighbour from the hotel
   const anchor = stay ? {name: stay.hotelName||stay.city, loc: stay.location, anchor:true} : null;
@@ -1879,6 +1947,7 @@ function renderItinerary(){
       `<span class="cost-chip"><span class="dot" style="background:${x.p.color}"></span>${esc(x.p.name)} <b>${x.t.est?"~":""}${fmtYen(x.t.v)}</b>${approxDisp(x.t.v)}</span>`).join("")}
       <span class="cost-note" title="Activity costs use the amount you entered. With the trip currency set to ¥, blanks get typical Japan prices and transit legs get rough fares; in other currencies only entered costs count. Hotels count only when a nightly cost is set on the stay.">what's counted?</span></div>`;
   }
+  head += seasonalLine();
   if(state.me && state.people[state.me.name]) head += suggestionCards(state.people[state.me.name]);
   if(!dates.length){ wrap.innerHTML = head + '<div class="list-empty">Set your trip dates in the header to build the day-by-day itinerary.</div>'; wireSuggestions(wrap); return; }
   const people = visiblePeople();
@@ -1922,7 +1991,8 @@ function renderPersonDay(p, date, plan){
   const cost = dayCost(p, date, plan);
   const costChip = cost.v > 0 ? `<span class="daycost" title="Entered costs plus typical prices for the rest; hotel counts when its nightly cost is set">${cost.est?"~":""}${fmtYen(cost.v)}${approxDisp(cost.v)}</span>` : "";
 
-  let html = `<div class="person-day"><div class="pd-head"><span class="swatch" style="background:${p.color}"></span><span class="pdn">${esc(p.name)}</span><span class="verdict ${verdict.cls}">${esc(verdict.text)}</span>${costChip}</div>`;
+  const navUrl = state.me && p.name===state.me.name ? gmapsDayUrl(plan) : null;
+  let html = `<div class="person-day"><div class="pd-head"><span class="swatch" style="background:${p.color}"></span><span class="pdn">${esc(p.name)}</span><span class="verdict ${verdict.cls}">${esc(verdict.text)}</span>${costChip}${navUrl && stopCount?` <a class="mini-btn" style="font-size:10.5px;padding:2px 8px" href="${navUrl}" target="_blank" rel="noopener" title="Open this day as a route in Google Maps">Nav</a>`:""}</div>`;
   if(stopCount === 0){
     const msg = trip ? `Day trip to ${esc(trip)} planned — add spots from the Explore tab.`
                      : `Based in ${esc(anchor.name)} — no activities planned.`;
@@ -1936,8 +2006,10 @@ function renderPersonDay(p, date, plan){
     const trMeta = tr ? [ [s.act.from,s.act.to].filter(Boolean).join(" → "), s.time, hasCost(s.act)?fmtYen(+s.act.cost):"" ].filter(Boolean).join(" · ") : "";
     const who = s.withWho ? ` <span style="color:var(--ink-faint);font-weight:400">· with ${esc(s.withWho)}</span>`
       : (s.act && !s.act.transit ? (j=>j.length?` <span style="color:var(--ink-faint);font-weight:400">· ${esc(j.join(", "))} in</span>`:"")(joinersOf(p.name, s.act.id)) : "");
+    const badge = s.act && s.act.booking==="needed" ? ' <span title="Needs booking">&#127903;&#65039;</span>' : "";
+    const doneStyle = s.act && s.act.status==="done" ? ' style="text-decoration:line-through;opacity:.6"' : "";
     html += `<div class="leg"><div class="rail-dot"><span class="rd ${s.anchor?'anchor':''} ${tr?'transit':''}"></span>${last?'':'<span class="rline"></span>'}</div>
-      <div class="stop"><div class="sname">${tr?'<span class="mode-tag mode-local">Transit</span> ':''}${esc(s.name)}${s.anchor?' <span style="color:var(--ink-faint);font-weight:400">· base</span>':''}${who}</div>${tr?(trMeta?`<div class="stime">${esc(trMeta)}</div>`:''):(s.time?`<div class="stime">${esc(s.time)}</div>`:'')}</div></div>`;
+      <div class="stop"><div class="sname"${doneStyle}>${tr?'<span class="mode-tag mode-local">Transit</span> ':''}${esc(s.name)}${badge}${s.anchor?' <span style="color:var(--ink-faint);font-weight:400">· base</span>':''}${who}</div>${tr?(trMeta?`<div class="stime">${esc(trMeta)}</div>`:''):(s.time?`<div class="stime">${esc(s.time)}</div>`:'')}</div></div>`;
     if(!last){
       const lg = legs[i];
       html += `<div class="leg-travel"><span class="mode-tag ${lg.cls}">${lg.label}</span>${lg.km.toFixed(1)} km · ~${fmtMin(lg.min)}${lg.cost&&curSym()==="¥"?` · ~${fmtYen(lg.cost)}`:""}</div>`;
@@ -2309,8 +2381,9 @@ async function clearDayTrip(date){
 async function addRecommendation(place, date){
   if(!date){ toast("Pick a day first"); return; }
   const rec=state.people[state.me.name];
+  const needsBooking=/\bbook(ed)?\b|reserve|sell out|sells out|sold out|timed ticket|timed slot|slots sell/i.test(place.blurb||"");
   rec.activities.push({ id:uid(), title:place.name, location:{lat:place.lat, lng:place.lng, label:place.name},
-    date, time:"", durationH:"", category:place.cat, notes:"" });
+    date, time:"", durationH:"", category:place.cat, notes:"", booking:needsBooking?"needed":"" });
   await saveMe(); state._didFit=false; render(); toast("Added "+place.name);
 }
 
@@ -2462,6 +2535,108 @@ async function dismissSuggestion(key){
 }
 
 /* ---------- coordination view ---------- */
+/* ---------- seasonal intelligence: what your dates land on ---------- */
+const SEASONAL=[
+  ["JP","03-20","04-15","🌸 Cherry blossom season — Kyoto peaks around early April; book stays early"],
+  ["JP","11-10","12-05","🍁 Autumn foliage — Kyoto and Nikko peak in late November"],
+  ["JP","12-15","02-28","🏂 Hokkaido powder season — Niseko and Furano at their deepest"],
+  ["JP","04-29","05-05","⚠️ Golden Week — all of Japan travels; trains and hotels jam"],
+  ["JP","08-11","08-16","⚠️ Obon week — domestic travel peak"],
+  ["KR","10-15","11-10","🍁 Korean autumn colors — Seoraksan first, Seoul a week later"],
+  ["CN","10-01","10-07","⚠️ China's National Day Golden Week — avoid intercity travel"],
+  ["TH","04-13","04-15","💦 Songkran — the nationwide water fight; everything gets soaked"],
+  ["TH","05-15","10-15","🌧️ Green season — short daily downpours, lush and less crowded"],
+  ["EU","08-01","08-31","⚠️ August in Europe — many family-run restaurants and shops close for holidays"],
+  ["GB","12-24","12-26","⚠️ UK Christmas — the rail network largely shuts down"]
+];
+function seasonalNotes(){
+  const dates=tripDates();
+  if(!dates.length) return [];
+  const on=new Set(activeCountries());
+  if(["FR","IT","ES","DE"].some(c=>on.has(c))) on.add("EU");
+  const mds=new Set(dates.map(d=>d.slice(5)));
+  const hit=(s,e,md)=> s<=e ? (md>=s && md<=e) : (md>=s || md<=e);  // ranges may wrap the year
+  const out=[];
+  for(const [c,s,e,note] of SEASONAL){
+    if(!on.has(c)) continue;
+    if([...mds].some(md=>hit(s,e,md))) out.push(note);
+  }
+  return out.slice(0,3);
+}
+function seasonalLine(){
+  const notes=seasonalNotes();
+  return notes.length ? `<div class="season-line">${notes.map(esc).join("<span class='sg-sep'>·</span>")}</div>` : "";
+}
+
+/* ---------- polls: settle the group debates ---------- */
+function allPolls(){
+  const out=[];
+  for(const p of Object.values(state.people))
+    for(const poll of (p.polls||[])) out.push({...poll, by:p.name, color:p.color});
+  out.sort((a,b)=>(b.ts||0)-(a.ts||0));
+  return out;
+}
+function pollVotes(by, id){
+  const key=by+"\u0001"+id, tally={};
+  for(const p of Object.values(state.people)){
+    const v=(p.votes||{})[key];
+    if(v!==undefined && v!==null) (tally[v]=tally[v]||[]).push(p.name);
+  }
+  return tally;
+}
+function pollSection(){
+  const polls=allPolls();
+  let html=`<div class="eyebrow" style="margin-top:4px">Group decisions <span class="count">${polls.length}</span></div>`;
+  if(state.me) html+=`<div class="exp-form" style="margin-bottom:12px">
+    <div class="field-row">
+      <div class="field" style="flex:2"><label>Question</label><input type="text" id="pollQ" placeholder="e.g. Tuesday: Otaru or Sapporo?" maxlength="80"></div>
+      <div class="field" style="flex:2"><label>Options (comma-separated)</label><input type="text" id="pollOpts" placeholder="Otaru, Sapporo, Rest day" maxlength="120"></div>
+      <button class="btn primary" id="pollAdd" style="flex:0">Ask</button>
+    </div></div>`;
+  const myKeyOf=poll=>poll.by+"\u0001"+poll.id;
+  const me=state.me && state.people[state.me.name];
+  for(const poll of polls){
+    const tally=pollVotes(poll.by, poll.id);
+    const myVote=me ? (me.votes||{})[myKeyOf(poll)] : undefined;
+    const totalVotes=Object.values(tally).reduce((n,v)=>n+v.length,0);
+    html+=`<div class="coord-card"><div class="cc-head"><div class="cc-people"><span class="dot" style="background:${poll.color}"></span>${esc(poll.q)}</div>
+      <span class="cc-where">${totalVotes} vote${totalVotes!==1?"s":""} · by ${esc(poll.by)}${canEdit(poll.by)?` <button class="idel" style="opacity:1" data-polldel="${poll.id}" title="Close poll">&times;</button>`:""}</span></div>`;
+    poll.opts.forEach((opt,i)=>{
+      const voters=tally[i]||[];
+      html+=`<div class="settle-line"><button class="mini-btn ${myVote===i?"on":""}" data-pollby="${esc(poll.by)}" data-pollid="${poll.id}" data-opt="${i}">${esc(opt)}</button>
+        <span style="font-size:11.5px;color:var(--ink-faint)">${voters.length?voters.map(esc).join(", "):""}</span></div>`;
+    });
+    html+=`</div>`;
+  }
+  return html;
+}
+async function askPoll(){
+  const q=document.getElementById("pollQ").value.trim();
+  const opts=document.getElementById("pollOpts").value.split(",").map(s=>s.trim()).filter(Boolean).slice(0,5);
+  if(!q || opts.length<2){ toast("A question and at least two options"); return; }
+  const rec=state.people[state.me.name];
+  (rec.polls=rec.polls||[]).push({id:uid(), q, opts, ts:Date.now()});
+  await saveMe(); render();
+}
+function wirePolls(wrap){
+  const pa=wrap.querySelector("#pollAdd");
+  if(pa) pa.onclick=askPoll;
+  wrap.querySelectorAll("[data-pollby]").forEach(b=>b.onclick=async()=>{
+    if(!state.me) return;
+    const rec=state.people[state.me.name];
+    const key=b.dataset.pollby+"\u0001"+b.dataset.pollid, opt=+b.dataset.opt;
+    rec.votes=rec.votes||{};
+    rec.votes[key] = rec.votes[key]===opt ? null : opt;  // tap again to unvote
+    await saveMe(); render();
+  });
+  wrap.querySelectorAll("[data-polldel]").forEach(b=>b.onclick=async()=>{
+    const rec=state.people[state.me.name];
+    rec.polls=(rec.polls||[]).filter(p=>p.id!==b.dataset.polldel);
+    await saveMe(); render();
+    toast("Poll closed");
+  });
+}
+
 function flightSection(){
   const rows=Object.values(state.people).filter(p=>p.flights && ((p.flights.arr&&p.flights.arr.date)||(p.flights.dep&&p.flights.dep.date)));
   if(!rows.length) return "";
@@ -2477,9 +2652,11 @@ function renderCoord(){
   const wrap = document.getElementById("coordInner");
   let head = `<h2>Coordination</h2><p class="lede">Where your paths cross. This looks for days you're in the same area and plans that land close together, so overlaps are easy to spot.</p>`;
   head += flightSection();
+  head += pollSection();
   const people = Object.values(state.people);
   if(people.length < 2){
     wrap.innerHTML = head + '<div class="list-empty">Share this trip and once a friend adds their stays and plans, overlaps will show up here. The map link carries everything — anyone who opens it can add their own plans.</div>';
+    wirePolls(wrap);
     return;
   }
   const cards = [];
@@ -2503,6 +2680,7 @@ function renderCoord(){
     cards.push(coordCard(A,B,sharedCityDays,nearbyPlans));
   }
   wrap.innerHTML = head + (cards.join("") || '<div class="list-empty">No overlapping days found yet. As people add stays and plans, matches will appear.</div>');
+  wirePolls(wrap);
 }
 /* a person's "city" on a date: their stay's city, else the city of their first activity that day */
 function presenceCity(p, date){
@@ -2634,6 +2812,58 @@ function checklistDone(p){
   const c = p.checklist||{};
   return visibleChecklist().reduce((n,[,,items])=>n+items.filter(([id])=>c[id]).length, 0);
 }
+/* ---------- packing: suggested by season and what you're actually doing ---------- */
+const PACKING = [
+  ["Essentials", null, [
+    ["ppass","Passport (and a photo of it)"],["pcards","Cards + some local cash"],["pmeds","Meds & prescriptions"],
+    ["padapt","Plug adapter & power bank"],["pesim","eSIM installed and tested"]]],
+  ["Clothing", null, [
+    ["pwalk","Broken-in walking shoes"],["players","Layers for changing weather"],["prain","Compact rain jacket or umbrella"]]],
+  ["Winter", "winter", [
+    ["pcoat","Insulated jacket"],["pgloves","Gloves, beanie, neck gaiter"],["pthermal","Thermal base layers"],
+    ["pboots","Waterproof boots"],["pwarmers","Hand warmers"]]],
+  ["Ski trip", "ski", [
+    ["pskiwear","Ski jacket & pants"],["pgoggles","Goggles — low-light lens for powder days"],["psocks","Ski socks ×3"],
+    ["phelmet","Helmet (or plan to rent)"],["pliftpass","Lift pass / lesson confirmations"]]],
+  ["Beach & islands", "beach", [
+    ["pswim","Swimwear ×2"],["preef","Reef-safe sunscreen"],["psandals","Sandals"],["pdrybag","Dry bag for boat days"]]],
+  ["Summer heat", "summer", [
+    ["psun","Sunscreen & hat"],["pcool","Breathable clothing"],["pbottle","Water bottle"]]]
+];
+function packingContext(){
+  const tags=new Set();
+  const months=new Set(tripDates().map(d=>+d.slice(5,7)));
+  if([12,1,2].some(m=>months.has(m))) tags.add("winter");
+  if([6,7,8].some(m=>months.has(m))) tags.add("summer");
+  const me=state.me && state.people[state.me.name];
+  const hay=((me&&me.activities)||[]).map(a=>a.title).join(" ").toLowerCase();
+  if(/ski|snowboard|niseko|hakuba|powder/.test(hay)) { tags.add("ski"); tags.add("winter"); }
+  if(/beach|island|snorkel|phuket|krabi|samui|okinawa|bali/.test(hay) || ["TH","SEA"].includes(tripHome())) tags.add("beach");
+  if(["TH","SEA"].includes(tripHome())) tags.add("summer");
+  return tags;
+}
+function renderPacking(rec){
+  const on=packingContext();
+  const groups=PACKING.filter(([,tag])=>!tag || on.has(tag));
+  const mine=rec.packing||{};
+  const customs=rec.packingCustom||[];
+  const total=groups.reduce((n,[,,items])=>n+items.length,0)+customs.length;
+  const done=groups.reduce((n,[,,items])=>n+items.filter(([id])=>mine[id]).length,0)+customs.filter(c=>mine["cx:"+c]).length;
+  let html=`<div class="eyebrow explore-sec" style="margin-top:34px">Packing <span class="count">${done}/${total}</span></div>
+    <div class="field-hint" style="margin-bottom:8px">Suggested from your dates and plans${on.has("ski")?" — ski trip spotted":""}. Add your own below.</div>`;
+  for(const [group,,items] of groups){
+    html+=`<div class="eyebrow explore-sec" style="font-size:9px;margin-top:14px">${esc(group)}</div>`;
+    for(const [id,label] of items){
+      html+=`<label class="ck-row ${mine[id]?'done':''}"><input type="checkbox" data-pack="${id}" ${mine[id]?'checked':''}><div><div class="ck-title">${esc(label)}</div></div></label>`;
+    }
+  }
+  for(const c of customs){
+    html+=`<label class="ck-row ${mine["cx:"+c]?'done':''}"><input type="checkbox" data-pack="cx:${esc(c)}" ${mine["cx:"+c]?'checked':''}><div><div class="ck-title">${esc(c)}</div></div><button class="idel" style="opacity:1" data-packdel="${esc(c)}">&times;</button></label>`;
+  }
+  html+=`<div class="chip-add" style="margin-top:8px"><input type="text" id="packAdd" placeholder="Add an item — e.g. onsen towel" maxlength="40"><button class="mini-btn" id="packAddBtn" type="button">Add</button></div>`;
+  return html;
+}
+
 function renderChecklist(){
   const wrap = document.getElementById("checkInner");
   const on = activeCountries();
@@ -2663,7 +2893,25 @@ function renderChecklist(){
       }
     }
   }
+  if(rec) body += renderPacking(rec);
   wrap.innerHTML = head + body;
+  if(rec){
+    wrap.querySelectorAll("[data-pack]").forEach(cb=>cb.onchange=async()=>{
+      (rec.packing=rec.packing||{})[cb.dataset.pack]=cb.checked;
+      await saveMe(); render();
+    });
+    wrap.querySelectorAll("[data-packdel]").forEach(b=>b.onclick=async()=>{
+      rec.packingCustom=(rec.packingCustom||[]).filter(c=>c!==b.dataset.packdel);
+      await saveMe(); render();
+    });
+    const pa=document.getElementById("packAddBtn");
+    if(pa) pa.onclick=async()=>{
+      const v=document.getElementById("packAdd").value.trim();
+      if(!v) return;
+      rec.packingCustom=[...(rec.packingCustom||[]), v];
+      await saveMe(); render();
+    };
+  }
   wrap.querySelectorAll("[data-country]").forEach(b=> b.onclick = async()=>{
     const code=b.dataset.country;
     let c = [...activeCountries()];
@@ -2813,6 +3061,7 @@ async function createNewTrip(name, home){
   // new trips get an unguessable id — shared via the invite link
   const id=slugTrip(name)+"-"+Math.random().toString(36).slice(2,7);
   const meta={title:name, start:"", end:"", home};
+  if(window.storage.uid) meta.ownerUid=window.storage.uid;  // lets the creator tidy up travelers
   if(COUNTRIES.some(c=>c[0]===home)) meta.countries=[home];
   await window.storage.putIn(id, "trip:meta", JSON.stringify(meta));
   switchTrip(id);
@@ -2886,7 +3135,7 @@ async function openTripsMenu(){
          <button class="mini-btn" id="tmDup" title="Copy everything into a new trip">Duplicate</button></div>
        <div class="tm-new"><input type="text" id="tmName" placeholder="New trip name, or a trip ID to join…" maxlength="48"><select id="tmNewHome" title="Where the new trip goes">${homeOpts("WORLD")}</select><button class="mini-btn" id="tmGo">Go</button></div>
        <div class="field-hint" style="padding:2px 13px 10px">Share a trip with the invite link — new trip IDs are unguessable on purpose. Each trip has its own destination, people, plans, dates, currency, and expenses.</div>
-       <div class="tm-foot"><button class="linkish" id="tmExport">Download trip data</button><a class="linkish" href="about.html" target="_blank" rel="noopener">About</a><a class="linkish" href="https://github.com/ZBelohlavek/Itinerary/issues" target="_blank" rel="noopener">Feedback</a></div>`;
+       <div class="tm-foot"><button class="linkish" id="tmExport">Download trip data</button><button class="linkish" id="tmLinkDev">Link another device</button><a class="linkish" href="about.html" target="_blank" rel="noopener">About</a><a class="linkish" href="https://github.com/ZBelohlavek/Itinerary/issues" target="_blank" rel="noopener">Feedback</a></div>`;
   menu.querySelectorAll("[data-trip]").forEach(b=>b.onclick=()=>{ if(b.dataset.trip!==cur) switchTrip(b.dataset.trip); });
   document.getElementById("tmHome").onchange=async(e)=>{
     state.trip.home=e.target.value;
@@ -2899,6 +3148,13 @@ async function openTripsMenu(){
   document.getElementById("tmInvite").onclick=copyInvite;
   document.getElementById("tmDup").onclick=duplicateTrip;
   document.getElementById("tmExport").onclick=exportTripJSON;
+  document.getElementById("tmLinkDev").onclick=async()=>{
+    const t=window.storage.linkToken;
+    if(!t){ toast("No identity to link yet — try after the page has synced"); return; }
+    const url=location.origin+location.pathname+"?trip="+encodeURIComponent(window.storage.tripId)+"&adopt="+encodeURIComponent(t);
+    try { await navigator.clipboard.writeText(url); toast("Device link copied — send it to YOURSELF only (it carries your identity)"); }
+    catch { prompt("Open this on your other device (don't share it — it carries your identity):", url); }
+  };
   document.getElementById("tmName").addEventListener("keydown", e=>{ if(e.key==="Enter") createOrJoinTrip(); });
 }
 
@@ -2943,6 +3199,115 @@ function applyHomeView(){
 function legForDate(d){
   for(const l of (state.trip.legs||[])) if(l.start && l.end && d>=l.start && d<=l.end) return l;
   return null;
+}
+
+/* ---------- Today mode: the live view for the day you're in ---------- */
+function gmapsDayUrl(plan){
+  const pts = plan.sequence.filter(s=>s.loc).map(s=>s.loc.lat+","+s.loc.lng);
+  if(!pts.length) return null;
+  if(pts.length===1) return "https://www.google.com/maps/search/?api=1&query="+pts[0];
+  const way = pts.slice(1,-1).slice(0,9).join("|");
+  return "https://www.google.com/maps/dir/?api=1&origin="+pts[0]+"&destination="+pts[pts.length-1]
+    + (way ? "&waypoints="+encodeURIComponent(way) : "&travelmode=transit");
+}
+async function setStatus(actId, status){
+  const rec=state.people[state.me.name];
+  const a=(rec.activities||[]).find(x=>x.id===actId);
+  if(!a) return;
+  if(status) a.status=status; else delete a.status;
+  await saveMe(); render();
+}
+async function rescheduleSkipped(actId){
+  const rec=state.people[state.me.name];
+  const a=(rec.activities||[]).find(x=>x.id===actId);
+  if(!a) return;
+  const t=new Date(); t.setDate(t.getDate()+1);
+  const from=iso(t), to=state.trip.end && state.trip.end>from ? state.trip.end : from;
+  a.date=""; delete a.status;
+  a.flex={type:"range", start:from, end:to};
+  await saveMe(); render();
+  toast("Back in the pool — the Prep board and day ideas will find it a day");
+}
+let geoWatch=null, lastGeoWrite=0;
+function sharingLoc(){
+  const me=state.me && state.people[state.me.name];
+  return !!(me && me.loc && me.loc.until > Date.now());
+}
+function startMeetup(){
+  if(!navigator.geolocation){ toast("This browser can't share location"); return; }
+  geoWatch=navigator.geolocation.watchPosition(async p=>{
+    const rec=state.people[state.me.name];
+    if(!rec || Date.now()-lastGeoWrite < 60000) return;  // one write a minute, tops
+    lastGeoWrite=Date.now();
+    rec.loc={lat:p.coords.latitude, lng:p.coords.longitude, ts:Date.now(), until:Date.now()+2*36e5};
+    await saveMe(); render();
+  }, ()=>toast("Couldn't get your location"), {enableHighAccuracy:false, maximumAge:30000});
+  toast("Sharing your location with the trip for 2 hours");
+}
+async function stopMeetup(){
+  if(geoWatch!=null){ try{ navigator.geolocation.clearWatch(geoWatch); }catch{} geoWatch=null; }
+  const rec=state.me && state.people[state.me.name];
+  if(rec && rec.loc){ delete rec.loc; await saveMe(); }
+  render();
+  toast("Location sharing stopped");
+}
+function renderToday(){
+  const wrap=document.getElementById("todayInner");
+  const today=iso(new Date());
+  const w=wxFor(today);
+  let head=`<h2>Today <span style="font-family:var(--sans);font-size:14px;color:var(--ink-faint);font-weight:400">${prettyDate(today)}</span>${w?` <span class="dh-wx" style="margin-left:10px">${WX_ICON(w.code)} ${w.tmax}° / ${w.tmin}°</span>`:""}</h2>`;
+  if(!state.me || !state.people[state.me.name]){ wrap.innerHTML=head+'<div class="list-empty">Add yourself to the trip first.</div>'; return; }
+  const me=state.people[state.me.name];
+  const plan=dayPlan(me, today);
+  const nav=gmapsDayUrl(plan);
+  const meet=sharingLoc();
+  head+=`<p class="lede" style="margin-bottom:14px">Check things off as you go — skipped plans can hop to another day.</p>
+    <div class="sug-actions" style="margin-bottom:18px">
+      ${nav?`<a class="mini-btn" href="${nav}" target="_blank" rel="noopener">&#129517; Navigate this day</a>`:""}
+      <button class="mini-btn ${meet?"on":""}" id="meetBtn">${meet?"&#128225; Sharing location — stop":"&#128225; Share my location (2h)"}</button>
+    </div>`;
+  let body="";
+  const stops=plan.sequence.filter(s=>!s.anchor);
+  if(!stops.length && !plan.stay){
+    body='<div class="list-empty">Nothing planned today. The Prep board or day ideas can fix that.</div>';
+  } else {
+    if(plan.anchor) body+=`<div class="td-row done-na"><span class="td-ico">&#127968;</span><div class="td-body"><b>${esc(plan.anchor.name)}</b><span class="td-sub">your base</span></div></div>`;
+    let nextMarked=false;
+    stops.forEach((s,i)=>{
+      const a=s.act;
+      const own=a && !s.withWho;
+      const done=a && a.status==="done";
+      const isNext=!done && !nextMarked && (nextMarked=true);
+      const dist=i>0 && plan.legs[plan.anchor?i:i-1] ? plan.legs[plan.anchor?i:i-1] : null;
+      if(dist) body+=`<div class="td-leg"><span class="mode-tag ${dist.cls}">${dist.label}</span> ${dist.km.toFixed(1)} km · ~${fmtMin(dist.min)}</div>`;
+      body+=`<div class="td-row ${done?"is-done":""} ${isNext?"is-next":""}">
+        <span class="td-ico">${done?"&#9989;":a&&a.transit?"&#128646;":"&#128205;"}</span>
+        <div class="td-body"><b>${esc(s.name)}</b><span class="td-sub">${[s.time, a&&a.transit&&(a.from||a.to)?`${a.from||"…"} → ${a.to||"…"}`:"", s.withWho?"with "+esc(s.withWho):"", a&&a.booking==="needed"?"&#127903;&#65039; needs booking":"", a&&a.booking==="booked"&&a.bookRef?"&#127903;&#65039; "+esc(a.bookRef):""].filter(Boolean).join(" · ")}${isNext?' <span class="td-next">next up</span>':""}</span></div>
+        ${own?`<span class="td-actions">${done?`<button class="mini-btn" data-tundo="${a.id}">Undo</button>`:`<button class="mini-btn" data-tdone="${a.id}">Done</button><button class="linkish" data-tskip="${a.id}">Skip</button>`}</span>`:""}
+      </div>`;
+    });
+  }
+  const skipped=(me.activities||[]).filter(a=>a.date===today && a.status==="skipped");
+  if(skipped.length){
+    body+=`<div class="eyebrow explore-sec">Skipped today</div>`;
+    for(const a of skipped) body+=`<div class="td-row is-skipped"><span class="td-ico">&#10060;</span><div class="td-body"><b>${esc(a.title)}</b></div>
+      <span class="td-actions"><button class="mini-btn" data-treme="${a.id}">Another day</button><button class="linkish" data-tundo="${a.id}">Un-skip</button></span></div>`;
+  }
+  // where everyone else is headed today
+  const others=Object.values(state.people).filter(p=>p.name!==me.name)
+    .map(p=>({p, acts:(p.activities||[]).filter(a=>a.date===today && a.status!=="skipped")}))
+    .filter(x=>x.acts.length);
+  if(others.length){
+    body+=`<div class="eyebrow explore-sec">The others today</div>`;
+    for(const o of others) body+=`<div class="td-row done-na"><span class="dot" style="background:${o.p.color};margin-top:7px"></span><div class="td-body"><b>${esc(o.p.name)}</b><span class="td-sub">${o.acts.slice(0,3).map(a=>esc(a.title)).join(" · ")}${o.acts.length>3?" · +"+(o.acts.length-3):""}</span></div></div>`;
+  }
+  wrap.innerHTML=head+body;
+  const mb=document.getElementById("meetBtn");
+  if(mb) mb.onclick=()=>sharingLoc()?stopMeetup():startMeetup();
+  wrap.querySelectorAll("[data-tdone]").forEach(b=>b.onclick=()=>setStatus(b.dataset.tdone,"done"));
+  wrap.querySelectorAll("[data-tskip]").forEach(b=>b.onclick=()=>setStatus(b.dataset.tskip,"skipped"));
+  wrap.querySelectorAll("[data-tundo]").forEach(b=>b.onclick=()=>setStatus(b.dataset.tundo,""));
+  wrap.querySelectorAll("[data-treme]").forEach(b=>b.onclick=()=>rescheduleSkipped(b.dataset.treme));
 }
 
 /* ---------- prep board: place flexible plans, move scheduled ones ---------- */
@@ -3118,6 +3483,30 @@ function renderExpenses(){
   </div>`;
   const {net, transfers}=expenseBalances();
   const exps=allExpenses();
+  // budget per person: estimated (pre-trip) and actually spent (my share) vs target
+  let budget=`<div class="eyebrow explore-sec">Budget</div><div class="coord-card">
+    <div class="field" style="max-width:220px;margin-bottom:10px"><label>Target per person ${esc(curSym())}</label>
+    <input type="text" id="expBudget" inputmode="numeric" placeholder="e.g. 250000" value="${state.trip.budget||""}"></div>`;
+  if(+state.trip.budget>0){
+    const b=+state.trip.budget;
+    const meRec=state.people[state.me.name];
+    const myEst=tripTotalCost(meRec).v;
+    let mySpent=0;
+    const names=Object.keys(state.people);
+    for(const e of exps){
+      const among=(e.for&&e.for.length ? e.for : names);
+      if(among.includes(state.me.name) && +e.amount>0) mySpent+=e.amount/among.length;
+    }
+    const bar=(label,v)=>{
+      const pct=Math.min(100, Math.round(v/b*100));
+      return `<div class="bud-row"><span class="bud-label">${label}</span><div class="bud-bar"><div style="width:${pct}%" class="${v>b?"over":""}"></div></div><span class="bud-val">${fmtYen(v)}${approxDisp(v)} · ${pct}%</span></div>`;
+    };
+    budget+=bar("Planned (estimates)", Math.round(myEst))+bar("Spent (your share)", Math.round(mySpent));
+    if(myEst>b) budget+=`<div class="field-hint">Plans are tracking ${fmtYen(Math.round(myEst-b))} over target — the itinerary cost chips show where.</div>`;
+  } else {
+    budget+=`<div class="field-hint">Set a target to see planned estimates and actual spending tracked against it.</div>`;
+  }
+  budget+=`</div>`;
   let bal="";
   if(exps.length){
     bal=`<div class="eyebrow explore-sec">Where things stand</div><div class="coord-card">
@@ -3141,7 +3530,11 @@ function renderExpenses(){
     }
     list+=`</div>`;
   }
-  wrap.innerHTML=head+form+bal+list;
+  wrap.innerHTML=head+form+budget+bal+list;
+  document.getElementById("expBudget").onchange=async(e)=>{
+    state.trip.budget=parseCost(e.target.value)||"";
+    await saveTrip(); render();
+  };
   wrap.querySelectorAll("[data-expwho]").forEach(b=>b.onclick=()=>b.classList.toggle("on"));
   document.getElementById("expCur").onchange=async(e)=>{ state.trip.currency=e.target.value; await saveTrip(); await loadFx(); render(); };
   document.getElementById("dispCur").onchange=async(e)=>{ try{ localStorage.setItem("meridian:display-currency", e.target.value); }catch{} await loadFx(); render(); };
@@ -3303,6 +3696,7 @@ function setView(v){
   document.getElementById("stageCheck").style.display = v==="check"?"block":"none";
   document.getElementById("stagePrep").style.display = v==="prep"?"block":"none";
   document.getElementById("stageExp").style.display = v==="exp"?"block":"none";
+  document.getElementById("stageToday").style.display = v==="today"?"block":"none";
   if(v==="map" && map) setTimeout(()=>map.invalidateSize(),50);
   render();
 }
@@ -3474,6 +3868,9 @@ function openItem(kind, existing){
     setFlexMode(existing && !existing.date && f ? (f.type==="options"?"options":"range") : "fixed");
     renderOptDays();
   }
+  document.getElementById("actBook").value = existing && !isStay ? (existing.booking||"") : "";
+  document.getElementById("actBookRef").value = existing && !isStay ? (existing.bookRef||"") : "";
+  document.getElementById("fldBookRef").style.display = (existing && existing.booking==="booked") ? "" : "none";
   document.getElementById("lblActCost").textContent = "Est. cost "+curSym()+" (optional)";
   document.getElementById("lblStayCost").textContent = "Cost per night "+curSym()+" (optional)";
   updatePickedLabel();
@@ -3530,6 +3927,12 @@ async function saveItem(){
       a.transit=true;
       a.from=document.getElementById("transFrom").value.trim();
       a.to=document.getElementById("transTo").value.trim();
+    }
+    a.booking=document.getElementById("actBook").value;
+    a.bookRef=document.getElementById("actBookRef").value.trim();
+    if(editId && state.editing && state.editing.id===editId){
+      const prev=rec.activities.find(x=>x.id===editId);
+      if(prev && prev.status) a.status=prev.status;  // keep done/skipped through edits
     }
     if(editId){ const i=rec.activities.findIndex(x=>x.id===editId); if(i>=0) rec.activities[i]=a; else rec.activities.push(a); }
     else rec.activities.push(a);
@@ -3736,6 +4139,9 @@ function wire(){
   document.getElementById("daySeg").addEventListener("click", e=>{
     const b=e.target.closest("button"); if(b) setFlexMode(b.dataset.mode);
   });
+  document.getElementById("actBook").onchange = e=>{
+    document.getElementById("fldBookRef").style.display = e.target.value==="booked" ? "" : "none";
+  };
   document.getElementById("optAddBtn").onclick = ()=>{
     const v=document.getElementById("optAdd").value;
     if(v && !flexDays.includes(v)){ flexDays.push(v); renderOptDays(); }

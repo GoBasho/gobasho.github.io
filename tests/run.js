@@ -412,6 +412,73 @@ async function setupProfile(page, name) {
     await swCtx.close();
   }
 
+  console.log("\n== e2e: today mode, bookings, packing, budget, polls, seasonal ==");
+  {
+    const page = await newPage(browser, "trip-day");
+    await page.addInitScript(() => {
+      const P = "meridian:trip-day:";
+      const pad = n => String(n).padStart(2, "0");
+      const fmt = d => d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate());
+      const t0 = fmt(new Date());
+      const t5 = (d => { d.setDate(d.getDate() + 5); return fmt(d); })(new Date());
+      localStorage.setItem(P + "me", JSON.stringify({ name: "Zach", color: "#c8483c" }));
+      localStorage.setItem(P + "person:Zach", JSON.stringify({ name: "Zach", color: "#c8483c", stays: [], dayTrips: {}, interests: [], updated: Date.now(), activities: [
+        { id: "t1", title: "Ski Lesson", date: t0, time: "09:00", location: { lat: 42.85, lng: 140.70 }, category: "Nature", booking: "needed", notes: "" },
+        { id: "t2", title: "Onsen Soak", date: t0, time: "18:00", location: { lat: 42.86, lng: 140.71 }, category: "Culture", notes: "" }] }));
+      localStorage.setItem(P + "trip:meta", JSON.stringify({ title: "T", start: t0, end: t5, countries: ["JP"], budget: 100000 }));
+    });
+    await page.goto("http://localhost:18899/", { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(900);
+    check("Today tab appears during the trip", await page.$eval("#todayTab", el => el.style.display !== "none"));
+    check("booking reminder in rail", /1 plan still needs booking/.test(await page.textContent("#railList")));
+    await page.click("#todayTab");
+    await page.waitForTimeout(400);
+    const td = await page.textContent("#todayInner");
+    check("today lists the day's stops", /Ski Lesson/.test(td) && /Onsen Soak/.test(td));
+    check("today flags the booking", /needs booking/.test(td));
+    check("navigate-day link built", await page.$eval("#todayInner a[href*='google.com/maps/dir']", el => /origin=42.85/.test(el.href)));
+    await page.click("[data-tdone='t1']");
+    await page.waitForTimeout(300);
+    check("done sticks", await page.evaluate(() => state.people.Zach.activities[0].status === "done"));
+    await page.click("[data-tskip='t2']");
+    await page.waitForTimeout(300);
+    check("skipped moves to its own list", /Skipped today/.test(await page.textContent("#todayInner")));
+    await page.click("[data-treme='t2']");
+    await page.waitForTimeout(300);
+    check("reschedule returns it to the flexible pool", await page.evaluate(() =>
+      state.people.Zach.activities[1].date === "" && state.people.Zach.activities[1].flex.type === "range"));
+    // packing: ski trip detected from activity titles
+    await page.click(".tab[data-view=check]");
+    await page.waitForTimeout(400);
+    const ck = await page.textContent("#checkInner");
+    check("packing suggests ski gear", /Ski jacket & pants/.test(ck) && /Goggles/.test(ck));
+    await page.click("[data-pack='pgoggles']");
+    await page.waitForTimeout(300);
+    check("packing tick persists to record", await page.evaluate(() => state.people.Zach.packing.pgoggles === true));
+    // budget bars
+    await page.click(".tab[data-view=exp]");
+    await page.waitForTimeout(400);
+    const exp = await page.textContent("#expInner");
+    check("budget bars render", /Planned \(estimates\)/.test(exp) && /Spent \(your share\)/.test(exp));
+    // polls
+    await page.click(".tab[data-view=coord]");
+    await page.waitForTimeout(300);
+    await page.fill("#pollQ", "Otaru or Sapporo?");
+    await page.fill("#pollOpts", "Otaru, Sapporo");
+    await page.click("#pollAdd");
+    await page.waitForTimeout(400);
+    await page.click("[data-pollby][data-opt='0']");
+    await page.waitForTimeout(400);
+    const coord = await page.textContent("#coordInner");
+    check("poll created and voted", /Otaru or Sapporo\?/.test(coord) && /1 vote/.test(coord) && /Zach/.test(coord));
+    // seasonal note when in season (only assert when today is in a JP window)
+    const seasonal = await page.evaluate(() => seasonalNotes());
+    const m = new Date().getMonth() + 1;
+    if ([12, 1, 2].includes(m)) check("seasonal: powder note in winter", seasonal.some(n => /powder/i.test(n)), seasonal);
+    else check("seasonal function returns array", Array.isArray(seasonal));
+    await page.context().close();
+  }
+
   console.log("\n== e2e: first-run welcome ==");
   {
     // brand-new visitor: welcome screen, not someone else's trip

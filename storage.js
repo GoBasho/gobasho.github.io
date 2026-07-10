@@ -218,6 +218,9 @@
     },
     /* this browser's stable anonymous identity (null before first auth) */
     get uid() { return authUid; },
+    /* the credential that lets another device adopt this identity —
+       only ever share it with yourself */
+    get linkToken() { return refreshTok || null; },
     /* read/write a key in a trip other than the active one */
     async getFrom(tid, key) {
       await ready;
