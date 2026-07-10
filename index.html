@@ -7,11 +7,21 @@
 <meta name="description" content="A shared trip planner — plan stays and activities with friends on one map anywhere in the world, find points of interest and photo spots, and see where your paths cross.">
 <meta name="theme-color" content="#f4f5f2">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%E2%9B%A9%EF%B8%8F%3C/text%3E%3C/svg%3E">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon.svg">
 <script>
-/* resolve the theme before CSS paints to avoid a flash */
+/* resolve the theme before CSS paints, and honor ?trip= invite links
+   before storage.js decides which trip is active */
 (function(){ try {
   var t = localStorage.getItem("meridian:theme") || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
   document.documentElement.dataset.theme = t;
+  var trip = new URLSearchParams(location.search).get("trip");
+  if(trip){
+    localStorage.setItem("meridian:active-trip", trip);
+    var known = []; try { known = JSON.parse(localStorage.getItem("meridian:known-trips")) || []; } catch(e){}
+    if(!known.includes(trip)){ known.push(trip); localStorage.setItem("meridian:known-trips", JSON.stringify(known)); }
+    history.replaceState(null, "", location.pathname);
+  }
 } catch(e){} })();
 </script>
 <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
@@ -202,6 +212,19 @@
   .item .idel:hover { background: var(--shu-dim); color: var(--shu); }
   .item .iedit { font-size: 13px; padding-top: 3px; }
   .item .iedit:hover { background: var(--sky); color: var(--indigo); }
+  .item .ijoin, .item .icmt { opacity: 0; border: 1px solid transparent; background: transparent; color: var(--ink-faint); padding: 1px 5px; border-radius: 6px; font-size: 12px; line-height: 1.4; }
+  .item:hover .ijoin, .item:hover .icmt { opacity: 1; }
+  .item .ijoin.on, .item .icmt.on { opacity: 1; }
+  .item .ijoin.on { color: #3a6b4a; border-color: #3a6b4a44; }
+  .item .ijoin:hover { border-color: var(--indigo); color: var(--indigo); }
+  .item .icmt:hover { border-color: var(--indigo); color: var(--indigo); }
+  [data-theme="dark"] .item .ijoin.on { color: #8fc9a0; border-color: #8fc9a044; }
+  .cm-row { display: flex; gap: 10px; padding: 9px 2px; border-bottom: 1px solid var(--line); font-size: 13px; align-items: flex-start; }
+  .cm-row:last-child { border-bottom: none; }
+  .cm-row .dot { margin-top: 4px; }
+  .cm-ts { font-size: 11px; color: var(--ink-faint); margin-left: 4px; }
+  .cm-text { color: var(--ink-soft); line-height: 1.45; }
+  .undo-btn { border: none; background: var(--paper); color: var(--ink); border-radius: 6px; padding: 2px 11px; margin-left: 9px; font-weight: 600; font-size: 12px; cursor: pointer; }
 
   /* ---------- map ---------- */
   .stage { flex: 1; position: relative; min-width: 0; }
@@ -250,6 +273,7 @@
 
   .day-block { margin-bottom: 30px; }
   .day-head { display: flex; align-items: baseline; gap: 12px; padding-bottom: 8px; border-bottom: 1.5px solid var(--ink); margin-bottom: 4px; }
+  .dh-wx { margin-left: auto; font-size: 12px; color: var(--ink-soft); }
   .day-head .dh-num { font-family: var(--serif); font-size: 20px; }
   .day-head .dh-dow { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-faint); }
 
@@ -448,6 +472,7 @@
   .prep-item.mine:hover { border-color: var(--indigo); }
   .prep-item.ghost { border-style: dashed; color: var(--ink-soft); background: transparent; }
   .prep-item em { display: block; font-style: normal; font-size: 10.5px; color: var(--ink-faint); }
+  .prep-lane { font-size: 8.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-faint); margin: 7px 0 4px; border-bottom: 1px dashed var(--line); padding-bottom: 2px; }
 
   /* expenses */
   .exp-form { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 15px 16px 12px; margin-bottom: 16px; box-shadow: var(--shadow); }
@@ -533,6 +558,13 @@
   [data-theme="dark"] .leg .rail-dot .rd.transit { background: #22303c; }
   [data-theme="dark"] .prep-col.can { background: #202a3a; }
   [data-theme="dark"] .swatch-grid button.sel { box-shadow: 0 0 0 2px var(--surface) inset; }
+
+  @media print {
+    header.bar, aside.rail, .stage, .sug-card, .rail-hint, .mini-btn, .linkish, .idel, .iedit, .notice, .trips-menu { display: none !important; }
+    .app, .body, .panel { height: auto !important; overflow: visible !important; display: block !important; }
+    body { background: #fff; font-size: 12px; }
+    .day-block { break-inside: avoid; }
+  }
 
   @media (max-width: 860px) {
     header.bar { padding: 10px 12px; gap: 10px; flex-wrap: wrap; }
@@ -784,6 +816,24 @@
     <div class="modal-foot">
       <button class="btn" id="itemCancel" style="flex:0;">Cancel</button>
       <button class="btn primary" id="itemSave" style="flex:0;padding-left:22px;padding-right:22px;">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- comments modal -->
+<div class="scrim" id="commentScrim">
+  <div class="modal">
+    <div class="modal-head">
+      <h3 id="cmTitle">Comments</h3>
+      <p>Notes the whole group can see on this plan.</p>
+    </div>
+    <div class="modal-body" id="cmList"></div>
+    <div class="modal-foot" style="flex-direction:column; align-items:stretch; gap:9px;">
+      <textarea id="cmText" placeholder="Add a comment — booking tips, timing, links…" style="width:100%; border:1px solid var(--line-strong); border-radius:8px; padding:9px 11px; min-height:44px; background:var(--surface); color:var(--ink);"></textarea>
+      <div style="display:flex; gap:8px; justify-content:flex-end;">
+        <button class="btn" id="cmClose" style="flex:0;">Close</button>
+        <button class="btn primary" id="cmPost" style="flex:0;">Post</button>
+      </div>
     </div>
   </div>
 </div>
@@ -1297,8 +1347,18 @@ async function loadEveryone(){
   if(!hasStore) return;
   // one request for the whole trip; on a network blip keep what we already have
   let all;
-  try { all = await window.storage.getAll("", true); state.sharedOK = true; }
-  catch { state.sharedOK = false; return; }
+  try {
+    all = await window.storage.getAll("", true); state.sharedOK = true;
+    try { localStorage.setItem("meridian:"+window.storage.tripId+":snapshot", JSON.stringify(all)); } catch {}
+  }
+  catch {
+    state.sharedOK = false;
+    // offline (subway, plane): fall back to the last-synced snapshot once
+    if(!Object.keys(state.people).length){
+      try { all = JSON.parse(localStorage.getItem("meridian:"+window.storage.tripId+":snapshot")); } catch {}
+    }
+    if(!all) return;
+  }
   if(all["trip:meta"]){ try { Object.assign(state.trip, JSON.parse(all["trip:meta"])); } catch {} }
   const fresh = {};
   for(const k of Object.keys(all)){
@@ -1332,10 +1392,11 @@ function nearestCity(loc){
 }
 /* translate a leg distance into a plausible travel mode + rough minutes */
 function classifyLeg(km){
-  if(km <= 1.5) return { mode:"walk", label:"Walk", cls:"mode-walk", min: Math.max(4, Math.round(km/4.8*60)), cost: 0 };
-  if(km <= 12) return { mode:"local", label:"Local transit", cls:"mode-local", min: Math.round(km/18*60 + 8), cost: 250 };
-  if(km <= 120) return { mode:"regional", label:"Regional train", cls:"mode-regional", min: Math.round(km/70*60 + 20), cost: Math.round(km*18/10)*10 };
-  return { mode:"shink", label:"High-speed rail / flight", cls:"mode-shink", min: Math.round(km/180*60 + 45), cost: Math.round(km*24/100)*100 };
+  // straight-line km inflated by typical network detours (streets/rails bend)
+  if(km <= 1.5) return { mode:"walk", label:"Walk", cls:"mode-walk", min: Math.max(4, Math.round(km*1.35/4.8*60)), cost: 0 };
+  if(km <= 12) return { mode:"local", label:"Local transit", cls:"mode-local", min: Math.round(km*1.4/18*60 + 9), cost: 250 };
+  if(km <= 120) return { mode:"regional", label:"Regional train", cls:"mode-regional", min: Math.round(km*1.25/70*60 + 22), cost: Math.round(km*18/10)*10 };
+  return { mode:"shink", label:"High-speed rail / flight", cls:"mode-shink", min: Math.round(km*1.15/180*60 + 45), cost: Math.round(km*24/100)*100 };
 }
 function fmtMin(m){ return m >= 60 ? `${Math.floor(m/60)}h ${m%60}m` : `${m}m`; }
 
@@ -1472,9 +1533,11 @@ function renderDateStrip(){
     const chip = document.createElement("button");
     chip.className = "datechip" + (state.selectedDate===d ? " active" : "") + (myTrips[d] ? " trip" : "");
     const leg = legForDate(d);
+    const w = wxFor(d);
     if(myTrips[d]) chip.title = "Day trip to " + myTrips[d];
     else if(leg) chip.title = leg.name || leg.country;
-    chip.innerHTML = `<span class="dow">${dow(d)}${leg?" "+(FLAGS[leg.country]||""):""}</span><span class="dnum">${dnum(d)}</span><span class="dcount">${myTrips[d]?('→ '+myTrips[d].slice(0,4)):(counts[d]?('· '+counts[d]):'')}</span>`;
+    if(w) chip.title = (chip.title?chip.title+" · ":"") + w.tmax + "° / " + w.tmin + "°";
+    chip.innerHTML = `<span class="dow">${dow(d)}${leg?" "+(FLAGS[leg.country]||""):""}${w?" "+WX_ICON(w.code):""}</span><span class="dnum">${dnum(d)}</span><span class="dcount">${myTrips[d]?('→ '+myTrips[d].slice(0,4)):(counts[d]?('· '+counts[d]):'')}</span>`;
     chip.onclick = () => { state.selectedDate = (state.selectedDate===d ? null : d); render(); };
     strip.appendChild(chip);
   }
@@ -1497,6 +1560,15 @@ function renderRailList(){
     return;
   }
   wrap.innerHTML = "";
+  // what changed since your last visit
+  if(state._digest){
+    const dg = document.createElement("div");
+    dg.className = "rail-hint";
+    dg.style.cursor = "default";
+    dg.innerHTML = `<span>&#128075;</span> ${esc(state._digest)} <button class="linkish" style="margin-left:auto">Got it</button>`;
+    dg.querySelector("button").onclick = ()=>{ state._digest=null; render(); };
+    wrap.appendChild(dg);
+  }
   // nudge toward day-grouping suggestions without leaving the map
   if(state.me && state.people[state.me.name]){
     const me = state.people[state.me.name];
@@ -1519,26 +1591,36 @@ function renderRailList(){
     }));
   }
   for(const a of acts){
+    const joiners = joinersOf(a.person, a.id);
+    const cmts = actComments(a.person, a.id).length;
     wrap.appendChild(itemRow({
       color: a.color, title: a.title, tick: a.color,
-      sub: a.date
+      sub: (a.date
         ? `${a.time?a.time+' · ':''}${a.transit?('Transit'+(a.from||a.to?` · ${a.from||'…'} → ${a.to||'…'}`:'')):(a.category||'Activity')}${state.selectedDate?'':' · '+shortDate(a.date)} · ${a.person}`
-        : `Flexible · ${flexLabel(a)} · ${a.person}`,
+        : `Flexible · ${flexLabel(a)} · ${a.person}`) + (joiners.length?` · ${joiners.length} in`:''),
       onDel: canEdit(a.person) ? () => removeItem("activity", a.person, a.id) : null,
       onEdit: canEdit(a.person) ? () => openEdit("activity", a.person, a.id) : null,
+      onJoin: state.me && a.person!==state.me.name ? () => toggleJoin(a.person, a.id) : null,
+      joined: isJoined(a.person, a.id),
+      onComment: state.me ? () => openComments(a.person, a.id, a.title) : null,
+      commentCount: cmts,
       onClick: () => flyTo(a.location)
     }));
   }
 }
 
-function itemRow({color,title,sub,tick,onDel,onClick,onEdit}){
+function itemRow({color,title,sub,tick,onDel,onClick,onEdit,onJoin,joined,onComment,commentCount}){
   const el = document.createElement("div");
   el.className = "item";
   el.innerHTML = `<span class="tick" style="background:${tick}"></span>
     <div class="ibody"><div class="ititle">${esc(title)}</div><div class="isub">${esc(sub)}</div></div>
+    ${onJoin?`<button class="ijoin ${joined?'on':''}" title="${joined?"You're in — tap to leave":"I'm in!"}">${joined?'&#10003;':'+'}</button>`:''}
+    ${onComment?`<button class="icmt ${commentCount?'on':''}" title="Comments">&#128172;${commentCount||''}</button>`:''}
     ${onEdit?'<button class="iedit" title="Edit">&#9998;</button>':''}
     ${onDel?'<button class="idel" title="Remove">&times;</button>':''}`;
   if(onClick) el.querySelector(".ibody").onclick = onClick;
+  if(onJoin) el.querySelector(".ijoin").onclick = (e)=>{ e.stopPropagation(); onJoin(); };
+  if(onComment) el.querySelector(".icmt").onclick = (e)=>{ e.stopPropagation(); onComment(); };
   if(onEdit) el.querySelector(".iedit").onclick = (e)=>{ e.stopPropagation(); onEdit(); };
   if(onDel) el.querySelector(".idel").onclick = (e)=>{ e.stopPropagation(); onDel(); };
   return el;
@@ -1677,6 +1759,13 @@ function dayPlan(p, date){
   // order the day: by explicit time when given, otherwise nearest-neighbour from the hotel
   const anchor = stay ? {name: stay.hotelName||stay.city, loc: stay.location, anchor:true} : null;
   let stops = acts.map(a=>({name:a.title, loc:a.location, time:a.time, act:a}));
+  // friends' plans that p joined show up in p's day too
+  for(const q of Object.values(state.people)){
+    if(q.name===p.name) continue;
+    for(const a of (q.activities||[]))
+      if(a.date===date && a.location && (p.joined||[]).some(j=>j.o===q.name && j.id===a.id))
+        stops.push({name:a.title, loc:a.location, time:a.time, act:a, withWho:q.name});
+  }
   const timed = stops.filter(s=>s.time).sort((a,b)=>a.time.localeCompare(b.time));
   const untimed = stops.filter(s=>!s.time);
   if(anchor && untimed.length){
@@ -1704,7 +1793,7 @@ function dayPlan(p, date){
 function renderItinerary(){
   const wrap = document.getElementById("itineraryInner");
   const dates = tripDates();
-  let head = `<h2>Itinerary <button class="mini-btn" id="icsBtn" style="vertical-align:4px;margin-left:8px">Export my calendar (.ics)</button></h2><p class="lede">Each person's day is anchored to their hotel, then read as a route. Travel modes, the day verdict, and costs are estimates — a ~ cost means typical prices filled in where none were entered.</p>`;
+  let head = `<h2>Itinerary <button class="mini-btn" id="icsBtn" style="vertical-align:4px;margin-left:8px">Export my calendar (.ics)</button> <button class="mini-btn" id="printBtn" style="vertical-align:4px">Print</button></h2><p class="lede">Each person's day is anchored to their hotel, then read as a route. Travel modes, the day verdict, and costs are estimates — a ~ cost means typical prices filled in where none were entered.</p>`;
   const totals = visiblePeople().map(p=>({p, t:tripTotalCost(p)})).filter(x=>x.t.v>0);
   if(totals.length){
     head += `<div class="cost-line">Estimated trip cost: ${totals.map(x=>
@@ -1721,12 +1810,13 @@ function renderItinerary(){
     for(const p of people){
       const plan = dayPlan(p, date);
       const trip = (p.dayTrips||{})[date];
-      if(!plan.acts.length && !plan.stay && !trip) continue;
+      if(!plan.sequence.filter(s=>!s.anchor).length && !plan.stay && !trip) continue;
       dayHtml += renderPersonDay(p, date, plan);
     }
     if(!dayHtml) continue;
     const leg = legForDate(date);
-    body += `<div class="day-block"><div class="day-head"><span class="dh-num">${prettyDate(date)}</span><span class="dh-dow">${leg?`${FLAGS[leg.country]||""} ${esc(leg.name||leg.country)}`:"Day"}</span></div>${dayHtml}</div>`;
+    const w = wxFor(date);
+    body += `<div class="day-block"><div class="day-head"><span class="dh-num">${prettyDate(date)}</span><span class="dh-dow">${leg?`${FLAGS[leg.country]||""} ${esc(leg.name||leg.country)}`:"Day"}</span>${w?`<span class="dh-wx">${WX_ICON(w.code)} ${w.tmax}° / ${w.tmin}°</span>`:""}</div>${dayHtml}</div>`;
   }
   wrap.innerHTML = head + (body || '<div class="list-empty">No plans on the selected day(s) yet.</div>');
   wireSuggestions(wrap);
@@ -1737,6 +1827,8 @@ function wireSuggestions(wrap){
   wrap.querySelectorAll("[data-dismisssug]").forEach(b=> b.onclick=()=>dismissSuggestion(b.dataset.dismisssug));
   const ics=wrap.querySelector("#icsBtn");
   if(ics) ics.onclick=exportICS;
+  const pr=wrap.querySelector("#printBtn");
+  if(pr) pr.onclick=()=>window.print();
 }
 
 function renderPersonDay(p, date, plan){
@@ -1763,8 +1855,10 @@ function renderPersonDay(p, date, plan){
     const last = i===sequence.length-1;
     const tr = s.act && s.act.transit;
     const trMeta = tr ? [ [s.act.from,s.act.to].filter(Boolean).join(" → "), s.time, hasCost(s.act)?fmtYen(+s.act.cost):"" ].filter(Boolean).join(" · ") : "";
+    const who = s.withWho ? ` <span style="color:var(--ink-faint);font-weight:400">· with ${esc(s.withWho)}</span>`
+      : (s.act && !s.act.transit ? (j=>j.length?` <span style="color:var(--ink-faint);font-weight:400">· ${esc(j.join(", "))} in</span>`:"")(joinersOf(p.name, s.act.id)) : "");
     html += `<div class="leg"><div class="rail-dot"><span class="rd ${s.anchor?'anchor':''} ${tr?'transit':''}"></span>${last?'':'<span class="rline"></span>'}</div>
-      <div class="stop"><div class="sname">${tr?'<span class="mode-tag mode-local">Transit</span> ':''}${esc(s.name)}${s.anchor?' <span style="color:var(--ink-faint);font-weight:400">· base</span>':''}</div>${tr?(trMeta?`<div class="stime">${esc(trMeta)}</div>`:''):(s.time?`<div class="stime">${esc(s.time)}</div>`:'')}</div></div>`;
+      <div class="stop"><div class="sname">${tr?'<span class="mode-tag mode-local">Transit</span> ':''}${esc(s.name)}${s.anchor?' <span style="color:var(--ink-faint);font-weight:400">· base</span>':''}${who}</div>${tr?(trMeta?`<div class="stime">${esc(trMeta)}</div>`:''):(s.time?`<div class="stime">${esc(s.time)}</div>`:'')}</div></div>`;
     if(!last){
       const lg = legs[i];
       html += `<div class="leg-travel"><span class="mode-tag ${lg.cls}">${lg.label}</span>${lg.km.toFixed(1)} km · ~${fmtMin(lg.min)}${lg.cost&&curSym()==="¥"?` · ~${fmtYen(lg.cost)}`:""}</div>`;
@@ -2210,6 +2304,11 @@ function dayPlanIdeas(p){
       let score=allowed.length*10 - dayActs.length;
       const hotel=hotelLocForDate(p,d);
       if(hotel && haversine(hotel, c[0].location)<=25) score+=5;
+      // outdoor clusters chase good weather when a forecast is in reach
+      const w=wxFor(d);
+      if(w && c.filter(a=>["Nature","Sightseeing"].includes(a.category)).length >= c.length/2){
+        if(w.code>=61) score-=4; else if(w.code<=3) score+=2;
+      }
       const nearExisting=dayActs.some(x=>x.location && haversine(x.location, c[0].location)<=NEAR_KM);
       if(nearExisting) score+=8;
       return {d, allowed, score, nearExisting};
@@ -2503,6 +2602,59 @@ function renderChecklist(){
   });
 }
 
+/* ---------- weather (Open-Meteo, free, ~16-day horizon) ---------- */
+const WX_ICON = c => c<=1 ? "☀️" : c<=3 ? "⛅" : c<=48 ? "🌫️" : c<=57 ? "🌦️" : c<=67 ? "🌧️" : c<=77 ? "❄️" : c<=82 ? "🌧️" : c<=86 ? "❄️" : "⛈️";
+async function loadWeather(){
+  const dates=tripDates();
+  if(!dates.length) return;
+  const today=iso(new Date());
+  const horizon=(d=>{ d.setDate(d.getDate()+15); return iso(d); })(new Date());
+  const start=dates[0]>today ? dates[0] : today;
+  const end=dates[dates.length-1] < horizon ? dates[dates.length-1] : horizon;
+  if(start>end) return;  // trip outside the forecast window
+  const me=state.me && state.people[state.me.name];
+  const h=homeDef(tripHome());
+  const loc=(me && (me.stays||[]).find(s=>s.location) || {}).location || (h ? {lat:h[2][0], lng:h[2][1]} : null);
+  if(!loc) return;
+  const key="meridian:wx:"+window.storage.tripId;
+  try { const c=JSON.parse(localStorage.getItem(key)||"null"); if(c && Date.now()-c.ts < 3*36e5){ state._wx=c.byDate; return; } } catch {}
+  try {
+    const url=`https://api.open-meteo.com/v1/forecast?latitude=${loc.lat.toFixed(3)}&longitude=${loc.lng.toFixed(3)}&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=auto&start_date=${start}&end_date=${end}`;
+    const d=await (await fetch(url)).json();
+    if(d && d.daily && d.daily.time){
+      const byDate={};
+      d.daily.time.forEach((t,i)=>{ byDate[t]={code:d.daily.weather_code[i], tmax:Math.round(d.daily.temperature_2m_max[i]), tmin:Math.round(d.daily.temperature_2m_min[i])}; });
+      state._wx=byDate;
+      try { localStorage.setItem(key, JSON.stringify({ts:Date.now(), byDate})); } catch {}
+    }
+  } catch { /* offline: no forecast this session */ }
+}
+function wxFor(d){ return (state._wx||{})[d]; }
+
+/* ---------- live sync: Firebase's SSE stream, with the poll as fallback ---------- */
+let liveES=null;
+function anyModalOpen(){
+  return ["itemScrim","profileScrim","commentScrim"].some(id=>{
+    const el=document.getElementById(id); return el && el.classList.contains("show");
+  });
+}
+function startLiveSync(){
+  if(liveES || !window.storage.streamUrl || typeof EventSource==="undefined") return;
+  try {
+    liveES=new EventSource(window.storage.streamUrl);
+    let t=null;
+    const kick=()=>{ clearTimeout(t); t=setTimeout(async()=>{
+      if(document.hidden || anyModalOpen()) return;
+      const before=JSON.stringify([state.people, state.trip]);
+      await loadEveryone();
+      if(JSON.stringify([state.people, state.trip])!==before) render();
+    }, 400); };
+    liveES.addEventListener("put", kick);
+    liveES.addEventListener("patch", kick);
+    liveES.onerror=()=>{ try{ liveES.close(); }catch{} liveES=null; };  // 20s poll still runs
+  } catch { liveES=null; }
+}
+
 /* ---------- trips: switch, create, or join by name ---------- */
 function slugTrip(name){ return name.toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-+|-+$/g,"").slice(0,40) || "trip"; }
 function switchTrip(id){
@@ -2512,17 +2664,36 @@ function switchTrip(id){
 async function createOrJoinTrip(){
   const name=document.getElementById("tmName").value.trim();
   if(!name){ toast("Give the trip a name"); return; }
-  const id=slugTrip(name);
   const home=document.getElementById("tmNewHome").value;
   try {
-    const existing=await window.storage.getFrom(id, "trip:meta");
-    if(!existing){
-      const meta={title:name, start:"", end:"", home};
-      if(COUNTRIES.some(c=>c[0]===home)) meta.countries=[home];
-      await window.storage.putIn(id, "trip:meta", JSON.stringify(meta));
-    }
-  } catch { toast("Couldn't reach the shared database"); return; }
-  switchTrip(id);
+    // typing an existing trip's exact ID joins it (old-style ids included)
+    const asId=slugTrip(name);
+    if(await window.storage.getFrom(asId, "trip:meta")){ switchTrip(asId); return; }
+    // new trips get an unguessable id — share it via the invite link
+    const id=asId+"-"+Math.random().toString(36).slice(2,7);
+    const meta={title:name, start:"", end:"", home};
+    if(COUNTRIES.some(c=>c[0]===home)) meta.countries=[home];
+    await window.storage.putIn(id, "trip:meta", JSON.stringify(meta));
+    switchTrip(id);
+  } catch { toast("Couldn't reach the shared database"); }
+}
+function inviteLink(){
+  return location.origin+location.pathname+"?trip="+encodeURIComponent(window.storage.tripId);
+}
+async function copyInvite(){
+  try { await navigator.clipboard.writeText(inviteLink()); toast("Invite link copied — send it to your friends"); }
+  catch { prompt("Copy this invite link:", inviteLink()); }
+}
+async function duplicateTrip(){
+  try {
+    const all=await window.storage.getAll("", true);
+    let meta={};
+    try { meta=JSON.parse(all["trip:meta"]||"{}"); } catch {}
+    meta.title=(meta.title||window.storage.tripId)+" copy";
+    const id=slugTrip(meta.title)+"-"+Math.random().toString(36).slice(2,7);
+    for(const k of Object.keys(all)) await window.storage.putIn(id, k, k==="trip:meta"?JSON.stringify(meta):all[k]);
+    switchTrip(id);
+  } catch { toast("Couldn't duplicate the trip"); }
 }
 async function openTripsMenu(){
   const menu=document.getElementById("tripsMenu");
@@ -2545,9 +2716,11 @@ async function openTripsMenu(){
   }
   const homeOpts=sel=>HOMES.map(h=>`<option value="${h[0]}" ${sel===h[0]?"selected":""}>${h[1]}</option>`).join("");
   menu.innerHTML = rows.map(x=>`<button class="tm-item ${x.id===cur?"on":""}" data-trip="${esc(x.id)}"><span>${esc(x.title)}</span><span class="tm-id">${esc(x.id)}</span></button>`).join("")
-    + `<div class="tm-home">This trip explores <select id="tmHome">${homeOpts(tripHome())}</select></div>
-       <div class="tm-new"><input type="text" id="tmName" placeholder="New or friend's trip name…" maxlength="40"><select id="tmNewHome" title="Where the new trip goes">${homeOpts("WORLD")}</select><button class="mini-btn" id="tmGo">Go</button></div>
-       <div class="field-hint" style="padding:2px 13px 10px">Friends who enter the same name land in the same trip. Each trip has its own destination, people, plans, dates, currency, and expenses — Europe belongs in its own trip.</div>`;
+    + `<div class="tm-home">This trip explores <select id="tmHome">${homeOpts(tripHome())}</select>
+         <button class="mini-btn" id="tmInvite" title="Copy a link that brings friends straight into this trip">Copy invite</button>
+         <button class="mini-btn" id="tmDup" title="Copy everything into a new trip">Duplicate</button></div>
+       <div class="tm-new"><input type="text" id="tmName" placeholder="New trip name, or a trip ID to join…" maxlength="48"><select id="tmNewHome" title="Where the new trip goes">${homeOpts("WORLD")}</select><button class="mini-btn" id="tmGo">Go</button></div>
+       <div class="field-hint" style="padding:2px 13px 10px">Share a trip with the invite link — new trip IDs are unguessable on purpose. Each trip has its own destination, people, plans, dates, currency, and expenses.</div>`;
   menu.querySelectorAll("[data-trip]").forEach(b=>b.onclick=()=>{ if(b.dataset.trip!==cur) switchTrip(b.dataset.trip); });
   document.getElementById("tmHome").onchange=async(e)=>{
     state.trip.home=e.target.value;
@@ -2557,6 +2730,8 @@ async function openTripsMenu(){
     toast("Trip focused on "+(homeDef(e.target.value)||[])[1]);
   };
   document.getElementById("tmGo").onclick=createOrJoinTrip;
+  document.getElementById("tmInvite").onclick=copyInvite;
+  document.getElementById("tmDup").onclick=duplicateTrip;
   document.getElementById("tmName").addEventListener("keydown", e=>{ if(e.key==="Enter") createOrJoinTrip(); });
 }
 
@@ -2646,16 +2821,28 @@ function renderPrep(){
   for(const d of dates){
     const can = selAct && allowed.includes(d);
     const leg = legForDate(d);
-    grid+=`<div class="prep-col ${can?"can":""}" data-pday="${d}"><div class="prep-dh">${dow(d)}<b>${dnum(d)}</b>${leg?` <span title="${esc(leg.name||leg.country)}">${FLAGS[leg.country]||""}</span>`:""}</div>`;
+    const w = wxFor(d);
+    grid+=`<div class="prep-col ${can?"can":""}" data-pday="${d}"><div class="prep-dh">${dow(d)}<b>${dnum(d)}</b>${leg?` <span title="${esc(leg.name||leg.country)}">${FLAGS[leg.country]||""}</span>`:""}${w?` <span title="${w.tmax}° / ${w.tmin}°">${WX_ICON(w.code)}</span>`:""}</div>`;
+    // gather the day's entries, then lay them out in time-of-day lanes
+    const entries=[];
     for(const p of visiblePeople()){
       const mine = p.name===state.me.name;
       for(const a of (p.activities||[])){
-        if(a.date===d){
-          grid+=`<div class="prep-item ${mine?"mine":""} ${state.prepSel===a.id?"sel":""}" ${mine?`data-psel="${a.id}"`:""} style="border-left-color:${p.color}"><span>${esc(a.title)}</span><em>${a.time?esc(a.time)+" · ":""}${esc(p.name)}</em></div>`;
-        } else if(mine && !a.date && actWindow(a).includes(d)){
-          grid+=`<div class="prep-item ghost ${state.prepSel===a.id?"sel":""}" data-psel="${a.id}" style="border-left-color:${p.color}"><span>${esc(a.title)}</span><em>possible</em></div>`;
-        }
+        if(a.date===d) entries.push({a, p, mine, ghost:false});
+        else if(mine && !a.date && actWindow(a).includes(d)) entries.push({a, p, mine, ghost:true});
       }
+    }
+    const laneOf = e => e.ghost ? 4 : !e.a.time ? 3 : e.a.time<"12:00" ? 0 : e.a.time<"17:00" ? 1 : 2;
+    const LANES = ["Morning","Afternoon","Evening","Anytime","Possible"];
+    entries.sort((x,y)=> laneOf(x)-laneOf(y) || (x.a.time||"99").localeCompare(y.a.time||"99"));
+    const showLanes = entries.some(e=>laneOf(e)<3);
+    let lastLane=-1;
+    for(const e of entries){
+      const lane=laneOf(e);
+      if(showLanes && lane!==lastLane){ grid+=`<div class="prep-lane">${LANES[lane]}</div>`; lastLane=lane; }
+      grid += e.ghost
+        ? `<div class="prep-item ghost ${state.prepSel===e.a.id?"sel":""}" data-psel="${e.a.id}" style="border-left-color:${e.p.color}"><span>${esc(e.a.title)}</span><em>possible</em></div>`
+        : `<div class="prep-item ${e.mine?"mine":""} ${state.prepSel===e.a.id?"sel":""}" ${e.mine?`data-psel="${e.a.id}"`:""} style="border-left-color:${e.p.color}"><span>${esc(e.a.title)}</span><em>${e.a.time?esc(e.a.time)+" · ":""}${esc(e.p.name)}</em></div>`;
     }
     grid+=`</div>`;
   }
@@ -2803,10 +2990,15 @@ function renderExpenses(){
     await saveMe(); render(); toast("Expense added");
   };
   wrap.querySelectorAll("[data-expdel]").forEach(b=>b.onclick=async()=>{
-    if(!confirm("Remove this expense?")) return;
     const rec=state.people[state.me.name];
-    rec.expenses=(rec.expenses||[]).filter(e=>e.id!==b.dataset.expdel);
-    await saveMe(); render(); toast("Removed");
+    const i=(rec.expenses||[]).findIndex(e=>e.id===b.dataset.expdel);
+    if(i<0) return;
+    const [item]=rec.expenses.splice(i,1);
+    await saveMe(); render();
+    toast("Expense removed", async()=>{
+      rec.expenses.splice(Math.min(i, rec.expenses.length), 0, item);
+      await saveMe(); render(); toast("Restored");
+    });
   });
 }
 
@@ -2865,6 +3057,57 @@ function exportICS(){
   toast("Calendar downloaded — import it into Google or Apple Calendar");
 }
 
+/* ---------- joins ("I'm in") and comments ----------
+   Both live on the joiner's/commenter's own record so nobody ever
+   writes to someone else's data. */
+function isJoined(owner, id){
+  const me=state.me && state.people[state.me.name];
+  return !!(me && (me.joined||[]).some(j=>j.o===owner && j.id===id));
+}
+function joinersOf(owner, id){
+  return Object.values(state.people)
+    .filter(p=>p.name!==owner && (p.joined||[]).some(j=>j.o===owner && j.id===id))
+    .map(p=>p.name);
+}
+async function toggleJoin(owner, id){
+  const rec=state.people[state.me.name];
+  rec.joined=rec.joined||[];
+  const i=rec.joined.findIndex(j=>j.o===owner && j.id===id);
+  if(i>=0) rec.joined.splice(i,1); else rec.joined.push({o:owner, id});
+  await saveMe(); render();
+  toast(i>=0 ? "Left the plan" : "You're in");
+}
+function actComments(owner, id){
+  const key=owner+"\u0001"+id, out=[];
+  for(const p of Object.values(state.people))
+    for(const c of ((p.comments||{})[key])||[]) out.push({by:p.name, color:p.color, t:c.t, ts:c.ts});
+  out.sort((a,b)=>a.ts-b.ts);
+  return out;
+}
+function openComments(owner, id, title){
+  state.commenting={owner, id, title};
+  renderComments();
+  document.getElementById("commentScrim").classList.add("show");
+}
+function renderComments(){
+  const c=state.commenting;
+  if(!c) return;
+  document.getElementById("cmTitle").textContent=c.title;
+  const list=actComments(c.owner, c.id);
+  document.getElementById("cmList").innerHTML = list.length
+    ? list.map(x=>`<div class="cm-row"><span class="dot" style="background:${x.color}"></span><div><b>${esc(x.by)}</b> <span class="cm-ts">${new Date(x.ts).toLocaleDateString("en-US",{month:"short",day:"numeric"})}</span><div class="cm-text">${linkify(esc(x.t))}</div></div></div>`).join("")
+    : '<div class="list-empty">No comments yet — first!</div>';
+}
+async function postComment(){
+  const t=document.getElementById("cmText").value.trim();
+  if(!t || !state.me) return;
+  const rec=state.people[state.me.name];
+  const key=state.commenting.owner+"\u0001"+state.commenting.id;
+  ((rec.comments=rec.comments||{})[key]=rec.comments[key]||[]).push({t, ts:Date.now()});
+  document.getElementById("cmText").value="";
+  await saveMe(); renderComments(); render();
+}
+
 /* ============================================================
    Actions
    ============================================================ */
@@ -2872,11 +3115,16 @@ function canEdit(person){ return state.me && person === state.me.name; }
 
 async function removeItem(kind, person, id){
   if(!canEdit(person)) return;
-  if(!confirm(kind==="activity" ? "Remove this activity?" : "Remove this stay?")) return;
   const rec = state.people[person];
-  if(kind==="activity") rec.activities = rec.activities.filter(a=>a.id!==id);
-  else rec.stays = rec.stays.filter(s=>s.id!==id);
-  await saveMe(); render(); toast("Removed");
+  const list = kind==="activity" ? rec.activities : rec.stays;
+  const i = list.findIndex(x=>x.id===id);
+  if(i<0) return;
+  const [item] = list.splice(i,1);
+  await saveMe(); render();
+  toast((kind==="activity"?"Activity":"Stay")+" removed", async()=>{
+    list.splice(Math.min(i, list.length), 0, item);
+    await saveMe(); render(); toast("Restored");
+  });
 }
 
 function setView(v){
@@ -3272,10 +3520,20 @@ function shortDate(s){ return parseISO(s).toLocaleDateString("en-US",{month:"sho
 function shortRange(a,b){ return a&&b ? shortDate(a)+"–"+shortDate(b) : (a?shortDate(a):""); }
 function eyeOn(){ return '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>'; }
 function eyeOff(){ return '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.9 17.9A9.7 9.7 0 0 1 12 19C6 19 2 12 2 12a17 17 0 0 1 4-4.8m3.5-1.9A9.7 9.7 0 0 1 12 5c6 0 10 7 10 7a17 17 0 0 1-2.3 3.2M1 1l22 22"/></svg>'; }
-let toastTimer=null;
-function toast(msg){
-  const n=document.getElementById("notice"); n.textContent=msg; n.classList.add("show");
-  clearTimeout(toastTimer); toastTimer=setTimeout(()=>n.classList.remove("show"),1800);
+let toastTimer=null, undoFn=null;
+function toast(msg, undo){
+  const n=document.getElementById("notice");
+  n.innerHTML=esc(msg)+(undo?' <button class="undo-btn" id="undoBtn">Undo</button>':"");
+  n.style.pointerEvents=undo?"auto":"none";
+  n.classList.add("show");
+  undoFn=undo||null;
+  if(undo) document.getElementById("undoBtn").onclick=async()=>{
+    n.classList.remove("show");
+    const f=undoFn; undoFn=null;
+    if(f) await f();
+  };
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>{ n.classList.remove("show"); undoFn=null; }, undo?6000:1800);
 }
 
 /* ============================================================
@@ -3315,6 +3573,11 @@ function wire(){
   document.getElementById("tripsBtn").onclick = openTripsMenu;
   document.getElementById("themeBtn").onclick = ()=>applyTheme(isDark()?"light":"dark");
   applyTheme(document.documentElement.dataset.theme || "light");
+  document.getElementById("cmClose").onclick = ()=>document.getElementById("commentScrim").classList.remove("show");
+  document.getElementById("cmPost").onclick = postComment;
+  document.getElementById("commentScrim").addEventListener("click", e=>{
+    if(e.target.id==="commentScrim") e.currentTarget.classList.remove("show");
+  });
   // dismiss popovers on outside click
   document.addEventListener("click", e=>{
     if(!e.target.closest(".loc-box")) document.getElementById("locSuggest").classList.remove("show");
@@ -3353,17 +3616,26 @@ async function boot(){
     await loadEveryone();
     // announce yourself only when this trip didn't know you yet
     if(state._justJoined){ state._justJoined=false; await saveMe(); }
+    // digest: who changed things since this browser last looked
+    try {
+      const dk="meridian:"+window.storage.tripId+":last-seen";
+      const last=+localStorage.getItem(dk)||0;
+      const changed=Object.values(state.people).filter(p=>p.name!==(state.me&&state.me.name) && p.updated>last);
+      if(last && changed.length) state._digest="Since your last visit: "+changed.map(p=>p.name).join(", ")+" updated their plans.";
+      localStorage.setItem(dk, String(Date.now()));
+    } catch {}
   }
   loadFx().then(()=>{ if(fxRates) render(); });  // second-currency rates, async
+  loadWeather().then(()=>{ if(state._wx) render(); });
+  if("serviceWorker" in navigator){ try { navigator.serviceWorker.register("sw.js"); } catch {} }
+  startLiveSync();
   render();
   // frame the trip's home region unless existing pins already framed the map
   if(!state._didFit) applyHomeView();
   if(!state.me) openProfile();
   // gentle background refresh so collaborators' changes appear
   if(hasStore) setInterval(async()=>{
-    if(document.hidden) return;  // no point syncing a tab nobody is looking at
-    if(document.getElementById("itemScrim").classList.contains("show")) return;
-    if(document.getElementById("profileScrim").classList.contains("show")) return;
+    if(document.hidden || anyModalOpen()) return;
     const before = JSON.stringify([state.people, state.trip, state.sharedOK]);
     await loadEveryone();
     // skip the re-render (map markers, panels, thumbnails) when nothing changed

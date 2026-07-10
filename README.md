@@ -60,12 +60,20 @@ the same map, connect a free Firebase database:
    {
      "rules": {
        "trips": {
-         ".read": true,
-         ".write": true
+         "$trip": {
+           ".read": true,
+           ".write": true
+         }
        }
      }
    }
    ```
+
+   These rules allow access to a trip only if you know its exact ID — nobody
+   can list all trips in the database. New trips get unguessable IDs, so the
+   **Copy invite** link in the Trips menu is how friends get in. (If you used
+   the older rules with `.read`/`.write` directly under `trips`, switch to
+   these.)
 
 5. Back on the **Data** tab, copy the database URL shown at the top — it looks
    like `https://japan-trip-default-rtdb.asia-southeast1.firebasedatabase.app`.

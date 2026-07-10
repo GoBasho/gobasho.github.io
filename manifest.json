@@ -1,0 +1,12 @@
+{
+  "name": "Meridian Trip Planner",
+  "short_name": "Meridian",
+  "description": "Shared trip planner — stays, plans, and photo spots with friends on one map.",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#f4f5f2",
+  "theme_color": "#f4f5f2",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

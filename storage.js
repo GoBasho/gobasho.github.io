@@ -128,24 +128,34 @@
     get tripId() { return tripId; },
     /* pick another trip for this browser (takes effect on reload) */
     switchTrip(id) {
-      try { localStorage.setItem("meridian:active-trip", id); } catch {}
+      try {
+        localStorage.setItem("meridian:active-trip", id);
+        const known = JSON.parse(localStorage.getItem("meridian:known-trips") || "[]");
+        if (!known.includes(id)) { known.push(id); localStorage.setItem("meridian:known-trips", JSON.stringify(known)); }
+      } catch {}
     },
-    /* every trip id present in the database (or this browser, in local mode) */
+    /* trips this browser knows, plus whatever the database will enumerate
+       (with locked-down rules the root listing is denied — invite links
+       and the known-trips list carry the load instead) */
     async listTrips() {
       await ready;
+      const ids = new Set([tripId]);
+      try { JSON.parse(localStorage.getItem("meridian:known-trips") || "[]").forEach(x => ids.add(x)); } catch {}
       if (mode === "shared") {
-        const res = await fetch(dbUrl + "/trips.json?shallow=true");
-        if (!res.ok) throw new Error("Trip list failed (" + res.status + ")");
-        const obj = (await res.json()) || {};
-        return Object.keys(obj).map(decodeKey);
-      }
-      const ids = new Set();
-      for (let i = 0; i < localStorage.length; i++) {
-        const m = (localStorage.key(i) || "").match(/^meridian:(.+):trip:meta$/);
-        if (m) ids.add(m[1]);
+        try {
+          const res = await fetch(dbUrl + "/trips.json?shallow=true");
+          if (res.ok) Object.keys((await res.json()) || {}).forEach(k => ids.add(decodeKey(k)));
+        } catch {}
+      } else {
+        for (let i = 0; i < localStorage.length; i++) {
+          const m = (localStorage.key(i) || "").match(/^meridian:(.+):trip:meta$/);
+          if (m) ids.add(m[1]);
+        }
       }
       return [...ids];
     },
+    /* live-update stream endpoint (Firebase supports EventSource on REST) */
+    get streamUrl() { return mode === "shared" ? base() + ".json" : null; },
     /* read/write a key in a trip other than the active one */
     async getFrom(tid, key) {
       await ready;

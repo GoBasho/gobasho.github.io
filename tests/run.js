@@ -17,7 +17,9 @@ if (!chromium) { console.error("Playwright not found — npm i playwright && npx
 const ROOT = pth.join(__dirname, "..");
 const MIME = { ".html":"text/html", ".js":"application/javascript", ".css":"text/css", ".png":"image/png" };
 const site = http.createServer((req, res) => {
-  const f = pth.join(ROOT, req.url === "/" ? "index.html" : decodeURIComponent(req.url.split("?")[0]));
+  let p = decodeURIComponent(req.url.split("?")[0]);
+  if (p === "/") p = "/index.html";
+  const f = pth.join(ROOT, p);
   fs.readFile(f, (err, data) => {
     if (err) { res.statusCode = 404; return res.end(); }
     res.setHeader("Content-Type", MIME[pth.extname(f)] || "text/plain");
@@ -56,7 +58,8 @@ function check(name, ok, extra) {
 }
 
 async function newPage(browser, tripId, opts = {}) {
-  const ctx = await browser.newContext();
+  // block service workers so they can't serve the real config.js over our mocks
+  const ctx = await browser.newContext({ serviceWorkers: "block" });
   const page = await ctx.newPage();
   page.on("pageerror", e => { fail++; console.log("  FAIL pageerror: " + e.message); });
   await page.route("**/config.js", r => r.fulfill({ contentType: "application/javascript",
@@ -71,6 +74,16 @@ async function newPage(browser, tripId, opts = {}) {
     body: JSON.stringify({ result: "success", rates: { USD: 0.0068, EUR: 0.0060, JPY: 1 } }) }));
   await page.route("https://photon.komoot.io/**", r => r.fulfill({ contentType: "application/json", body: '{"features":[]}' }));
   await page.route("https://en.wikipedia.org/**", r => r.fulfill({ contentType: "application/json", body: '{"query":{"pages":{}}}' }));
+  await page.route("https://api.open-meteo.com/**", r => {
+    const u = new URL(r.request().url());
+    const days = [];
+    let d = new Date(u.searchParams.get("start_date") + "T00:00:00");
+    const end = new Date(u.searchParams.get("end_date") + "T00:00:00");
+    while (d <= end && days.length < 20) { days.push(d.toISOString().slice(0, 10)); d.setDate(d.getDate() + 1); }
+    r.fulfill({ contentType: "application/json", body: JSON.stringify({ daily: {
+      time: days, weather_code: days.map(() => 0),
+      temperature_2m_max: days.map(() => 22), temperature_2m_min: days.map(() => 14) } }) });
+  });
   return page;
 }
 
@@ -306,6 +319,87 @@ async function setupProfile(page, name) {
     check("one click schedules the whole cluster", acts.filter(d => d === acts[0] && d).length === 3, acts);
     check("cards clear once planned", !(await page.$(".sug-card")));
     await page.context().close();
+  }
+
+  console.log("\n== e2e: weather, joins, comments, undo, digest, lanes ==");
+  {
+    const page = await newPage(browser, "v2-test");
+    await page.addInitScript(() => {
+      const P = "meridian:v2-test:";
+      const pad = n => String(n).padStart(2, "0");
+      const fmt = d => d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate());
+      const t0 = fmt(new Date());
+      const t5 = (d => { d.setDate(d.getDate() + 5); return fmt(d); })(new Date());
+      localStorage.setItem(P + "me", JSON.stringify({ name: "Zach", color: "#c8483c" }));
+      localStorage.setItem(P + "person:Zach", JSON.stringify({ name: "Zach", color: "#c8483c", stays: [], dayTrips: {}, interests: [], updated: Date.now(), activities: [
+        { id: "z1", title: "Morning Fish Market", date: t0, time: "08:00", location: { lat: 35.66, lng: 139.77 }, category: "Food & drink", notes: "" },
+        { id: "z2", title: "Evening Bar Crawl", date: t0, time: "19:00", location: { lat: 35.66, lng: 139.70 }, category: "Nightlife", notes: "" }] }));
+      localStorage.setItem(P + "person:Alex", JSON.stringify({ name: "Alex", color: "#2e5e7e", stays: [], dayTrips: {}, interests: [], updated: Date.now() + 60000, activities: [
+        { id: "x1", title: "Ghibli Museum", date: t0, time: "", location: { lat: 35.696, lng: 139.570 }, category: "Culture", notes: "" }] }));
+      localStorage.setItem(P + "trip:meta", JSON.stringify({ title: "T", start: t0, end: t5, countries: ["JP"] }));
+      localStorage.setItem(P + "last-seen", "1");
+    });
+    await page.goto("http://localhost:18899/", { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(1000);
+    check("weather icons on the date strip", (await page.textContent("#dateStrip")).includes("☀️"));
+    check("digest names who changed", /Since your last visit: Alex/.test(await page.textContent("#railList")));
+    await page.hover('.item:has-text("Ghibli")');
+    await page.click('.item:has-text("Ghibli") .ijoin');
+    await page.waitForTimeout(400);
+    check("joining marks the plan", /1 in/.test(await page.textContent('.item:has-text("Ghibli")')));
+    await page.click(".tab[data-view=itinerary]");
+    await page.waitForTimeout(400);
+    check("joined plan lands in my day", /Ghibli Museum[\s\S]*with Alex/.test(await page.textContent("#itineraryInner")));
+    await page.hover('.item:has-text("Ghibli")');
+    await page.click('.item:has-text("Ghibli") .icmt');
+    await page.fill("#cmText", "Book tickets early!");
+    await page.click("#cmPost");
+    await page.waitForTimeout(300);
+    check("comment posts", /Book tickets early!/.test(await page.textContent("#cmList")));
+    await page.click("#cmClose");
+    await page.hover('.item:has-text("Morning Fish Market")');
+    await page.click('.item:has-text("Morning Fish Market") .idel');
+    await page.waitForTimeout(300);
+    check("delete is immediate", !/Fish Market/.test(await page.textContent("#railList")));
+    await page.click("#undoBtn");
+    await page.waitForTimeout(300);
+    check("undo restores it", /Fish Market/.test(await page.textContent("#railList")));
+    await page.click(".tab[data-view=prep]");
+    await page.waitForTimeout(400);
+    const lanes = await page.$$eval(".prep-lane", els => els.map(e => e.textContent));
+    check("prep board shows time lanes", lanes.includes("Morning") && lanes.includes("Evening"), lanes);
+    await page.context().close();
+  }
+
+  console.log("\n== e2e: invites, unguessable ids, duplication, PWA ==");
+  {
+    const page = await newPage(browser, "inv-test");
+    await page.goto("http://localhost:18899/?trip=secret-abc12", { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(500);
+    check("invite link switches trip", await page.evaluate(() => window.storage.tripId) === "secret-abc12");
+    check("invite recorded as known", await page.evaluate(() => (JSON.parse(localStorage.getItem("meridian:known-trips")) || []).includes("secret-abc12")));
+    await setupProfile(page, "Zach");
+    await page.click("#tripsBtn");
+    await page.waitForTimeout(400);
+    await page.fill("#tmName", "Osaka Test");
+    await page.click("#tmGo");
+    await page.waitForTimeout(1200);
+    const tid = await page.evaluate(() => window.storage.tripId);
+    check("new trip id is unguessable", /^osaka-test-[a-z0-9]{5}$/.test(tid), tid);
+    await page.click("#tripsBtn");
+    await page.waitForTimeout(400);
+    await page.click("#tmDup");
+    await page.waitForTimeout(1200);
+    const dup = await page.evaluate(() => ({ id: window.storage.tripId, title: state.trip.title }));
+    check("duplicate copies the trip", /copy/.test(dup.title) && dup.id !== tid, dup);
+    await page.context().close();
+    // service worker check needs an unblocked context (and no reloads after)
+    const swCtx = await browser.newContext();
+    const swPage = await swCtx.newPage();
+    await swPage.goto("http://localhost:18899/", { waitUntil: "domcontentloaded" });
+    check("service worker registers", await swPage.evaluate(() =>
+      Promise.race([navigator.serviceWorker.ready.then(() => true), new Promise(r => setTimeout(() => r(false), 4000))])));
+    await swCtx.close();
   }
 
   console.log("\n== e2e: dark mode & mobile layout ==");
