@@ -67,6 +67,7 @@
   }
 
   const ready = (async function init() {
+    if (tripId.startsWith("demo-")) return;  // demo trips are sandboxed to this browser
     if (!raw) return;
     const origin = originOf(raw);
     if (origin && /(\.firebaseio\.com|\.firebasedatabase\.app)$/i.test(origin) ||

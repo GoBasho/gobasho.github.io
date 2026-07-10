@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Meridian — plan trips together</title>
+<meta name="description" content="A free shared trip planner. Stays, day plans, transit, costs, and who's in — all on one map your whole group can edit.">
+<meta property="og:title" content="Meridian — plan trips together">
+<meta property="og:description" content="A free shared trip planner. Stays, day plans, transit, costs, and who's in — all on one map.">
+<meta property="og:image" content="https://zbelohlavek.github.io/Itinerary/og-image.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="icon.svg">
+<style>
+  :root { --ink:#14171f; --soft:#454b5a; --faint:#8b909c; --paper:#f4f5f2; --surface:#fff; --line:#e2e3dd; --shu:#c8483c; --indigo:#2e5e7e; }
+  @media (prefers-color-scheme: dark){ :root { --ink:#e7e9ef; --soft:#b8bcc8; --faint:#828795; --paper:#13161d; --surface:#1c2029; --line:#2a2f3a; --shu:#e0685a; --indigo:#7ba7cc; } }
+  * { box-sizing:border-box; margin:0; }
+  body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Helvetica Neue",Arial,sans-serif; background:var(--paper); color:var(--ink); line-height:1.6; }
+  .wrap { max-width:820px; margin:0 auto; padding:60px 22px 80px; }
+  h1 { font-family:"Hiragino Mincho ProN","Yu Mincho",Georgia,serif; font-size:44px; font-weight:400; line-height:1.15; }
+  h1 small { display:block; font-family:inherit; font-size:13px; letter-spacing:.3em; text-transform:uppercase; color:var(--faint); margin-bottom:14px; }
+  .lede { font-size:18px; color:var(--soft); margin:18px 0 30px; max-width:600px; }
+  .cta { display:flex; gap:12px; flex-wrap:wrap; margin-bottom:56px; }
+  .btn { display:inline-block; padding:13px 26px; border-radius:10px; text-decoration:none; font-weight:600; font-size:15px; }
+  .btn.primary { background:var(--shu); color:#fff; }
+  .btn.ghost { border:1.5px solid var(--line); color:var(--ink); background:var(--surface); }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:16px; margin-bottom:56px; }
+  .card { background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:20px; }
+  .card h3 { font-size:15px; margin-bottom:6px; }
+  .card p { font-size:13.5px; color:var(--soft); }
+  .fine { font-size:13px; color:var(--faint); border-top:1px solid var(--line); padding-top:22px; }
+  .fine a { color:var(--indigo); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1><small>Meridian · Trip Planner</small>Plan the trip together,<br>on one shared map.</h1>
+  <p class="lede">Everyone on the trip adds their stays, plans, and must-sees. Meridian lays them on a map, builds each person's day-by-day itinerary, suggests smart day plans from things that sit near each other, splits the expenses, and shows where your paths cross.</p>
+  <div class="cta">
+    <a class="btn primary" href="index.html?demo=1">Try the demo trip</a>
+    <a class="btn ghost" href="index.html">Open the planner</a>
+  </div>
+  <div class="grid">
+    <div class="card"><h3>&#128506;&#65039; One map, whole group</h3><p>Stays, activities, transit, and photo spots, color-coded per person — with live sync, so edits appear as they happen.</p></div>
+    <div class="card"><h3>&#128161; It plans with you</h3><p>Drop in everything you want to do — flexible dates welcome — and it clusters what's near each other into ready-made days, checking the weather on the way.</p></div>
+    <div class="card"><h3>&#128176; Costs that add up</h3><p>Day-by-day cost estimates in local currency (converted to yours), plus group expense splitting that works out who owes whom.</p></div>
+    <div class="card"><h3>&#9992;&#65039; Built for the real trip</h3><p>Country-aware prep checklists, flight boards, calendar export, printable day sheets — and it works offline once you've loaded your trip.</p></div>
+  </div>
+  <p class="fine">Free and open source. Your trip's data lives in a private database and is visible only to people who have your trip's invite link — don't put passport numbers in it. Take your data anytime with the JSON export in the Trips menu. Found a bug or want a feature? <a href="https://github.com/ZBelohlavek/Itinerary/issues">Tell us here</a>.</p>
+</div>
+</body>
+</html>

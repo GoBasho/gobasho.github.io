@@ -9,13 +9,24 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%E2%9B%A9%EF%B8%8F%3C/text%3E%3C/svg%3E">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon.svg">
+<meta property="og:title" content="Meridian — Trip Planner">
+<meta property="og:description" content="Plan trips with friends on one shared map — stays, day plans, transit, costs, and who's in.">
+<meta property="og:image" content="https://zbelohlavek.github.io/Itinerary/og-image.png">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
 <script>
 /* resolve the theme before CSS paints, and honor ?trip= invite links
    before storage.js decides which trip is active */
 (function(){ try {
   var t = localStorage.getItem("meridian:theme") || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
   document.documentElement.dataset.theme = t;
-  var trip = new URLSearchParams(location.search).get("trip");
+  var q = new URLSearchParams(location.search);
+  if(q.get("demo")){
+    localStorage.setItem("meridian:active-trip", "demo-tour");
+    localStorage.setItem("meridian:want-demo", "1");
+    history.replaceState(null, "", location.pathname);
+  }
+  var trip = q.get("trip");
   if(trip){
     localStorage.setItem("meridian:active-trip", trip);
     var known = []; try { known = JSON.parse(localStorage.getItem("meridian:known-trips")) || []; } catch(e){}
@@ -225,6 +236,11 @@
   .cm-ts { font-size: 11px; color: var(--ink-faint); margin-left: 4px; }
   .cm-text { color: var(--ink-soft); line-height: 1.45; }
   .undo-btn { border: none; background: var(--paper); color: var(--ink); border-radius: 6px; padding: 2px 11px; margin-left: 9px; font-weight: 600; font-size: 12px; cursor: pointer; }
+  .steps-card { border: 1px solid var(--line); border-radius: 9px; background: var(--surface); padding: 11px 13px; margin-bottom: 10px; box-shadow: var(--shadow); }
+  .step-row { font-size: 12.5px; color: var(--ink-soft); padding: 3px 0; }
+  .step-row.done { color: var(--ink-faint); text-decoration: line-through; }
+  .step-row .linkish { font-size: 12.5px; padding: 0; }
+  .tm-foot { display: flex; gap: 14px; padding: 4px 13px 11px; border-top: 1px solid var(--line); padding-top: 9px; }
 
   /* ---------- map ---------- */
   .stage { flex: 1; position: relative; min-width: 0; }
@@ -721,8 +737,9 @@
         <div class="field-hint">Shows on the Coordination tab so arrivals line up, and lands in your calendar export.</div>
       </div>
     </div>
-    <div class="modal-foot">
+    <div class="modal-foot" style="flex-direction:column; align-items:stretch; gap:6px;">
       <button class="btn primary wide" id="profileSave">Save</button>
+      <button class="linkish" id="demoBtn" type="button">New here? Look around a demo trip first</button>
     </div>
   </div>
 </div>
@@ -1468,6 +1485,7 @@ function render(){
   if(state.view === "exp") renderExpenses();
   renderMeChip();
   document.getElementById("storageWarn").innerHTML =
+    isDemo() ? "" :
     (!hasStore || !state.sharedOK) ? '<span class="storage-warn">Sharing offline</span>' :
     (window.storage.mode === "local" ? '<span class="storage-warn" title="See README.md — hook up a free Firebase database to share plans with friends">Saved to this browser only</span>' : "");
 }
@@ -1560,6 +1578,31 @@ function renderRailList(){
     return;
   }
   wrap.innerHTML = "";
+  // demo banner
+  if(isDemo()){
+    const db = document.createElement("div");
+    db.className = "rail-hint";
+    db.style.cursor = "default";
+    db.innerHTML = `<span>&#129514;</span> Demo trip — sandboxed to this browser, so play freely. <button class="mini-btn" style="margin-left:auto">Start your own trip</button>`;
+    db.querySelector("button").onclick = openTripsMenu;
+    wrap.appendChild(db);
+  }
+  // first steps for a fresh trip
+  const steps = firstSteps();
+  if(steps && !localStorage.getItem("meridian:"+window.storage.tripId+":steps-done")){
+    const sc = document.createElement("div");
+    sc.className = "steps-card";
+    sc.innerHTML = `<div class="eyebrow" style="margin-bottom:8px">First steps <button class="btn ghost" id="stepsDismiss" style="font-size:11px">Hide</button></div>`
+      + steps.map(([label, done, action])=>`<div class="step-row ${done?"done":""}">${done?"&#10003;":"&#9675;"} ${action?`<button class="linkish" data-step="${action}">${esc(label)}</button>`:esc(label)}</div>`).join("");
+    sc.querySelector("#stepsDismiss").onclick = ()=>{ try{ localStorage.setItem("meridian:"+window.storage.tripId+":steps-done","1"); }catch{} render(); };
+    sc.querySelectorAll("[data-step]").forEach(b=>b.onclick=()=>{
+      if(b.dataset.step==="invite") copyInvite();
+      if(b.dataset.step==="profile") openProfile();
+      if(b.dataset.step==="stay") openItem("stay");
+      if(b.dataset.step==="plan") openItem("activity");
+    });
+    wrap.appendChild(sc);
+  }
   // what changed since your last visit
   if(state._digest){
     const dg = document.createElement("div");
@@ -1607,6 +1650,19 @@ function renderRailList(){
       onClick: () => flyTo(a.location)
     }));
   }
+}
+
+/* the getting-started list: null once everything's done */
+function firstSteps(){
+  const me = state.me && state.people[state.me.name];
+  const invited = Object.keys(state.people).length>1 || localStorage.getItem("meridian:"+window.storage.tripId+":invited")==="1";
+  const steps = [
+    ["Add yourself to the trip", !!state.me, "profile"],
+    ["Add a stay — hotel and dates", !!(me && (me.stays||[]).length), "stay"],
+    ["Add a plan or event", !!(me && (me.activities||[]).length), "plan"],
+    ["Copy the invite link for your people", invited, "invite"]
+  ];
+  return steps.every(s=>s[1]) ? null : steps;
 }
 
 function itemRow({color,title,sub,tick,onDel,onClick,onEdit,onJoin,joined,onComment,commentCount}){
@@ -2655,6 +2711,60 @@ function startLiveSync(){
   } catch { liveES=null; }
 }
 
+/* ---------- demo trip: a sandboxed sample living only in this browser ---------- */
+const DEMO_ID = "demo-tour";
+function seedDemo(){
+  const P = "meridian:"+DEMO_ID+":";
+  if(localStorage.getItem(P+"trip:meta")) return;  // keep the visitor's demo edits
+  const d0 = new Date(); d0.setDate(d0.getDate()+7);
+  const day = n => { const d = new Date(d0); d.setDate(d.getDate()+n); return iso(d); };
+  const kae = { name:"Kae", color:"#2e5e7e", interests:["photo","food"], updated:Date.now(), dayTrips:{},
+    stays:[
+      {id:"dk1", city:"Tokyo", hotelName:"Shibuya Stream Hotel", location:{lat:35.6580,lng:139.7016}, start:day(0), end:day(4), cost:14000},
+      {id:"dk2", city:"Kyoto", hotelName:"Gion Ryokan", location:{lat:35.0037,lng:135.7752}, start:day(4), end:day(9), cost:16000}],
+    activities:[
+      {id:"da1", title:"Senso-ji Temple", date:day(1), time:"09:00", category:"Culture", location:{lat:35.7148,lng:139.7967}, cost:0, notes:"Nakamise street snacks after"},
+      {id:"da2", title:"teamLab Planets", date:day(1), time:"14:00", category:"Culture", location:{lat:35.6486,lng:139.7906}, cost:3800, notes:"Booked: https://www.teamlab.art"},
+      {id:"da3", title:"Nozomi to Kyoto", date:day(4), time:"10:15", category:"Travel", transit:true, from:"Tokyo Station", to:"Kyoto Station", location:{lat:34.9855,lng:135.7581}, cost:13500},
+      {id:"da4", title:"Fushimi Inari at dawn", date:day(5), time:"06:30", category:"Culture", location:{lat:34.9671,lng:135.7727}, notes:"Beat the crowds"},
+      {id:"da5", title:"Pokémon Center Shibuya", date:"", flex:{type:"range", start:day(0), end:day(3)}, category:"Shopping", location:{lat:35.6617,lng:139.7003}},
+      {id:"da6", title:"Shibuya Sky sunset", date:"", flex:{type:"range", start:day(0), end:day(3)}, category:"Sightseeing", location:{lat:35.6580,lng:139.7016}, cost:2500},
+      {id:"da7", title:"Meiji Shrine", date:"", flex:{type:"options", days:[day(2), day(3)]}, category:"Culture", location:{lat:35.6764,lng:139.6993}}],
+    expenses:[{id:"de1", desc:"Group dinner in Ebisu", amount:12400, date:day(1), for:null}],
+    flights:{arr:{date:day(0), time:"15:20", ap:"HND", fl:"NH105"}, dep:{date:day(9), time:"17:10", ap:"KIX", fl:"NH971"}},
+    checklist:{passport:true, visa:true, vjw:true, ic:true, esim:true} };
+  const ren = { name:"Ren", color:"#4e7a5e", interests:["anime","market"], updated:Date.now(), dayTrips:{},
+    stays:[{id:"dr1", city:"Tokyo", hotelName:"Asakusa View", location:{lat:35.7141,lng:139.7925}, start:day(0), end:day(4), cost:11000}],
+    activities:[
+      {id:"db1", title:"Akihabara arcades", date:day(2), time:"", category:"Shopping", location:{lat:35.7022,lng:139.7745}, notes:""},
+      {id:"db2", title:"Tsukiji breakfast crawl", date:day(1), time:"07:30", category:"Food & drink", location:{lat:35.6654,lng:139.7707}, cost:3000}],
+    expenses:[{id:"de2", desc:"Taxi from airport", amount:6800, date:day(0), for:["Kae","Ren"]}],
+    joined:[{o:"Kae", id:"da2"}],
+    comments:{ ["Kae\u0001da1"]: [{t:"Go before 8am — the street fills up fast", ts:Date.now()-86400000}] },
+    checklist:{passport:true, bank:true} };
+  localStorage.setItem(P+"trip:meta", JSON.stringify({title:"Japan — Demo Trip", start:day(0), end:day(9), countries:["JP"], currency:"¥", home:"JP"}));
+  localStorage.setItem(P+"person:Kae", JSON.stringify(kae));
+  localStorage.setItem(P+"person:Ren", JSON.stringify(ren));
+}
+function enterDemo(){
+  seedDemo();
+  window.storage.switchTrip(DEMO_ID);
+  location.reload();
+}
+function isDemo(){ return window.storage.tripId.startsWith("demo-"); }
+
+/* ---------- take your data with you ---------- */
+async function exportTripJSON(){
+  const all = await window.storage.getAll("", true);
+  const blob = new Blob([JSON.stringify({trip:window.storage.tripId, exported:new Date().toISOString(), data:all}, null, 2)], {type:"application/json"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = window.storage.tripId + ".json";
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(a.href);
+  toast("Trip data downloaded");
+}
+
 /* ---------- trips: switch, create, or join by name ---------- */
 function slugTrip(name){ return name.toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-+|-+$/g,"").slice(0,40) || "trip"; }
 function switchTrip(id){
@@ -2681,8 +2791,10 @@ function inviteLink(){
   return location.origin+location.pathname+"?trip="+encodeURIComponent(window.storage.tripId);
 }
 async function copyInvite(){
+  try { localStorage.setItem("meridian:"+window.storage.tripId+":invited", "1"); } catch {}
   try { await navigator.clipboard.writeText(inviteLink()); toast("Invite link copied — send it to your friends"); }
   catch { prompt("Copy this invite link:", inviteLink()); }
+  render();
 }
 async function duplicateTrip(){
   try {
@@ -2720,7 +2832,8 @@ async function openTripsMenu(){
          <button class="mini-btn" id="tmInvite" title="Copy a link that brings friends straight into this trip">Copy invite</button>
          <button class="mini-btn" id="tmDup" title="Copy everything into a new trip">Duplicate</button></div>
        <div class="tm-new"><input type="text" id="tmName" placeholder="New trip name, or a trip ID to join…" maxlength="48"><select id="tmNewHome" title="Where the new trip goes">${homeOpts("WORLD")}</select><button class="mini-btn" id="tmGo">Go</button></div>
-       <div class="field-hint" style="padding:2px 13px 10px">Share a trip with the invite link — new trip IDs are unguessable on purpose. Each trip has its own destination, people, plans, dates, currency, and expenses.</div>`;
+       <div class="field-hint" style="padding:2px 13px 10px">Share a trip with the invite link — new trip IDs are unguessable on purpose. Each trip has its own destination, people, plans, dates, currency, and expenses.</div>
+       <div class="tm-foot"><button class="linkish" id="tmExport">Download trip data</button><a class="linkish" href="about.html" target="_blank" rel="noopener">About</a><a class="linkish" href="https://github.com/ZBelohlavek/Itinerary/issues" target="_blank" rel="noopener">Feedback</a></div>`;
   menu.querySelectorAll("[data-trip]").forEach(b=>b.onclick=()=>{ if(b.dataset.trip!==cur) switchTrip(b.dataset.trip); });
   document.getElementById("tmHome").onchange=async(e)=>{
     state.trip.home=e.target.value;
@@ -2732,6 +2845,7 @@ async function openTripsMenu(){
   document.getElementById("tmGo").onclick=createOrJoinTrip;
   document.getElementById("tmInvite").onclick=copyInvite;
   document.getElementById("tmDup").onclick=duplicateTrip;
+  document.getElementById("tmExport").onclick=exportTripJSON;
   document.getElementById("tmName").addEventListener("keydown", e=>{ if(e.key==="Enter") createOrJoinTrip(); });
 }
 
@@ -3143,6 +3257,7 @@ function setView(v){
 /* ---------- profile modal ---------- */
 function openProfile(){
   const scrim=document.getElementById("profileScrim");
+  document.getElementById("demoBtn").style.display = (!state.me && !isDemo()) ? "" : "none";
   document.getElementById("profileTitle").textContent = state.me ? "Your profile" : "Add yourself to the trip";
   document.getElementById("profileName").value = state.me ? state.me.name : "";
   buildSwatches(state.me ? state.me.color : PALETTE[Object.keys(state.people).length % PALETTE.length]);
@@ -3212,6 +3327,10 @@ async function saveProfile(){
   if(!name){ toast("Enter a name"); return; }
   const interests=[...(document.getElementById("interestChips")._sel||[])];
   const oldName = state.me && state.me.name;
+  // taking a name that's already on the trip merges into that traveler — make sure it's really them
+  if((!oldName || oldName!==name) && state.people[name]){
+    if(!confirm('"'+name+'" is already a traveler on this trip. Continue only if that is you — otherwise pick a different name.')) return;
+  }
   if(oldName && oldName!==name){
     // rename: migrate the record and clear the old key
     const rec = state.people[oldName]; delete state.people[oldName];
@@ -3575,6 +3694,12 @@ function wire(){
   applyTheme(document.documentElement.dataset.theme || "light");
   document.getElementById("cmClose").onclick = ()=>document.getElementById("commentScrim").classList.remove("show");
   document.getElementById("cmPost").onclick = postComment;
+  document.getElementById("demoBtn").onclick = enterDemo;
+  // free-tier care: drop the live stream while the tab is hidden
+  document.addEventListener("visibilitychange", ()=>{
+    if(document.hidden){ if(liveES){ try{ liveES.close(); }catch{} liveES=null; } }
+    else startLiveSync();
+  });
   document.getElementById("commentScrim").addEventListener("click", e=>{
     if(e.target.id==="commentScrim") e.currentTarget.classList.remove("show");
   });
@@ -3597,6 +3722,7 @@ function wire(){
 }
 
 async function boot(){
+  try { if(localStorage.getItem("meridian:want-demo")==="1"){ localStorage.removeItem("meridian:want-demo"); seedDemo(); } } catch {}
   initMap();
   wire();
   // default trip window if unset — two months out, two weeks long; change it in the header

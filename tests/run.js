@@ -402,6 +402,43 @@ async function setupProfile(page, name) {
     await swCtx.close();
   }
 
+  console.log("\n== e2e: demo trip, first steps, name collision, export ==");
+  {
+    // ?demo=1 seeds a sandboxed sample trip
+    const page = await newPage(browser, "ignored", { shared: true });
+    await page.goto("http://localhost:18899/?demo=1", { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(900);
+    const demo = await page.evaluate(() => ({
+      trip: window.storage.tripId, mode: window.storage.mode,
+      people: Object.keys(state.people).sort().join(","),
+      title: state.trip.title
+    }));
+    check("demo link opens the demo trip", demo.trip === "demo-tour" && demo.title === "Japan — Demo Trip");
+    check("demo is sandboxed (local even with firebase config)", demo.mode === "local");
+    check("demo has sample travelers", demo.people === "Kae,Ren");
+    check("demo banner shows", /Demo trip — sandboxed/.test(await page.textContent("#railList")));
+    check("demo data feeds the idea engine", await page.evaluate(() => dayPlanIdeas(state.people.Kae).length >= 1));
+    // name collision: taking Kae's name asks for confirmation
+    let dialogMsg = "";
+    page.on("dialog", d => { dialogMsg = d.message(); d.dismiss(); });
+    await page.fill("#profileName", "Kae");
+    await page.click("#profileSave");
+    await page.waitForTimeout(300);
+    check("name collision warns", /already a traveler/.test(dialogMsg));
+    // first steps card + export
+    await page.fill("#profileName", "Zach");
+    await page.click("#profileSave");
+    await page.waitForTimeout(400);
+    const steps = await page.textContent(".steps-card");
+    check("first steps card tracks progress", /✓ Add yourself/.test(steps) && /Add a stay/.test(steps));
+    await page.click("#tripsBtn");
+    await page.waitForTimeout(300);
+    const [dl] = await Promise.all([ page.waitForEvent("download"), page.click("#tmExport") ]);
+    const json = JSON.parse(require("fs").readFileSync(await dl.path(), "utf8"));
+    check("trip data exports as JSON", json.trip === "demo-tour" && !!json.data["person:Kae"]);
+    await page.context().close();
+  }
+
   console.log("\n== e2e: dark mode & mobile layout ==");
   {
     const page = await newPage(browser, "theme-test");

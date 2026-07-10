@@ -11,6 +11,21 @@ countries the trip covers on the Checklist tab.
 It's a plain website — one HTML file plus two small scripts. No build tools,
 no server of your own to run.
 
+## Sharing it with family & friends
+
+The deployed site is all anyone needs — no setup on their end:
+
+1. Send them `about.html` (the landing page) or straight to
+   `index.html?demo=1` — a sandboxed **demo trip** they can safely poke at,
+   living only in their browser.
+2. When they're ready, they create a trip (or you send them your trip's
+   **invite link** from the Trips menu) and follow the **First steps** card.
+
+Privacy in one sentence: trip data is visible to anyone with that trip's
+invite link and nobody else, so share links only with your group and keep
+sensitive numbers (passports, bookings) out of notes. Anyone can download
+their trip as JSON from the Trips menu.
+
 ## Trips and legs
 
 - **Separate trips** — the **Trips** button in the header switches between
