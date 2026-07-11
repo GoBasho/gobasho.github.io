@@ -29,14 +29,17 @@ const site = http.createServer((req, res) => {
 
 // minimal Firebase Realtime DB REST mock
 const db = {};
+let denyWrites = false;  // simulates security rules refusing writes (401)
 const fb = http.createServer((req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET,PUT,OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "*");
   if (req.method === "OPTIONS") return res.end();
   const u = new URL(req.url, "http://x");
+  if (u.pathname === "/__deny") { denyWrites = u.searchParams.get("w") === "1"; return res.end("ok"); }
   const path = u.pathname.replace(/\.json$/, "");
   if (req.method === "PUT") {
+    if (denyWrites) { res.statusCode = 401; return res.end('{"error":"Permission denied"}'); }
     let body = ""; req.on("data", c => body += c);
     req.on("end", () => { db[path] = JSON.parse(body); res.end(JSON.stringify(db[path])); });
   } else if (u.searchParams.get("shallow") === "true") {
@@ -690,6 +693,86 @@ async function setupProfile(page, name) {
       return typeof (await res.json()) === "object";
     })());
     await a.context().close(); await b.context().close();
+  }
+
+  console.log("\n== e2e: new-computer / new-trip stay & activity add ==");
+  {
+    // reproduces the reported failure: a brand-new trip (empty meta dates)
+    // opened on a fresh browser, adding a stay then an activity
+    const page = await newPage(browser, "our-japan-trip", { shared: true, firstRun: true });
+    await page.goto("http://localhost:18899/", { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(600);
+    await page.fill("#wName", "Ski Trip");
+    await page.selectOption("#wHome", "JP");
+    await page.click("#wCreate");
+    await page.waitForTimeout(1200);
+    await setupProfile(page, "Mom");
+    // a fresh trip has no dates — the stay form must still offer usable defaults
+    const prefill = await page.evaluate(() => {
+      openItem("stay");
+      return { start: document.getElementById("stayStart").value, end: document.getElementById("stayEnd").value };
+    });
+    check("new trip: stay form dates default to the trip window", !!prefill.start && !!prefill.end, prefill);
+    await page.evaluate(() => document.getElementById("itemScrim").classList.remove("show"));
+    // add a stay by picking a map point (no geocoder needed)
+    await page.evaluate(() => {
+      openItem("stay");
+      state.pendingLoc = { lat: 43.06, lng: 141.35, label: "Sapporo Grand Hotel" };
+      document.getElementById("locInput").value = "Sapporo Grand Hotel";
+      document.getElementById("stayStart").value = "2026-12-01";
+      document.getElementById("stayEnd").value = "2026-12-05";
+    });
+    await page.click("#itemSave");
+    await page.waitForTimeout(500);
+    check("new-trip stay lands in the record", await page.evaluate(() => state.people.Mom.stays.length === 1));
+    const tid = await page.evaluate(() => window.storage.tripId);
+    check("new-trip stay persisted to the database", await page.evaluate(async (t) => {
+      const res = await fetch("http://localhost:18898/trips/" + t + "/person%3AMom.json");
+      const p = await res.json(); return (p.stays || []).length === 1;
+    }, tid));
+    // add an activity
+    await page.evaluate(() => {
+      openItem("activity");
+      state.pendingLoc = { lat: 43.07, lng: 141.34, label: "Odori Park" };
+      document.getElementById("itemName").value = "Odori Park";
+      document.getElementById("actDate").value = "2026-12-02";
+    });
+    await page.click("#itemSave");
+    await page.waitForTimeout(500);
+    check("new-trip activity lands in the record", await page.evaluate(() => state.people.Mom.activities.length === 1));
+    await page.context().close();
+  }
+
+  console.log("\n== e2e: a refused write is kept and retried, not lost ==");
+  {
+    const page = await newPage(browser, "deny-test", { shared: true });
+    await page.goto("http://localhost:18899/", { waitUntil: "domcontentloaded" });
+    await setupProfile(page, "Pat");
+    let warned = "";
+    page.on("dialog", d => d.dismiss());
+    // now make the database reject writes, as locked security rules would for
+    // an unauthenticated or wrong-owner browser, and add a stay
+    await fetch("http://localhost:18898/__deny?w=1");
+    warned = await page.evaluate(async () => {
+      openItem("stay");
+      state.pendingLoc = { lat: 35.68, lng: 139.76, label: "Tokyo Hotel" };
+      document.getElementById("stayStart").value = "2026-12-01";
+      document.getElementById("stayEnd").value = "2026-12-03";
+      await saveItem();
+      return document.getElementById("notice").textContent;
+    });
+    check("refused write keeps the stay locally", await page.evaluate(() => state.people.Pat.stays.length === 1));
+    check("refused write is announced, not silent", /refused|Couldn't reach/.test(warned), warned);
+    check("refused write is queued for retry", await page.evaluate(() => state._resaveMe === true));
+    // recover: writes allowed again, the queued save should land on next poll
+    await fetch("http://localhost:18898/__deny?w=0");
+    await page.evaluate(async () => { await saveMe(); });
+    check("recovered write persists to the database", await page.evaluate(async () => {
+      const res = await fetch("http://localhost:18898/trips/deny-test/person%3APat.json");
+      const p = await res.json(); return (p.stays || []).length === 1;
+    }));
+    check("retry flag clears after success", await page.evaluate(() => state._resaveMe === false));
+    await page.context().close();
   }
 
   console.log(`\n${pass} passed, ${fail} failed`);

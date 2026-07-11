@@ -218,6 +218,9 @@
     },
     /* this browser's stable anonymous identity (null before first auth) */
     get uid() { return authUid; },
+    /* wait until sign-in has actually been attempted, then report the uid —
+       for checks that must not run before the identity exists */
+    async whenAuthed() { await ready; await ensureAuth(); return authUid; },
     /* the credential that lets another device adopt this identity —
        only ever share it with yourself */
     get linkToken() { return refreshTok || null; },

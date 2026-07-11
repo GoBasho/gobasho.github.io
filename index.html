@@ -366,6 +366,7 @@
     width: 100%; border: 1px solid var(--line-strong); border-radius: 8px; padding: 9px 11px; background: var(--surface); color: var(--ink);
   }
   .field input:focus, .field select:focus, .field textarea:focus { outline: 2px solid var(--indigo); border-color: var(--indigo); }
+  .field input.field-err, .field select.field-err { outline: 2px solid #c4453d; border-color: #c4453d; }
   .field textarea { resize: vertical; min-height: 54px; }
   .field-row { display: flex; gap: 12px; }
   .field-row .field { flex: 1; }
@@ -1423,7 +1424,30 @@ function applyTheme(t){
 /* ---------- storage helpers (shared across all viewers) ---------- */
 const hasStore = typeof window.storage !== "undefined";
 async function sGet(k, shared){ try { return await window.storage.get(k, shared); } catch { return null; } }
-async function sSet(k, v, shared){ try { const r = await window.storage.set(k, v, shared); state.sharedOK=true; return r; } catch(e){ state.sharedOK=false; return null; } }
+async function sSet(k, v, shared){
+  try {
+    const r = await window.storage.set(k, v, shared);
+    state.sharedOK=true;
+    if(shared){ if(state.me && k==="person:"+state.me.name) state._resaveMe=false; if(k==="trip:meta") state._resaveTrip=false; }
+    return r;
+  } catch(e){
+    state.sharedOK=false;
+    if(shared) syncTrouble(k, e);
+    return null;
+  }
+}
+/* a shared write that fails is kept locally, retried by the sync poll, and
+   announced — a silently dropped save looks exactly like a broken app */
+let syncToastAt=0;
+function syncTrouble(key, e){
+  if(state.me && key==="person:"+state.me.name) state._resaveMe=true;
+  if(key==="trip:meta") state._resaveTrip=true;
+  if(Date.now()-syncToastAt < 45000) return;
+  syncToastAt=Date.now();
+  toast(/\(40[13]\)/.test(String(e&&e.message))
+    ? "The trip refused this change — if your name was set up on another device, pick a different name here or open your device link (Trips → Link another device)."
+    : "Couldn't reach the shared trip — your change is kept here and will retry.");
+}
 
 async function saveMe(){
   if(!state.me) return;
@@ -1452,7 +1476,12 @@ async function loadEveryone(){
     }
     if(!all) return;
   }
-  if(all["trip:meta"]){ try { Object.assign(state.trip, JSON.parse(all["trip:meta"])); } catch {} }
+  if(all["trip:meta"]){ try {
+    const m = JSON.parse(all["trip:meta"]);
+    if(!m.start) delete m.start;  // a brand-new trip has no dates yet — keep the
+    if(!m.end) delete m.end;      // suggested window instead of blanking every date form
+    Object.assign(state.trip, m);
+  } catch {} }
   const fresh = {};
   for(const k of Object.keys(all)){
     if(!k.startsWith("person:")) continue;
@@ -1461,6 +1490,15 @@ async function loadEveryone(){
   // repair reversed stay dates (older records could be saved with depart before arrive)
   for(const p of Object.values(fresh)) for(const s of (p.stays||[]))
     if(s.start && s.end && s.end < s.start){ const t=s.start; s.start=s.end; s.end=t; }
+  // if this browser's own record is newer than the server's copy, a save was
+  // refused or lost — the local one wins and the poll retries the save, so a
+  // background refresh can never quietly erase something just added here
+  const meName = state.me && state.me.name;
+  if(meName && state.people[meName] &&
+     (+state.people[meName].updated||0) > (fresh[meName] ? (+fresh[meName].updated||0) : 0)){
+    fresh[meName] = state.people[meName];
+    state._resaveMe = true;
+  }
   state.people = fresh;
   if(state.me && !state.people[state.me.name]){
     state.people[state.me.name] = { name: state.me.name, color: state.me.color, stays: [], activities: [], dayTrips: {}, interests: [], updated: Date.now() };
@@ -3829,7 +3867,8 @@ async function saveProfile(){
   // taking a name that's already on the trip merges into that traveler — make sure it's really them
   if((!oldName || oldName!==name) && state.people[name]){
     const theirs = state.people[name].uid;
-    if(theirs && window.storage.uid && theirs !== window.storage.uid){
+    const ours = window.storage.whenAuthed ? await window.storage.whenAuthed() : window.storage.uid;
+    if(theirs && ours && theirs !== ours){
       toast('"'+name+'" belongs to someone else on this trip — pick a different name'); return;
     }
     if(!confirm('"'+name+'" is already a traveler on this trip. Continue only if that is you — otherwise pick a different name.')) return;
@@ -3982,6 +4021,13 @@ async function findTransitTimes(){
   }
 }
 
+/* point at the field a validation message is about, until it's edited */
+function flagField(id){
+  const el=document.getElementById(id);
+  if(!el) return;
+  el.classList.add("field-err");
+  el.addEventListener("input", ()=>el.classList.remove("field-err"), {once:true});
+}
 async function saveItem(){
   const kind = state.editing.kind;
   const editId = state.editing.id;
@@ -3999,8 +4045,13 @@ async function saveItem(){
     const s={ id:editId||uid(), city, hotelName:(document.getElementById("locInput").value.trim()||city),
       location:state.pendingLoc, start:document.getElementById("stayStart").value, end:document.getElementById("stayEnd").value,
       cost: parseCost(document.getElementById("stayCost").value) };
-    if(!s.start||!s.end){ toast("Set arrive and depart dates"); return; }
-    if(s.end < s.start){ toast("Depart is before arrive — check the dates"); return; }
+    if(!s.start||!s.end){
+      if(!s.start) flagField("stayStart");
+      if(!s.end) flagField("stayEnd");
+      document.getElementById(!s.start?"stayStart":"stayEnd").focus();
+      toast("Set arrive and depart dates"); return;
+    }
+    if(s.end < s.start){ flagField("stayStart"); flagField("stayEnd"); toast("Depart is before arrive — check the dates"); return; }
     if(editId){ const i=rec.stays.findIndex(x=>x.id===editId); if(i>=0) rec.stays[i]=s; else rec.stays.push(s); }
     else rec.stays.push(s);
   } else {
@@ -4012,14 +4063,14 @@ async function saveItem(){
     let date="", flex=null, time="";
     if(flexMode==="fixed"){
       date=document.getElementById("actDate").value;
-      if(!date){ toast("Pick a day"); return; }
+      if(!date){ flagField("actDate"); document.getElementById("actDate").focus(); toast("Pick a day"); return; }
       time=document.getElementById("actTime").value;
     } else if(flexMode==="options"){
       if(!flexDays.length){ toast("Add at least one possible day"); return; }
       flex={type:"options", days:[...flexDays].sort()};
     } else {
       const s=document.getElementById("actRangeStart").value, e=document.getElementById("actRangeEnd").value;
-      if(!s||!e){ toast("Set the date window"); return; }
+      if(!s||!e){ if(!s) flagField("actRangeStart"); if(!e) flagField("actRangeEnd"); toast("Set the date window"); return; }
       if(e<s){ toast("Window ends before it starts"); return; }
       flex={type:"range", start:s, end:e};
     }
@@ -4044,13 +4095,15 @@ async function saveItem(){
     }
     if(editId){ const i=rec.activities.findIndex(x=>x.id===editId); if(i>=0) rec.activities[i]=a; else rec.activities.push(a); }
     else rec.activities.push(a);
-    if(!date){ await saveMe(); document.getElementById("itemScrim").classList.remove("show"); state._didFit=false; render(); toast("Added — pick its day on the Prep board"); return; }
+    if(!date){ await saveMe(); document.getElementById("itemScrim").classList.remove("show"); state._didFit=false; render(); if(state.sharedOK) toast("Added — pick its day on the Prep board"); return; }
   }
   await saveMe();
   document.getElementById("itemScrim").classList.remove("show");
   state._didFit=false;
   render();
-  toast(editId ? "Saved" : (kind==="stay"?"Stay added":"Activity added"));
+  // if the shared save was refused, syncTrouble() already surfaced why —
+  // don't paper over it with a success message
+  if(state.sharedOK) toast(editId ? "Saved" : (kind==="stay"?"Stay added":"Activity added"));
 }
 
 /* ---------- location search (curated + OSM geocoders + map click) ---------- */
@@ -4253,7 +4306,8 @@ function toast(msg, undo){
     if(f) await f();
   };
   clearTimeout(toastTimer);
-  toastTimer=setTimeout(()=>{ n.classList.remove("show"); undoFn=null; }, undo?6000:1800);
+  // long messages need longer on screen
+  toastTimer=setTimeout(()=>{ n.classList.remove("show"); undoFn=null; }, undo?6000:Math.max(1800, Math.min(7000, msg.length*45)));
 }
 
 /* ============================================================
@@ -4306,7 +4360,9 @@ function wire(){
     const name=document.getElementById("wName").value.trim();
     if(!name){ toast("Give the trip a name"); return; }
     try { await createNewTrip(name, document.getElementById("wHome").value); }
-    catch { toast("Couldn't reach the shared database"); }
+    catch(e){ toast(/\(40[13]\)/.test(String(e&&e.message))
+      ? "The database refused the new trip — Anonymous sign-in may be off, or this network blocks Google sign-in."
+      : "Couldn't reach the shared database"); }
   };
   document.getElementById("wJoinBtn").onclick = ()=>joinTrip(document.getElementById("wJoin").value);
   document.getElementById("wJoin").addEventListener("keydown", e=>{ if(e.key==="Enter") joinTrip(e.target.value); });
@@ -4379,6 +4435,9 @@ async function boot(){
   // gentle background refresh so collaborators' changes appear
   if(hasStore) setInterval(async()=>{
     if(document.hidden || anyModalOpen()) return;
+    // first, re-send anything the last save attempt couldn't deliver
+    if(state._resaveMe && state.me && state.people[state.me.name]) await saveMe();
+    if(state._resaveTrip) await saveTrip();
     const before = JSON.stringify([state.people, state.trip, state.sharedOK]);
     await loadEveryone();
     // skip the re-render (map markers, panels, thumbnails) when nothing changed
