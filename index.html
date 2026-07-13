@@ -3,13 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Meridian — Trip Planner</title>
+<title>Basho — Trip Planner</title>
 <meta name="description" content="A shared trip planner — plan stays and activities with friends on one map anywhere in the world, find points of interest and photo spots, and see where your paths cross.">
 <meta name="theme-color" content="#f4f5f2">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%E2%9B%A9%EF%B8%8F%3C/text%3E%3C/svg%3E">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon.svg">
-<meta property="og:title" content="Meridian — Trip Planner">
+<meta property="og:title" content="Basho — Trip Planner">
 <meta property="og:description" content="Plan trips with friends on one shared map — stays, day plans, transit, costs, and who's in.">
 <meta property="og:image" content="https://zbelohlavek.github.io/Itinerary/og-image.png">
 <meta property="og:type" content="website">
@@ -677,7 +677,7 @@
 <body>
 <div class="app">
   <header class="bar">
-    <div class="wordmark">Meridian<small>Trip Planner</small></div>
+    <div class="wordmark">Basho<small>Trip Planner</small></div>
     <div class="trip-head">
       <input class="trip-title" id="tripTitle" value="Our Japan Trip" maxlength="48" aria-label="Trip name">
       <div class="trip-dates">
@@ -964,7 +964,7 @@
 
 <script>
 /* ============================================================
-   Meridian — Asia trip planner (Japan · Korea · China · Thailand)
+   Basho — trip planner, named for the wandering poet (and "basho" = "place")
    Data is kept in a shared key/value store (storage.js), one key
    per traveler, so anyone opening the site reads and writes the
    same trip. See config.js to hook up live sharing.
@@ -3943,7 +3943,7 @@ function icsAllDay(date){
   return ["DTSTART;VALUE=DATE:"+date.replace(/-/g,""), "DTEND;VALUE=DATE:"+iso(nd).replace(/-/g,"")];
 }
 function buildICS(p){
-  const L=["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//Meridian//Japan Trip//EN","CALSCALE:GREGORIAN",
+  const L=["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//Basho//Trip Planner//EN","CALSCALE:GREGORIAN",
            "X-WR-CALNAME:"+icsEscape(state.trip.title||"Japan Trip")];
   const stamp=new Date().toISOString().replace(/[-:]/g,"").slice(0,15)+"Z";
   const ev=(uid, lines)=>L.push("BEGIN:VEVENT","UID:"+uid+"@meridian","DTSTAMP:"+stamp,...lines,"END:VEVENT");

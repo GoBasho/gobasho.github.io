@@ -1,4 +1,7 @@
-# Meridian — Trip Planner
+# Basho — Trip Planner
+
+Named for Matsuo Basho, the wandering poet who walked Japan writing about
+every stop — and for the Japanese word *basho*, "place."
 
 A shared trip planner that works anywhere in the world. Everyone on the trip
 adds themselves, plans their hotels and stays, pins activities and photo spots

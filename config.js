@@ -1,5 +1,5 @@
 /*
- * Meridian configuration — the only file you ever need to edit.
+ * Basho configuration — the only file you ever need to edit.
  *
  * SHARING WITH FRIENDS (optional, ~10 minutes, free):
  * Out of the box the planner saves everything in your own browser only.

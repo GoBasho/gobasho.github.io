@@ -1,4 +1,4 @@
-/* Meridian service worker: cache the app shell so the planner opens
+/* Basho service worker: cache the app shell so the planner opens
    offline (data comes from the last-synced snapshot in localStorage). */
 const CACHE = "meridian-v1";
 const SHELL = [

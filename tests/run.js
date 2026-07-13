@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /*
- * Meridian test suite: unit tests on the app's pure functions plus
+ * Basho test suite: unit tests on the app's pure functions plus
  * end-to-end flows in headless Chromium, with Firebase, Photon,
  * Wikipedia, and exchange-rate APIs mocked locally.
  *

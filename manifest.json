@@ -1,6 +1,6 @@
 {
-  "name": "Meridian Trip Planner",
-  "short_name": "Meridian",
+  "name": "Basho Trip Planner",
+  "short_name": "Basho",
   "description": "Shared trip planner — stays, plans, and photo spots with friends on one map.",
   "start_url": "./",
   "display": "standalone",

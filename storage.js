@@ -1,5 +1,8 @@
 /*
- * Storage adapter for Meridian.
+ * Storage adapter for Basho.
+ *
+ * (Storage keys and the MERIDIAN_CONFIG global keep their original names —
+ * renaming them would orphan every browser's saved trips and identity.)
  *
  * The app talks to a tiny key/value API: get(key, shared), set(key, value,
  * shared), list(prefix, shared). "shared" data is the trip everyone sees;
