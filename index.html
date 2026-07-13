@@ -11,7 +11,7 @@
 <link rel="apple-touch-icon" href="icon.svg">
 <meta property="og:title" content="Basho — Trip Planner">
 <meta property="og:description" content="Plan trips with friends on one shared map — stays, day plans, transit, costs, and who's in.">
-<meta property="og:image" content="https://zbelohlavek.github.io/Itinerary/og-image.png">
+<meta property="og:image" content="https://gobasho.github.io/og-image.png">
 <meta property="og:type" content="website">
 <meta name="twitter:card" content="summary_large_image">
 <script>
@@ -3510,7 +3510,7 @@ async function openTripsMenu(){
          <button class="mini-btn" id="tmDup" title="Copy everything into a new trip">Duplicate</button></div>
        <div class="tm-new"><input type="text" id="tmName" placeholder="New trip name, or a trip ID to join…" maxlength="48"><select id="tmNewHome" title="Where the new trip goes">${homeOpts("WORLD")}</select><button class="mini-btn" id="tmGo">Go</button></div>
        <div class="field-hint" style="padding:2px 13px 10px">Share a trip with the invite link — new trip IDs are unguessable on purpose. Each trip has its own destination, people, plans, dates, currency, and expenses.</div>
-       <div class="tm-foot"><button class="linkish" id="tmExport">Download trip data</button>${googleClientId() ? (window.storage.authEmail ? `<span class="tm-id" title="Signed in — your plans are editable from any device you sign in on">Synced: ${esc(window.storage.authEmail)}</span>` : '<button class="linkish" id="tmGoogle">Sign in to sync devices</button>') : '<button class="linkish" id="tmLinkDev">Link another device</button>'}<a class="linkish" href="about.html" target="_blank" rel="noopener">About</a><a class="linkish" href="https://github.com/ZBelohlavek/Itinerary/issues" target="_blank" rel="noopener">Feedback</a></div>`;
+       <div class="tm-foot"><button class="linkish" id="tmExport">Download trip data</button>${googleClientId() ? (window.storage.authEmail ? `<span class="tm-id" title="Signed in — your plans are editable from any device you sign in on">Synced: ${esc(window.storage.authEmail)}</span>` : '<button class="linkish" id="tmGoogle">Sign in to sync devices</button>') : '<button class="linkish" id="tmLinkDev">Link another device</button>'}<a class="linkish" href="about.html" target="_blank" rel="noopener">About</a><a class="linkish" href="https://github.com/GoBasho/gobasho.github.io/issues" target="_blank" rel="noopener">Feedback</a></div>`;
   menu.querySelectorAll("[data-trip]").forEach(b=>b.onclick=()=>{ if(b.dataset.trip!==cur) switchTrip(b.dataset.trip); });
   document.getElementById("tmHome").onchange=async(e)=>{
     state.trip.home=e.target.value;

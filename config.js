@@ -25,7 +25,7 @@ window.MERIDIAN_CONFIG = {
   //   2. On that Google panel, expand "Web SDK configuration" and copy the
   //      Web client ID (ends in .apps.googleusercontent.com) here.
   //   3. Authentication → Settings → Authorized domains → add the domain the
-  //      site runs on (e.g. zbelohlavek.github.io).
+  //      site runs on (e.g. gobasho.github.io).
   // Leave as "" to keep invisible per-browser identities only.
   googleClientId: "957666197172-807mvh5u6397th803l06s2viudkagvuc.apps.googleusercontent.com",
 

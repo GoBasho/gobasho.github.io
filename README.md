@@ -171,7 +171,7 @@ headless Chromium, with all external services mocked. It needs Playwright:
 From a terminal (PowerShell on Windows):
 
 ```
-git clone https://github.com/ZBelohlavek/Itinerary "C:\Users\Zacha\OneDrive\Desktop\Japan Trip"
+git clone https://github.com/GoBasho/gobasho.github.io "C:\Users\Zacha\OneDrive\Desktop\Japan Trip"
 ```
 
 Or on the GitHub page click **Code → Download ZIP** and unzip it into that
