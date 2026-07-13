@@ -214,6 +214,10 @@ async function setupProfile(page, name) {
         {id:"m1", title:"Sky deck", date:"2026-09-08", time:"15:00", cost:5000, maybe:true, location:{lat:35.66,lng:139.70}}]};
       r.maybeCost = dayCost(mp, "2026-09-08").v;
       r.maybeConflicts = timeConflicts(mp).length;
+      // "during the trip" plans: window is the whole trip, label reads plainly
+      state.trip = {start:"2026-09-07", end:"2026-09-09"};
+      r.tripWindow = actWindow({date:"", flex:{type:"trip"}}).join(",");
+      r.tripLabel = flexLabel({flex:{type:"trip"}});
       return r;
     });
     check("haversine Tokyo→Kyoto ≈ 366km", Math.abs(u.haversineTokyoKyoto - 366) < 12, u.haversineTokyoKyoto);
@@ -251,6 +255,8 @@ async function setupProfile(page, name) {
     check("trip months decide when no date given", u.fireworksJulyTrip === null && /fireworks/.test(u.fireworksNovTrip));
     check("maybes don't count toward day cost", u.maybeCost === 1000, u.maybeCost);
     check("maybes don't trigger time-conflict warnings", u.maybeConflicts === 0);
+    check("during-the-trip window spans the whole trip", u.tripWindow === "2026-09-07,2026-09-08,2026-09-09", u.tripWindow);
+    check("during-the-trip label", u.tripLabel === "during the trip", u.tripLabel);
     await page.context().close();
   }
 
@@ -907,6 +913,20 @@ async function setupProfile(page, name) {
       return !!a && a.date === "2026-12-14" && a.maybe === true;
     }));
     check("scheduled maybe wears an if-time tag in the itinerary", !!(await page.$("#itineraryInner .maybe-tag")));
+    // a "during the trip" plan through the same form: no dates to type at all
+    await page.evaluate(() => {
+      openItem("activity");
+      state.pendingLoc = { lat: 35.71, lng: 139.80, label: "Kappabashi Street" };
+      document.getElementById("itemName").value = "Kappabashi Street";
+      setFlexMode("trip");
+    });
+    await page.click("#itemSave");
+    await page.waitForTimeout(400);
+    check("during-the-trip plan saves unscheduled with a trip window", await page.evaluate(() => {
+      const a = state.people.Zach.activities.find(x => x.title === "Kappabashi Street");
+      return !!a && !a.date && a.flex && a.flex.type === "trip" && actWindow(a).length === 7;
+    }));
+    check("rail reads Flexible · during the trip", /Flexible · during the trip/.test(await page.textContent("#railList")));
     await page.context().close();
   }
 

@@ -879,6 +879,7 @@
             <button type="button" data-mode="fixed" class="on">Exact day</button>
             <button type="button" data-mode="options">A few options</button>
             <button type="button" data-mode="range">Date range</button>
+            <button type="button" data-mode="trip">During the trip</button>
           </div>
         </div>
         <div class="field-row" id="whenFixed">
@@ -898,6 +899,9 @@
             <div class="field"><label>And</label><input type="date" id="actRangeEnd"></div>
           </div>
           <div class="field-hint">Happens once somewhere in this window — place it on the Prep board when you're ready.</div>
+        </div>
+        <div id="whenTrip" style="display:none;">
+          <div class="field-hint">Anytime while you're there. It waits on the Prep board, any day can take it, and open itinerary days will suggest it.</div>
         </div>
         <div class="field-row">
           <div class="field" id="fldCat">
@@ -1606,6 +1610,7 @@ function stayCoversDate(stay, date){ return stay.start && stay.end && date >= st
 function actWindow(a){
   if(a.date) return [a.date];
   if(!a.flex) return [];
+  if(a.flex.type==="trip") return tripDates();  // anytime while we're there
   if(a.flex.type==="options") return (a.flex.days||[]).slice();
   if(a.flex.type==="range"){
     const out=[]; let d=parseISO(a.flex.start); const end=parseISO(a.flex.end); let g=0;
@@ -1616,6 +1621,7 @@ function actWindow(a){
 }
 function flexLabel(a){
   if(!a.flex) return "";
+  if(a.flex.type==="trip") return "during the trip";
   if(a.flex.type==="options") return (a.flex.days||[]).map(shortDate).join(" or ");
   return "sometime "+shortDate(a.flex.start)+"–"+shortDate(a.flex.end);
 }
@@ -4283,6 +4289,7 @@ function setFlexMode(m){
   document.getElementById("whenFixed").style.display = m==="fixed"?"flex":"none";
   document.getElementById("whenOptions").style.display = m==="options"?"block":"none";
   document.getElementById("whenRange").style.display = m==="range"?"block":"none";
+  document.getElementById("whenTrip").style.display = m==="trip"?"block":"none";
 }
 function renderOptDays(){
   const box=document.getElementById("optDays");
@@ -4344,7 +4351,7 @@ function openItem(kind, existing){
     document.getElementById("actRangeEnd").value = f && f.type==="range" ? f.end : "";
     document.getElementById("optAdd").value = "";
     // an unscheduled flexible item opens in its flexible mode; anything dated opens as exact
-    setFlexMode(existing && !existing.date && f ? (f.type==="options"?"options":"range") : "fixed");
+    setFlexMode(existing && !existing.date && f ? (f.type==="options"?"options":f.type==="trip"?"trip":"range") : "fixed");
     renderOptDays();
   }
   document.getElementById("actBook").value = existing && !isStay ? (existing.booking||"") : "";
@@ -4455,6 +4462,8 @@ async function saveItem(){
     } else if(flexMode==="options"){
       if(!flexDays.length){ toast("Add at least one possible day"); return; }
       flex={type:"options", days:[...flexDays].sort()};
+    } else if(flexMode==="trip"){
+      flex={type:"trip"};
     } else {
       const s=document.getElementById("actRangeStart").value, e=document.getElementById("actRangeEnd").value;
       if(!s||!e){ if(!s) flagField("actRangeStart"); if(!e) flagField("actRangeEnd"); toast("Set the date window"); return; }
