@@ -855,6 +855,57 @@ async function setupProfile(page, name) {
     await w.context().close();
   }
 
+  console.log("\n== e2e: Google sign-in for multi-device editing ==");
+  {
+    const gauthConfig = async (page, localId) => {
+      // config with a Google client id (later routes win over newPage's)
+      await page.route("**/config.js", r => r.fulfill({ contentType: "application/javascript",
+        body: 'window.MERIDIAN_CONFIG={firebaseUrl:"https://mock-rtdb.firebaseio.com",tripId:"gauth-test",apiKey:"AIza-test",googleClientId:"cid-test.apps.googleusercontent.com"};' }));
+      await page.route("**/accounts:signInWithIdp*", r => r.fulfill({ contentType: "application/json",
+        body: JSON.stringify({ idToken: "tok-g", refreshToken: "ref-g", localId, email: "zach@example.com", expiresIn: "3600" }) }));
+      await page.route("https://accounts.google.com/**", r => r.fulfill({ contentType: "application/javascript", body: "" }));
+    };
+    const page = await newPage(browser, "gauth-test", { shared: true });
+    await gauthConfig(page, "uid-test");  // same uid back = anonymous account linked
+    await page.goto("http://localhost:18899/", { waitUntil: "domcontentloaded" });
+    await setupProfile(page, "Zach");
+    await page.click("#meChip");
+    check("account section appears when a client id is configured",
+      await page.$eval("#accountBox", el => el.style.display !== "none" && /Sign in with Google/i.test(el.textContent)));
+    // the GIS popup can't run headless — feed its callback directly
+    const toastMsg = await page.evaluate(async () => {
+      await handleGoogleCredential({ credential: "fake-google-jwt" });
+      return document.getElementById("notice").textContent;
+    });
+    check("linked sign-in keeps the uid (records stay editable)", await page.evaluate(() => window.storage.uid === "uid-test"));
+    check("signed-in email exposed", await page.evaluate(() => window.storage.authEmail === "zach@example.com"));
+    check("sign-in confirms without the ownership warning", /Signed in as zach@example.com/.test(toastMsg) && !/old identity/.test(toastMsg), toastMsg);
+    check("google identity persisted for next visit", await page.evaluate(() => {
+      const s = JSON.parse(localStorage.getItem("meridian:auth"));
+      return s.r === "ref-g" && s.e === "zach@example.com";
+    }));
+    check("profile shows the synced account with a sign out", await page.$eval("#accountBox", el =>
+      /Synced as/.test(el.textContent) && !!el.querySelector("#acctOut")));
+    await page.keyboard.press("Escape");
+    await page.click("#tripsBtn");
+    await page.waitForTimeout(300);
+    check("trips menu shows the synced account", /Synced: zach@example\.com/.test(await page.textContent("#tripsMenu")));
+    await page.context().close();
+    // wrong order: this Google account was first used on ANOTHER device,
+    // so linking is refused and this browser adopts the other uid — with a warning
+    const p2 = await newPage(browser, "gauth-test", { shared: true });
+    await gauthConfig(p2, "uid-other");
+    await p2.goto("http://localhost:18899/", { waitUntil: "domcontentloaded" });
+    await setupProfile(p2, "Kae");
+    const warn = await p2.evaluate(async () => {
+      await handleGoogleCredential({ credential: "fake-google-jwt" });
+      return document.getElementById("notice").textContent;
+    });
+    check("unlinked sign-in adopts the account's uid", await p2.evaluate(() => window.storage.uid === "uid-other"));
+    check("and warns that older plans stay with the old identity", /old identity/.test(warn), warn);
+    await p2.context().close();
+  }
+
   console.log("\n== e2e: itinerary legs as collapsible chapters ==");
   {
     // Japan trip with a two-day Korea leg in the middle → three chapters

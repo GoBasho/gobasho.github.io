@@ -456,6 +456,8 @@
   .rec-note { font-size: 10.5px; color: var(--ink-faint); margin-top: 2px; }
   .rec-off { font-size: 10px; font-weight: 600; color: #a8712c; margin-top: 2px; }
   [data-theme="dark"] .rec-off { color: #d9a45b; }
+  .acct-line { font-size: 12.5px; color: var(--ink-soft); line-height: 1.5; }
+  .gsi-mount { margin-top: 8px; min-height: 32px; }
   .rec-note a { color: var(--indigo); }
 
   .chip-pick { display: flex; flex-wrap: wrap; gap: 7px; }
@@ -803,6 +805,7 @@
         </div>
         <div class="field-hint">Shows on the Coordination tab so arrivals line up, and lands in your calendar export.</div>
       </div>
+      <div class="field" id="accountBox" style="display:none"></div>
     </div>
     <div class="modal-foot" style="flex-direction:column; align-items:stretch; gap:6px;">
       <button class="btn primary wide" id="profileSave">Save</button>
@@ -3502,7 +3505,7 @@ async function openTripsMenu(){
          <button class="mini-btn" id="tmDup" title="Copy everything into a new trip">Duplicate</button></div>
        <div class="tm-new"><input type="text" id="tmName" placeholder="New trip name, or a trip ID to join…" maxlength="48"><select id="tmNewHome" title="Where the new trip goes">${homeOpts("WORLD")}</select><button class="mini-btn" id="tmGo">Go</button></div>
        <div class="field-hint" style="padding:2px 13px 10px">Share a trip with the invite link — new trip IDs are unguessable on purpose. Each trip has its own destination, people, plans, dates, currency, and expenses.</div>
-       <div class="tm-foot"><button class="linkish" id="tmExport">Download trip data</button><button class="linkish" id="tmLinkDev">Link another device</button><a class="linkish" href="about.html" target="_blank" rel="noopener">About</a><a class="linkish" href="https://github.com/ZBelohlavek/Itinerary/issues" target="_blank" rel="noopener">Feedback</a></div>`;
+       <div class="tm-foot"><button class="linkish" id="tmExport">Download trip data</button>${googleClientId() ? (window.storage.authEmail ? `<span class="tm-id" title="Signed in — your plans are editable from any device you sign in on">Synced: ${esc(window.storage.authEmail)}</span>` : '<button class="linkish" id="tmGoogle">Sign in to sync devices</button>') : '<button class="linkish" id="tmLinkDev">Link another device</button>'}<a class="linkish" href="about.html" target="_blank" rel="noopener">About</a><a class="linkish" href="https://github.com/ZBelohlavek/Itinerary/issues" target="_blank" rel="noopener">Feedback</a></div>`;
   menu.querySelectorAll("[data-trip]").forEach(b=>b.onclick=()=>{ if(b.dataset.trip!==cur) switchTrip(b.dataset.trip); });
   document.getElementById("tmHome").onchange=async(e)=>{
     state.trip.home=e.target.value;
@@ -3515,7 +3518,10 @@ async function openTripsMenu(){
   document.getElementById("tmInvite").onclick=copyInvite;
   document.getElementById("tmDup").onclick=duplicateTrip;
   document.getElementById("tmExport").onclick=exportTripJSON;
-  document.getElementById("tmLinkDev").onclick=async()=>{
+  const tmg=document.getElementById("tmGoogle");
+  if(tmg) tmg.onclick=()=>{ menu.classList.remove("show"); openProfile(); };
+  const tld=document.getElementById("tmLinkDev");
+  if(tld) tld.onclick=async()=>{
     const t=window.storage.linkToken;
     if(!t){ toast("No identity to link yet — try after the page has synced"); return; }
     const url=location.origin+location.pathname+"?trip="+encodeURIComponent(window.storage.tripId)+"&adopt="+encodeURIComponent(t);
@@ -4084,8 +4090,66 @@ function openProfile(){
     document.getElementById(pref+"Ap").value = f.ap||"";
     document.getElementById(pref+"Fl").value = f.fl||"";
   }
+  renderAccountBox();
   scrim.classList.add("show");
   document.getElementById("profileName").focus();
+}
+
+/* ---------- optional Google sign-in: one identity across all your devices ----------
+   Only appears when config.js provides a googleClientId. Anonymous stays the
+   default — nobody is forced to sign in to use the planner. */
+function googleClientId(){ return (window.MERIDIAN_CONFIG||{}).googleClientId || ""; }
+function renderAccountBox(){
+  const box=document.getElementById("accountBox");
+  if(!googleClientId() || window.storage.mode!=="shared"){ box.style.display="none"; return; }
+  box.style.display="block";
+  if(window.storage.authEmail){
+    box.innerHTML=`<label>Account</label><div class="acct-line">Synced as <b>${esc(window.storage.authEmail)}</b> — sign in with the same Google account on any device to edit your plans there. <button class="linkish" id="acctOut" type="button">Sign out</button></div>`;
+    box.querySelector("#acctOut").onclick=()=>{
+      if(!confirm("Sign out? This browser goes back to its own invisible identity — plans saved while signed in stay owned by your Google account.")) return;
+      window.storage.signOut(); location.reload();
+    };
+  } else {
+    box.innerHTML=`<label>Account</label><div class="acct-line">Sign in with Google to edit your plans from any device — phone, laptop, anywhere.</div><div class="gsi-mount" id="gsiMount"></div>`;
+    mountGoogleButton(document.getElementById("gsiMount"));
+  }
+}
+let gsiLoading=null;
+function loadGsi(){
+  if(window.google && window.google.accounts) return Promise.resolve();
+  if(gsiLoading) return gsiLoading;
+  gsiLoading=new Promise((ok,err)=>{
+    const s=document.createElement("script");
+    s.src="https://accounts.google.com/gsi/client"; s.async=true;
+    s.onload=ok; s.onerror=()=>{ gsiLoading=null; err(new Error("gsi load failed")); };
+    document.head.appendChild(s);
+  });
+  return gsiLoading;
+}
+async function mountGoogleButton(el){
+  try {
+    await loadGsi();
+    google.accounts.id.initialize({ client_id: googleClientId(), callback: handleGoogleCredential });
+    google.accounts.id.renderButton(el, { theme: isDark()?"filled_black":"outline", size:"medium", text:"signin_with", width: 230 });
+  } catch {
+    el.innerHTML='<div class="field-hint">Couldn\'t reach Google sign-in — check your connection and reopen this window.</div>';
+  }
+}
+/* GIS hands back a credential (Google ID token); trade it for the Firebase identity */
+async function handleGoogleCredential(resp){
+  try {
+    const r = await window.storage.signInWithGoogle(resp.credential);
+    if(r.linked){
+      toast("Signed in as "+(r.email||"your Google account")+" — use the same account on your other devices to edit anywhere");
+    } else {
+      toast("Signed in as "+(r.email||"your Google account")+". Plans made earlier in this browser belong to its old identity — edit those from the device that made them.");
+    }
+    if(state.me) await saveMe();  // stamp the record with the (possibly new) uid
+    renderAccountBox();
+    render();
+  } catch {
+    toast("Google sign-in didn't complete — try again");
+  }
 }
 function readFlights(){
   const read = pref => ({

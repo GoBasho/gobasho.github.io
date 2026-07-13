@@ -19,6 +19,16 @@ window.MERIDIAN_CONFIG = {
   // anonymous sign-in so database rules can enforce per-person ownership.
   apiKey: "AIzaSyAbY_uK-revIDNRSaycqfkdO5NJoETZ1V0",
 
+  // OPTIONAL: Google sign-in, so each person can edit their plans from any
+  // device they sign in on. Three steps in the Firebase console (~3 min):
+  //   1. Authentication → Sign-in method → Add new provider → Google → enable.
+  //   2. On that Google panel, expand "Web SDK configuration" and copy the
+  //      Web client ID (ends in .apps.googleusercontent.com) here.
+  //   3. Authentication → Settings → Authorized domains → add the domain the
+  //      site runs on (e.g. zbelohlavek.github.io).
+  // Leave as "" to keep invisible per-browser identities only.
+  googleClientId: "",
+
   // A name that keeps your trip's data separate from anything else in the
   // database. Change it if you ever want to start a fresh trip.
   tripId: "our-japan-trip"

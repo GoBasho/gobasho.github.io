@@ -121,6 +121,33 @@ read and edit the trip data. For a trip planner shared among friends that's
 usually fine, but don't put anything sensitive in it (passport numbers,
 booking references, etc.).
 
+## Optional: Google sign-in for editing from any device (~3 minutes)
+
+Out of the box each browser gets its own invisible identity, so your plans
+are only editable from the browser that created them. Turn on Google
+sign-in and anyone can edit their plans from every device they sign in on
+— phone, laptop, anywhere. Still free (Firebase's free tier covers 50,000
+monthly users), and nobody is forced to sign in: anonymous stays the
+default.
+
+1. In the Firebase console: **Authentication → Sign-in method →
+   Add new provider → Google** → enable it, pick your support email, save.
+2. On that same Google panel, expand **Web SDK configuration** and copy the
+   **Web client ID** (ends in `.apps.googleusercontent.com`). Paste it as
+   the `googleClientId` value in `config.js` and push.
+3. **Authentication → Settings → Authorized domains** → add the domain the
+   site runs on (e.g. `your-username.github.io`). `localhost` is already
+   allowed for local testing.
+
+A "Sign in with Google" button then appears in everyone's profile window
+(and the Trips menu). **Order matters the first time:** sign in first on
+the device that already has your plans — that upgrades its invisible
+identity to your Google account and keeps ownership of everything you've
+written. After that, signing in on any other device gives it the same
+identity automatically. (Sign in on a brand-new device first and it gets a
+fresh identity that can't edit records made before — the app warns when
+that happens.)
+
 ## Running the tests
 
 `node tests/run.js` runs unit tests on the app's core functions plus

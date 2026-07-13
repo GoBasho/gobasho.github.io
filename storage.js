@@ -104,16 +104,16 @@
      stable anonymous user; the id token rides along on every database
      request so security rules can enforce per-record ownership. */
   const apiKey = cfg.apiKey || "";
-  let authUid = null, authToken = null, authExp = 0, refreshTok;
+  let authUid = null, authToken = null, authExp = 0, refreshTok, authEmail = null;
   function persistAuth() {
-    try { localStorage.setItem("meridian:auth", JSON.stringify({ r: refreshTok, u: authUid })); } catch {}
+    try { localStorage.setItem("meridian:auth", JSON.stringify({ r: refreshTok, u: authUid, e: authEmail })); } catch {}
   }
   async function ensureAuth() {
     if (!apiKey || mode !== "shared") return null;
     if (authToken && Date.now() < authExp - 300000) return authToken;
     if (refreshTok === undefined) {
       refreshTok = null;
-      try { const s = JSON.parse(localStorage.getItem("meridian:auth") || "null"); if (s) { refreshTok = s.r; authUid = s.u; } } catch {}
+      try { const s = JSON.parse(localStorage.getItem("meridian:auth") || "null"); if (s) { refreshTok = s.r; authUid = s.u; authEmail = s.e || null; } } catch {}
     }
     try {
       if (refreshTok) {
@@ -221,6 +221,41 @@
     /* wait until sign-in has actually been attempted, then report the uid —
        for checks that must not run before the identity exists */
     async whenAuthed() { await ready; await ensureAuth(); return authUid; },
+    /* the Google account this browser is signed in with (null = anonymous) */
+    get authEmail() { return authEmail; },
+    /* Trade a Google ID token (from Google Identity Services) for a Firebase
+       identity. Tries to LINK the current anonymous account first, so the uid
+       — and with it ownership of every record already written — is preserved.
+       If this Google account already exists (signed in on another device
+       first), linking is refused and we sign in as that account instead. */
+    async signInWithGoogle(googleIdToken) {
+      await ready;
+      if (!apiKey || mode !== "shared") throw new Error("Shared database not configured");
+      await ensureAuth();
+      const call = (link) => fetch("https://identitytoolkit.googleapis.com/v1/accounts:signInWithIdp?key=" + apiKey, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(Object.assign({
+          postBody: "id_token=" + encodeURIComponent(googleIdToken) + "&providerId=google.com",
+          requestUri: (location.origin && location.origin !== "null") ? location.origin : "http://localhost",
+          returnSecureToken: true
+        }, link && authToken ? { idToken: authToken } : {}))
+      });
+      let res = await call(true);
+      if (!res.ok) res = await call(false);
+      if (!res.ok) throw new Error("Google sign-in failed (" + res.status + ")");
+      const d = await res.json();
+      const prevUid = authUid;
+      authToken = d.idToken; refreshTok = d.refreshToken; authUid = d.localId;
+      authExp = Date.now() + (+d.expiresIn || 3600) * 1000;
+      authEmail = d.email || null;
+      persistAuth();
+      return { email: authEmail, uid: authUid, linked: !prevUid || authUid === prevUid };
+    },
+    /* drop the signed-in identity; the next load mints a fresh anonymous one */
+    signOut() {
+      authToken = null; authUid = null; refreshTok = null; authEmail = null; authExp = 0;
+      try { localStorage.removeItem("meridian:auth"); } catch {}
+    },
     /* the credential that lets another device adopt this identity —
        only ever share it with yourself */
     get linkToken() { return refreshTok || null; },
