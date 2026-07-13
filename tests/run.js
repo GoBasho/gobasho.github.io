@@ -855,6 +855,38 @@ async function setupProfile(page, name) {
     await w.context().close();
   }
 
+  console.log("\n== e2e: food spots ==");
+  {
+    db["/trips/food-test/trip%3Ameta"] = JSON.stringify({ title: "Tokyo Eats", start: "2026-12-13", end: "2026-12-19", home: "JP", countries: ["JP"] });
+    const page = await newPage(browser, "food-test", { shared: true });
+    let photonURL = "";
+    await page.route("https://photon.komoot.io/**", r => {
+      photonURL = r.request().url();
+      r.fulfill({ contentType: "application/json", body: JSON.stringify({ features: [
+        { properties: { name: "Ichiran Shibuya", city: "Tokyo", osm_key: "amenity", osm_value: "restaurant" },
+          geometry: { coordinates: [139.6989, 35.6591] } }
+      ] }) });
+    });
+    await page.goto("http://localhost:18899/", { waitUntil: "domcontentloaded" });
+    await setupProfile(page, "Zach");
+    await page.click("#addFood");
+    check("food form opens with its own framing", await page.evaluate(() =>
+      document.getElementById("itemTitle").textContent === "Add a food spot" &&
+      document.getElementById("fldCat").style.display === "none" &&
+      document.getElementById("actCat").value === "Food & drink"));
+    await page.fill("#locInput", "ichiran");
+    await page.waitForSelector(".loc-suggest .loc-opt", { timeout: 5000 });
+    check("search asks the geocoder for eateries", /osm_tag=amenity%3Arestaurant/.test(photonURL) && /osm_tag=shop%3Abakery/.test(photonURL), photonURL);
+    check("restaurant suggested with its type", /Ichiran Shibuya/.test(await page.textContent("#locSuggest")));
+    await page.click(".loc-suggest .loc-opt");
+    await page.click("#itemSave");
+    await page.waitForTimeout(400);
+    const saved = await page.evaluate(() => state.people.Zach.activities[0]);
+    check("food spot saved as a Food & drink plan", !!saved && saved.title === "Ichiran Shibuya" && saved.category === "Food & drink", saved);
+    check("confirmation names the food spot", /Food spot added/.test(await page.textContent("#notice")));
+    await page.context().close();
+  }
+
   console.log("\n== e2e: Google sign-in for multi-device editing ==");
   {
     const gauthConfig = async (page, localId) => {

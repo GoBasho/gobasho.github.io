@@ -173,7 +173,8 @@
   }
   .eyebrow .count { color: var(--ink-faint); font-weight: 500; letter-spacing: 0; }
 
-  .add-row { display: flex; gap: 8px; }
+  .add-row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .add-row .btn { flex: 1 1 auto; }
   .btn {
     display: inline-flex; align-items: center; justify-content: center; gap: 7px;
     border: 1px solid var(--line-strong); background: var(--surface); color: var(--ink);
@@ -720,6 +721,10 @@
           <button class="btn" id="addTransit">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="3" width="14" height="14" rx="3"/><path d="M5 11h14M9 17l-2 4M15 17l2 4"/><circle cx="9" cy="14" r=".5"/><circle cx="15" cy="14" r=".5"/></svg>
             Transit
+          </button>
+          <button class="btn" id="addFood">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 3v7a2 2 0 0 0 2 2v9"/><path d="M5 3v4M9 3v4"/><path d="M17 3c-1.7 0-3 2-3 5v4h3v9"/><path d="M17 3v9"/></svg>
+            Food
           </button>
         </div>
       </div>
@@ -4259,22 +4264,25 @@ function openItem(kind, existing){
   state.pendingLoc = existing ? existing.location : null;
   const isStay = kind==="stay";
   const isTransit = kind==="transit";
+  const isFood = kind==="food";
   document.getElementById("itemTitle").textContent = existing
     ? (isStay?"Edit stay":isTransit?"Edit transit":"Edit activity")
-    : (isStay?"Add a stay":isTransit?"Add transit":"Add an activity");
+    : (isStay?"Add a stay":isTransit?"Add transit":isFood?"Add a food spot":"Add an activity");
   document.getElementById("itemSubtitle").textContent = isStay
     ? "Where you're based, and for which dates. It becomes a hotel marker."
     : isTransit
     ? "A train, bus, or ferry leg — the location pin is where it takes you."
+    : isFood
+    ? "A restaurant, café, market, or bar — give it a day, or leave it flexible."
     : "A place you'd like to visit, on a given day.";
   document.getElementById("stayFields").style.display = isStay?"block":"none";
   document.getElementById("actFields").style.display = isStay?"none":"block";
   document.getElementById("transitFields").style.display = isTransit?"block":"none";
-  document.getElementById("fldCat").style.display = isTransit?"none":"block";
+  document.getElementById("fldCat").style.display = (isTransit||isFood)?"none":"block";
   document.getElementById("fldTitle").style.display = isStay?"none":"block";
   document.getElementById("lblTitle").textContent = isTransit?"Line / train / bus":"What is it";
-  document.getElementById("itemName").placeholder = isTransit?"e.g. Nozomi 24, JR Yamanote, Airport Limousine":"e.g. Fushimi Inari Shrine";
-  document.getElementById("locInput").placeholder = isTransit?"Arrival station or stop":"Search a place, or click the map";
+  document.getElementById("itemName").placeholder = isTransit?"e.g. Nozomi 24, JR Yamanote, Airport Limousine":isFood?"e.g. Ichiran Ramen, Nishiki Market stall":"e.g. Fushimi Inari Shrine";
+  document.getElementById("locInput").placeholder = isTransit?"Arrival station or stop":isFood?"Search restaurants, cafés, markets":"Search a place, or click the map";
   document.getElementById("transFrom").value = existing && existing.from ? existing.from : "";
   document.getElementById("transTo").value = existing && existing.to ? existing.to : "";
   document.getElementById("transTimes").style.display = "none";
@@ -4291,7 +4299,7 @@ function openItem(kind, existing){
   document.getElementById("actDur").value = existing && !isStay ? (existing.durationH||"") : "";
   document.getElementById("actCost").value = existing && !isStay && existing.cost!=="" && existing.cost!=null ? existing.cost : "";
   document.getElementById("actNotes").value = existing && !isStay ? (existing.notes||"") : "";
-  document.getElementById("actCat").value = existing && !isStay ? (existing.category||"Sightseeing") : "Sightseeing";
+  document.getElementById("actCat").value = existing && !isStay ? (existing.category||"Sightseeing") : (isFood?"Food & drink":"Sightseeing");
   if(!isStay){
     const f = existing && existing.flex;
     flexDays = f && f.type==="options" ? [...(f.days||[])] : [];
@@ -4444,7 +4452,7 @@ async function saveItem(){
   render();
   // if the shared save was refused, syncTrouble() already surfaced why —
   // don't paper over it with a success message
-  if(state.sharedOK) toast(editId ? "Saved" : (kind==="stay"?"Stay added":"Activity added"));
+  if(state.sharedOK) toast(editId ? "Saved" : (kind==="stay"?"Stay added":kind==="food"?"Food spot added":"Activity added"));
 }
 
 /* ---------- location search (curated + OSM geocoders + map click) ---------- */
@@ -4468,8 +4476,10 @@ function onLocInput(){
   const box=document.getElementById("locSuggest");
   if(q.length<2){ box.classList.remove("show"); return; }
   const kind=state.editing && state.editing.kind;
-  // curated places are attractions — only offer them for activities
-  const curated = (kind==="stay"||kind==="transit") ? [] : curatedMatches(q);
+  // curated places are attractions — only offer them for activities,
+  // and only the edible ones when adding a food spot
+  let curated = (kind==="stay"||kind==="transit") ? [] : curatedMatches(q);
+  if(kind==="food") curated = curated.filter(x=>/food|restaurant|market|caf/i.test((x.kind||"")+" "+(x.cat||"")));
   renderSuggest(curated, true);
   // debounced geocoder for anything else
   clearTimeout(searchTimer);
@@ -4506,7 +4516,8 @@ function osmCategory(key, value){
    transit gets stations, airports, and terminals */
 const PHOTON_TAGS = {
   stay: ["place","tourism:hotel","tourism:hostel","tourism:guest_house","tourism:apartment","tourism:motel","building"],
-  transit: ["railway:station","railway:halt","aeroway:aerodrome","amenity:bus_station","amenity:ferry_terminal","place"]
+  transit: ["railway:station","railway:halt","aeroway:aerodrome","amenity:bus_station","amenity:ferry_terminal","place"],
+  food: ["amenity:restaurant","amenity:cafe","amenity:fast_food","amenity:bar","amenity:pub","amenity:food_court","amenity:ice_cream","amenity:marketplace","shop:bakery","shop:confectionery","shop:deli"]
 };
 async function photonSearch(q, kind){
   const bb=homeBbox();
@@ -4664,6 +4675,7 @@ function wire(){
   document.getElementById("addActivity").onclick = ()=>openItem("activity");
   document.getElementById("addStay").onclick = ()=>openItem("stay");
   document.getElementById("addTransit").onclick = ()=>openItem("transit");
+  document.getElementById("addFood").onclick = ()=>openItem("food");
   document.getElementById("clearDay").onclick = ()=>{ state.selectedDate=null; render(); };
 
   document.getElementById("profileSave").onclick = saveProfile;
