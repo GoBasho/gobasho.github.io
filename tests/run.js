@@ -855,6 +855,50 @@ async function setupProfile(page, name) {
     await w.context().close();
   }
 
+  console.log("\n== e2e: itinerary legs as collapsible chapters ==");
+  {
+    // Japan trip with a two-day Korea leg in the middle → three chapters
+    db["/trips/legs-test/trip%3Ameta"] = JSON.stringify({
+      title: "Japan 2026", start: "2026-12-13", end: "2026-12-19", home: "JP", countries: ["JP", "KR"],
+      legs: [{ id: "l1", country: "KR", name: "Seoul hop", start: "2026-12-15", end: "2026-12-16" }]
+    });
+    const page = await newPage(browser, "legs-test", { shared: true });
+    await page.goto("http://localhost:18899/", { waitUntil: "domcontentloaded" });
+    await setupProfile(page, "Zach");
+    await page.evaluate(() => {
+      const me = state.people.Zach;
+      me.activities = [
+        { id: "a1", title: "Senso-ji", date: "2026-12-13", category: "Culture", location: { lat: 35.71, lng: 139.79 } },
+        { id: "a2", title: "Gyeongbokgung", date: "2026-12-15", category: "Culture", location: { lat: 37.58, lng: 126.98 } }];
+      return saveMe().then(() => setView("itinerary"));
+    });
+    await page.waitForSelector(".leg-box");
+    const boxes = await page.$$eval(".leg-box", els => els.map(e => ({
+      head: e.querySelector(".leg-head").textContent.replace(/\s+/g, " ").trim(),
+      closed: e.classList.contains("closed")
+    })));
+    check("three chapters: home, leg, home again", boxes.length === 3, boxes.length);
+    check("home chapters labeled with the country", /Japan/.test(boxes[0].head) && /Japan/.test(boxes[2].head), boxes[0].head);
+    check("leg chapter uses the leg's name", /Seoul hop/.test(boxes[1].head), boxes[1].head);
+    check("chapter headers count their plans", /1 plan/.test(boxes[0].head) && /1 plan/.test(boxes[1].head));
+    check("all chapters start open", boxes.every(b => !b.closed));
+    // collapse the Korea leg; the fold must survive a reload
+    await page.$$eval(".leg-head", els => els[1].click());
+    await page.waitForTimeout(200);
+    check("clicking the header folds the chapter", await page.$$eval(".leg-box", els =>
+      els[1].classList.contains("closed") && els[1].querySelector(".leg-days").offsetParent === null));
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(800);
+    await page.evaluate(() => setView("itinerary"));
+    await page.waitForSelector(".leg-box");
+    check("fold state survives a reload", await page.$$eval(".leg-box", els =>
+      els[1].classList.contains("closed") && !els[0].classList.contains("closed")));
+    // inside a chapter the per-day header doesn't repeat the leg tag
+    check("day rows inside a leg say Day, not the leg name", await page.$$eval(".leg-box .day-head .dh-dow", els =>
+      els.filter(e => !e.closest(".empty-day")).every(e => e.textContent.trim() === "Day")));
+    await page.context().close();
+  }
+
   console.log("\n== e2e: first stay after a reload (Firebase drops empty arrays) ==");
   {
     // profile-only record → reload → the record returns without stays/activities

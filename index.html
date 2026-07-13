@@ -298,6 +298,19 @@
   .day-block { margin-bottom: 30px; }
   .day-head { display: flex; align-items: baseline; gap: 12px; padding-bottom: 8px; border-bottom: 1.5px solid var(--ink); margin-bottom: 4px; }
   .day-block.empty-day .day-head { border-bottom-style: dashed; border-bottom-color: var(--line-strong); opacity: .8; align-items: center; }
+
+  /* collapsible leg chapters on the itinerary */
+  .leg-box { border: 1px solid var(--line); border-radius: 12px; margin: 0 0 16px; overflow: hidden; background: var(--surface); }
+  .leg-head { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 12px 16px; background: var(--sky); border: 0; cursor: pointer; color: var(--ink); }
+  .leg-head:hover { filter: brightness(.985); }
+  .leg-head .lh-name { font-weight: 700; font-size: 14px; }
+  .leg-head .lh-range { color: var(--ink-soft); font-size: 12.5px; }
+  .leg-head .lh-count { margin-left: auto; color: var(--ink-faint); font-size: 12px; white-space: nowrap; }
+  .leg-head .chev { flex-shrink: 0; transition: transform .15s; color: var(--ink-soft); }
+  .leg-box.closed .chev { transform: rotate(-90deg); }
+  .leg-box .leg-days { padding: 14px 16px 4px; }
+  .leg-box.closed .leg-days { display: none; }
+  @media print { .leg-box.closed .leg-days { display: block; } }  /* print everything, folded or not */
   .dh-wx { margin-left: auto; font-size: 12px; color: var(--ink-soft); }
   .day-head .dh-num { font-family: var(--serif); font-size: 20px; }
   .day-head .dh-dow { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-faint); }
@@ -2119,14 +2132,47 @@ function renderItinerary(){
   if(!dates.length){ wrap.innerHTML = head + '<div class="list-empty">Set your trip dates in the header to build the day-by-day itinerary.</div>'; wireSuggestions(wrap); return; }
   const people = visiblePeople();
   const shownDates = state.selectedDate ? [state.selectedDate] : dates;
+  let body = "", hadDays = false;
+  if(!state.selectedDate && (state.trip.legs||[]).length){
+    // legs turn the itinerary into collapsible chapters: home stretches
+    // and each side-trip leg, with remembered open/closed state
+    const closed = collapsedLegs();
+    for(const seg of legSegments(dates)){
+      const part = dayBlocksHtml(seg.dates, people, false);
+      hadDays = hadDays || part.hadDays;
+      const country = seg.leg ? seg.leg.country : tripHome();
+      const label = seg.leg ? (seg.leg.name || countryLabel(seg.leg.country)) : (countryLabel(tripHome()) || state.trip.title || "Home base");
+      const nPlans = allActivities().filter(a=>a.date && seg.dates.includes(a.date)).length;
+      body += `<div class="leg-box ${closed[seg.key]?"closed":""}">
+        <button class="leg-head" data-toggleleg="${esc(seg.key)}">
+          <svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+          <span class="lh-name">${FLAGS[country]||""} ${esc(label)}</span>
+          <span class="lh-range">${esc(shortRange(seg.dates[0], seg.dates[seg.dates.length-1]))} · ${seg.dates.length} day${seg.dates.length>1?"s":""}</span>
+          <span class="lh-count">${nPlans} plan${nPlans!==1?"s":""}</span>
+        </button>
+        <div class="leg-days">${part.html || '<div class="list-empty">Nothing planned in this leg yet.</div>'}</div>
+      </div>`;
+    }
+  } else {
+    const part = dayBlocksHtml(shownDates, people, true);
+    hadDays = part.hadDays;
+    body = part.html;
+  }
+  if(!hadDays && !allActivities().some(a=>a.date)) body = "";  // a fully empty trip keeps the single friendly empty state
+  wrap.innerHTML = head + (body || '<div class="list-empty">No plans on the selected day(s) yet.</div>');
+  wireSuggestions(wrap);
+}
+
+/* the day-by-day blocks for a run of dates; empty stretches collapse into
+   one nudge toward Explore */
+function dayBlocksHtml(datesArr, people, showLegTag){
   let body = "", hadDays = false, emptyRun = null;
-  // consecutive unplanned days collapse into one gentle nudge toward Explore
   const flushEmpty = ()=>{
     if(!emptyRun) return;
     body += `<div class="day-block empty-day"><div class="day-head"><span class="dh-num">${emptyRun.start===emptyRun.end?prettyDate(emptyRun.start):esc(shortDate(emptyRun.start)+" – "+shortDate(emptyRun.end))}</span><span class="dh-dow">Nothing planned yet</span><button class="mini-btn" data-explore style="margin-left:auto">Find ideas nearby</button></div></div>`;
     emptyRun = null;
   };
-  for(const date of shownDates){
+  for(const date of datesArr){
     let dayHtml = "";
     for(const p of people){
       const plan = dayPlan(p, date);
@@ -2140,14 +2186,39 @@ function renderItinerary(){
     }
     flushEmpty();
     hadDays = true;
-    const leg = legForDate(date);
+    const leg = showLegTag ? legForDate(date) : null;  // inside a leg box the header already says it
     const w = wxFor(date);
     body += `<div class="day-block"><div class="day-head"><span class="dh-num">${prettyDate(date)}</span><span class="dh-dow">${leg?`${FLAGS[leg.country]||""} ${esc(leg.name||leg.country)}`:"Day"}</span>${w?`<span class="dh-wx">${WX_ICON(w.code)} ${w.tmax}° / ${w.tmin}°</span>`:""}</div>${dayHtml}</div>`;
   }
   flushEmpty();
-  if(!hadDays) body = "";  // a fully empty trip keeps the single friendly empty state
-  wrap.innerHTML = head + (body || '<div class="list-empty">No plans on the selected day(s) yet.</div>');
-  wireSuggestions(wrap);
+  return { html: body, hadDays };
+}
+
+/* consecutive trip dates grouped by which leg they fall in (null = home base) */
+function legSegments(dates){
+  const segs = [];
+  for(const d of dates){
+    const leg = legForDate(d);
+    const id = leg ? "leg:"+(leg.id || (leg.start||"")+(leg.country||"")) : "main";
+    const last = segs[segs.length-1];
+    if(last && last.id === id) last.dates.push(d);
+    else segs.push({ id, key: leg ? id : "main:"+d, leg, dates: [d] });
+  }
+  return segs;
+}
+function countryLabel(code){
+  const c = COUNTRIES.find(x=>x[0]===code);
+  return c ? c[1] : ((homeDef(code)||[])[1] || code || "");
+}
+/* per-browser memory of which itinerary legs are folded shut */
+function collapsedLegs(){
+  try { return JSON.parse(localStorage.getItem("meridian:"+window.storage.tripId+":legs-closed")) || {}; } catch { return {}; }
+}
+function toggleLeg(key){
+  const c = collapsedLegs();
+  if(c[key]) delete c[key]; else c[key] = true;
+  try { localStorage.setItem("meridian:"+window.storage.tripId+":legs-closed", JSON.stringify(c)); } catch {}
+  render();
 }
 function wireSuggestions(wrap){
   wrap.querySelectorAll("[data-merge]").forEach(b=> b.onclick=()=>applyMergeSuggestion(b.dataset.merge, b.dataset.target));
@@ -2157,6 +2228,7 @@ function wireSuggestions(wrap){
     document.querySelectorAll(".tab").forEach(t=>t.classList.toggle("active", t.dataset.view==="explore"));
     setView("explore");
   });
+  wrap.querySelectorAll("[data-toggleleg]").forEach(b=> b.onclick=()=>toggleLeg(b.dataset.toggleleg));
   const ics=wrap.querySelector("#icsBtn");
   if(ics) ics.onclick=exportICS;
   const pr=wrap.querySelector("#printBtn");
