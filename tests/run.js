@@ -183,6 +183,15 @@ async function setupProfile(page, name) {
       r.countdownAhead = tripCountdown();
       state.trip = {start: iso(new Date()), end: iso(new Date())};
       r.countdownDuring = tripCountdown();
+      // explore expansion: offset geometry and season awareness
+      r.destKm = haversine({lat:43,lng:141}, destOffset({lat:43,lng:141}, 10, 45));
+      r.skiInAugust = seasonCheck("Niseko ski resort", "2027-08-05");
+      r.skiInJanuary = seasonCheck("Niseko ski resort", "2027-01-15");
+      r.beachInJanuary = seasonCheck("Shirahama beach", "2027-01-15");
+      state.trip = {start:"2027-07-30", end:"2027-08-02"};   // no date → trip months decide
+      r.fireworksJulyTrip = seasonCheck("Lake Toya fireworks");
+      state.trip = {start:"2027-11-01", end:"2027-11-04"};
+      r.fireworksNovTrip = seasonCheck("Lake Toya fireworks");
       return r;
     });
     check("haversine Tokyo→Kyoto ≈ 366km", Math.abs(u.haversineTokyoKyoto - 366) < 12, u.haversineTokyoKyoto);
@@ -213,6 +222,11 @@ async function setupProfile(page, name) {
     check("timeConflicts flags the colliding pair only", u.conflicts === true);
     check("countdown before the trip", u.countdownAhead === "10 days to go", u.countdownAhead);
     check("countdown during the trip", u.countdownDuring === "Day 1 of 1", u.countdownDuring);
+    check("destOffset lands the requested distance away", Math.abs(u.destKm - 10) < 0.2, u.destKm);
+    check("ski hill flagged out of season in August", u.skiInAugust === "ski season is Dec–Apr", u.skiInAugust);
+    check("ski hill fine in January", u.skiInJanuary === null);
+    check("beach flagged in January", /beach season/.test(u.beachInJanuary), u.beachInJanuary);
+    check("trip months decide when no date given", u.fireworksJulyTrip === null && /fireworks/.test(u.fireworksNovTrip));
     await page.context().close();
   }
 
@@ -824,6 +838,47 @@ async function setupProfile(page, name) {
     check("welcome dates land in the shared trip", await w.evaluate(() =>
       state.trip.start === "2027-03-01" && state.trip.end === "2027-03-08"));
     await w.context().close();
+  }
+
+  console.log("\n== e2e: expanded Explore — radius rings, more results, seasons ==");
+  {
+    // an August trip based in Niseko: rural, thin curation, ski hills nearby
+    db["/trips/explore-test/trip%3Ameta"] = JSON.stringify({ title: "Powder Scouting", start: "2027-08-02", end: "2027-08-08", home: "JP", countries: ["JP"] });
+    const page = await newPage(browser, "explore-test", { shared: true });
+    // synthetic Wikipedia: every geosearch circle returns the same 15 pages
+    // (dedupe should collapse them), one being a ski hill — out of season in August
+    let geoCalls = 0, geoUrl = "";
+    await page.route("https://en.wikipedia.org/**", r => {
+      const u = r.request().url();
+      if (!/generator=geosearch/.test(u)) return r.fulfill({ contentType: "application/json", body: '{"query":{"pages":{}}}' });
+      geoCalls++; geoUrl = u;
+      const pages = { "1": { title: "Konbu Ski Area", description: "ski area in Hokkaido", coordinates: [{ lat: 42.81, lon: 140.69 }] } };
+      for (let i = 2; i <= 15; i++) pages[String(i)] = { title: "Annupuri Spot " + i, description: "scenic viewpoint", coordinates: [{ lat: 42.8 + i * 0.001, lon: 140.68 }] };
+      r.fulfill({ contentType: "application/json", body: JSON.stringify({ query: { pages } }) });
+    });
+    await page.goto("http://localhost:18899/", { waitUntil: "domcontentloaded" });
+    await setupProfile(page, "Zach");
+    await page.evaluate(() => {
+      const me = state.people.Zach;
+      me.stays = [{ id: "s1", city: "Niseko", hotelName: "Powder Lodge", location: { lat: 42.80, lng: 140.68 }, start: "2027-08-02", end: "2027-08-08" }];
+      return saveMe().then(() => setView("explore"));
+    });
+    await page.waitForSelector(".wiki-near .rec-card", { timeout: 8000 });
+    check("radius honored: a ring of geosearches, not one 10 km circle", geoCalls >= 7, geoCalls);
+    check("coordinate/thumbnail limits requested (the old 10-result cap)", /colimit=50/.test(geoUrl) && /pilimit=50/.test(geoUrl));
+    const cards = await page.$$eval(".wiki-near .rec-card", els => els.map(e => ({
+      name: e.querySelector(".rec-name").textContent,
+      off: !!e.querySelector(".rec-off"),
+      hidden: e.style.display === "none"
+    })));
+    check("results deduped across circles, all kept", cards.length === 15, cards.length);
+    check("out-of-season ski hill sinks to the bottom, labeled",
+      cards[cards.length - 1].name === "Konbu Ski Area" && cards[cards.length - 1].off);
+    check("in-season spots carry no label", cards.slice(0, 3).every(c => !c.off));
+    check("first dozen visible, the rest folded", cards.filter(c => !c.hidden).length === 12 && cards.filter(c => c.hidden).length === 3, cards.filter(c => !c.hidden).length);
+    await page.click(".wiki-more");
+    check("Show more reveals the rest", await page.$$eval(".wiki-near .rec-card", els => els.every(e => e.style.display !== "none")));
+    await page.context().close();
   }
 
   console.log("\n== e2e: a refused write is kept and retried, not lost ==");

@@ -441,6 +441,8 @@
   .across-note { font-size: 12.5px; color: var(--ink-soft); margin: 4px 0 2px; }
   .rec-match { font-size: 9.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--shu); font-weight: 700; }
   .rec-note { font-size: 10.5px; color: var(--ink-faint); margin-top: 2px; }
+  .rec-off { font-size: 10px; font-weight: 600; color: #a8712c; margin-top: 2px; }
+  [data-theme="dark"] .rec-off { color: #d9a45b; }
   .rec-note a { color: var(--indigo); }
 
   .chip-pick { display: flex; flex-wrap: wrap; gap: 7px; }
@@ -2251,17 +2253,24 @@ function forYouInCity(city, p, date){
   return out;
 }
 
+/* season note for a curated point, from its name/blurb/tags */
+function pointSeason(pt, targetDate){
+  return seasonCheck(pt.name+" "+pt.blurb+" "+(pt.tags||[]).join(" "), targetDate);
+}
 function forYouSection(title, city, targetDate, p){
   const hotelLoc=targetDate?hotelLocForDate(p,targetDate):null;
   const anchorLoc=hotelLoc||cityCentroid(city);
   const items=forYouInCity(city, p, targetDate).filter(x=>withinRadius(anchorLoc, x.pt));
   if(!items.length) return "";
+  items.forEach(x=>x.off=pointSeason(x.pt, targetDate));
+  items.sort((a,b)=>(a.off?1:0)-(b.off?1:0));
   const hotel=hotelLoc;
   let html=`<div class="eyebrow explore-sec">${esc(title)} <span class="count">${items.length}</span></div><div class="rec-grid">`;
-  for(const {pt,hits} of items){
+  for(const {pt,hits,off} of items){
     const dist = hotel ? ` &middot; ${haversine(hotel,{lat:pt.lat,lng:pt.lng}).toFixed(1)} km from base` : "";
     const note = pt.note ? `<div class="rec-note">Approximate — <a href="${pt.note}" target="_blank" rel="noopener">official map</a></div>` : "";
     html+=`<div class="rec-card foryou"><div class="rec-thumb" data-thumb="${esc(pt.wiki||pt.name)}"></div><div class="rec-match">${esc(hits[0])}</div><div class="rec-name">${esc(pt.name)}</div>
+      ${off?`<div class="rec-off">Out of season — ${esc(off)}</div>`:""}
       <div class="rec-blurb">${esc(pt.blurb)}</div>${note}
       <div class="rec-foot"><span class="rec-dist">${esc(pt.city)}${dist}</span>
       <button class="mini-btn" data-addrec="${pt._i}" data-recdate="${targetDate||''}">Add${targetDate?'':'…'}</button></div></div>`;
@@ -2273,13 +2282,16 @@ function recSection(title, city, targetDate, p){
   if(!POINTS.some(pt=>pt.mainstream && pt.city===city)) return "";  // uncurated city: the Wikipedia section covers it
   const hotelLoc=targetDate?hotelLocForDate(p,targetDate):null;
   const anchorLoc=hotelLoc||cityCentroid(city);
-  const recs=recsForCity(city, p, targetDate).filter(pt=>withinRadius(anchorLoc, pt));
+  const recs=recsForCity(city, p, targetDate).filter(pt=>withinRadius(anchorLoc, pt))
+    .map(r=>({r, off:pointSeason(r, targetDate)}))
+    .sort((a,b)=>(a.off?1:0)-(b.off?1:0));
   if(!recs.length) return `<div class="eyebrow explore-sec">${esc(title)}</div><div class="list-empty">Nothing within your Explore radius that isn't already on your list.</div>`;
   const hotel=hotelLoc;
   let html=`<div class="eyebrow explore-sec">${esc(title)} <span class="count">${recs.length}</span></div><div class="rec-grid">`;
-  for(const r of recs){
+  for(const {r,off} of recs){
     const dist = hotel ? ` &middot; ${haversine(hotel,{lat:r.lat,lng:r.lng}).toFixed(1)} km from base` : "";
     html+=`<div class="rec-card"><div class="rec-thumb" data-thumb="${esc(r.wiki||r.name)}"></div><div class="rec-cat">${esc(r.cat)}</div><div class="rec-name">${esc(r.name)}</div>
+      ${off?`<div class="rec-off">Out of season — ${esc(off)}</div>`:""}
       <div class="rec-blurb">${esc(r.blurb)}</div>
       <div class="rec-foot"><span class="rec-dist">${esc(r.city)}${dist}</span>
       <button class="mini-btn" data-addrec="${r._i}" data-recdate="${targetDate||''}">Add${targetDate?'':'…'}</button></div></div>`;
@@ -2294,13 +2306,14 @@ function nearSection(loc, baseCity, targetDate, p){
   const have=new Set((p.activities||[]).map(a=>a.title.toLowerCase()));
   const items=POINTS
     .filter(pt=>pt.city!==baseCity && !have.has(pt.name.toLowerCase()))
-    .map(pt=>({pt, km:haversine(loc,{lat:pt.lat,lng:pt.lng})}))
+    .map(pt=>({pt, km:haversine(loc,{lat:pt.lat,lng:pt.lng}), off:pointSeason(pt, targetDate)}))
     .filter(x=>x.km<=radiusKm() && x.km>2)
-    .sort((a,b)=>a.km-b.km).slice(0,12);
+    .sort((a,b)=>((a.off?1:0)-(b.off?1:0)) || (a.km-b.km)).slice(0,18);
   if(!items.length) return "";
   let html=`<div class="eyebrow explore-sec">Farther out, within ${radiusKm()} km <span class="count">${items.length}</span></div><div class="rec-grid">`;
-  for(const {pt,km} of items){
+  for(const {pt,km,off} of items){
     html+=`<div class="rec-card"><div class="rec-thumb" data-thumb="${esc(pt.wiki||pt.name)}"></div><div class="rec-cat">${esc(pt.cat)}</div><div class="rec-name">${esc(pt.name)}</div>
+      ${off?`<div class="rec-off">Out of season — ${esc(off)}</div>`:""}
       <div class="rec-blurb">${esc(pt.blurb)}</div>
       <div class="rec-foot"><span class="rec-dist">${esc(pt.city)} &middot; ${km.toFixed(0)} km away</span>
       <button class="mini-btn" data-addrec="${pt._i}" data-recdate="${targetDate||''}">Add${targetDate?'':'…'}</button></div></div>`;
@@ -2461,29 +2474,78 @@ function hydrateThumbs(wrap){
 
 /* ---------- worldwide nearby sights via Wikipedia geosearch ---------- */
 function cityCentroid(name){ const c=CITIES.find(x=>x[0]===name); return c?{lat:c[1],lng:c[2]}:null; }
+/* the point `km` away from loc at compass bearing `deg` (flat-earth is fine at these distances) */
+function destOffset(loc, km, deg){
+  const rad = deg*Math.PI/180;
+  return { lat: loc.lat + (km*Math.cos(rad))/111.32,
+           lng: loc.lng + (km*Math.sin(rad))/(111.32*Math.cos(loc.lat*Math.PI/180)) };
+}
 const wikiNearCache = new Map();
 const WIKI_SKIP = /footballer|politician|company|organization|corporation|school|university|college|hospital|radio|television|conference|album|film|band|newspaper|magazine|constituency|ward\b|electoral|municipality|prefecture|province|county|district of|neighbourhood|neighborhood|suburb|railway station|metro station|subway station|train station|bus station|airport|airline|embassy|office building|headquarters/i;
-async function wikiNearby(loc){
-  const radM = Math.round(Math.min(isFinite(radiusKm())?radiusKm():10, 10) * 1000);  // API caps at 10 km
-  const key = loc.lat.toFixed(2)+","+loc.lng.toFixed(2)+","+radM;
-  if(wikiNearCache.has(key)) return wikiNearCache.get(key);
+async function wikiGeoOnce(loc, radKm){
   const url = "https://en.wikipedia.org/w/api.php?action=query&format=json&origin=*"
     + "&generator=geosearch&ggscoord=" + loc.lat + "%7C" + loc.lng
-    + "&ggsradius=" + radM + "&ggslimit=30&prop=pageimages%7Cdescription%7Ccoordinates&piprop=thumbnail&pithumbsize=400";
-  let out = [];
+    + "&ggsradius=" + Math.round(radKm*1000) + "&ggslimit=50"
+    // colimit/pilimit matter: without them only 10 pages get coordinates
+    // attached and everything else is thrown away downstream
+    + "&prop=pageimages%7Cdescription%7Ccoordinates&colimit=50&pilimit=50&piprop=thumbnail&pithumbsize=400";
   try {
     const res = await fetch(url);
     const data = await res.json();
-    const pages = Object.values((data.query||{}).pages||{});
-    out = pages
+    return Object.values((data.query||{}).pages||{})
       .filter(pg => pg.coordinates && pg.coordinates[0])
       .filter(pg => !WIKI_SKIP.test(pg.description||""))
       .filter(pg => pg.thumbnail || pg.description)
       .map(pg => ({ title: pg.title, desc: pg.description||"", thumb: pg.thumbnail && pg.thumbnail.source,
                     lat: pg.coordinates[0].lat, lng: pg.coordinates[0].lon }));
-  } catch {}
+  } catch { return []; }
+}
+async function wikiNearby(loc){
+  // the API caps one search at 10 km — bigger Explore ranges get a bouquet of
+  // circles: the base, a ring around it, and the towns inside range (sights
+  // cluster in towns, not open countryside), all deduped by title
+  const R = isFinite(radiusKm()) ? radiusKm() : 100;
+  const key = loc.lat.toFixed(2)+","+loc.lng.toFixed(2)+","+R;
+  if(wikiNearCache.has(key)) return wikiNearCache.get(key);
+  const centers = [{ loc, r: Math.min(R, 10) }];
+  if(R > 10) for(let b=0; b<360; b+=60) centers.push({ loc: destOffset(loc, Math.min(R*0.65, 16), b), r: 10 });
+  if(R > 25){
+    const towns = CITIES.map(([name,lat,lng])=>({lat, lng, km:haversine(loc,{lat,lng})}))
+      .filter(t=>t.km>20 && t.km<=R).sort((a,b)=>a.km-b.km).slice(0,5);
+    for(const t of towns) centers.push({ loc:{lat:t.lat, lng:t.lng}, r: 10 });
+  }
+  const lists = await Promise.all(centers.map(c=>wikiGeoOnce(c.loc, c.r)));
+  const seen = new Set(); const out = [];
+  for(const list of lists) for(const x of list){
+    const k = x.title.toLowerCase();
+    if(!seen.has(k) && haversine(loc, x) <= R+2){ seen.add(k); out.push(x); }
+  }
   wikiNearCache.set(key, out);
   return out;
+}
+/* ---------- season awareness: don't pitch ski hills in August ---------- */
+const SEASON_RULES = [
+  [/\bski\b|skiing|snowboard|piste|gondola.*winter/i, [11,0,1,2,3], "ski season is Dec–Apr"],
+  [/snow festival|ice festival|ice sculpture/i, [0,1], "held Jan–Feb"],
+  [/beach|snorkel|swimming cove|lagoon/i, [5,6,7,8], "beach season is Jun–Sep"],
+  [/cherry blossom|sakura|hanami/i, [2,3], "blossoms Mar–Apr"],
+  [/autumn leaves|autumn colou?rs|fall foliage|koyo/i, [9,10], "autumn colours Oct–Nov"],
+  [/lavender|sunflower|flower field|tulip/i, [4,5,6,7], "in bloom May–Aug"],
+  [/fireworks/i, [6,7], "fireworks season Jul–Aug"]
+];
+/* months (0-based) this trip touches; a specific date narrows it to one */
+function seasonMonths(date){
+  if(date) return [parseISO(date).getMonth()];
+  const ds = tripDates();
+  return [...new Set(ds.map(d=>parseISO(d).getMonth()))];
+}
+/* null when fine; a human explanation when the thing is out of season */
+function seasonCheck(text, date){
+  const months = seasonMonths(date);
+  if(!months.length) return null;
+  for(const [re, ok, label] of SEASON_RULES)
+    if(re.test(text) && !months.some(m=>ok.includes(m))) return label;
+  return null;
 }
 /* match a Wikipedia description against a traveler's interests */
 const WIKI_INTEREST = [
@@ -2540,26 +2602,38 @@ async function hydrateWikiNear(el, p){
   ]);
   const interests = (p.interests||[]);
   let items = (await wikiNearby(loc)).filter(x=>!have.has(x.title.toLowerCase()));
-  // your interests float to the top, tagged with what matched
-  items.forEach(x=>{ x.hits = wikiMatches(x.desc, interests); });
-  items.sort((a,b)=>(b.hits.length?1:0)-(a.hits.length?1:0));
-  items = items.slice(0,10);
+  // interests float up, out-of-season sinks (still shown, clearly labeled), then nearest first
+  items.forEach(x=>{
+    x.hits = wikiMatches(x.desc, interests);
+    x.off = seasonCheck(x.title+" "+x.desc, targetDate);
+    x.km = haversine(loc, x);
+  });
+  items.sort((a,b)=>
+    ((a.off?1:0)-(b.off?1:0)) ||
+    ((b.hits.length?1:0)-(a.hits.length?1:0)) ||
+    (a.km-b.km));
+  items = items.slice(0,30);
   if(!items.length){ el.innerHTML=""; return; }
+  const FOLD = 12;  // the rest hides behind "Show more"
   let html = `<div class="eyebrow explore-sec">${esc(el.dataset.wlabel)} <span class="count">${items.length}</span></div><div class="rec-grid">`;
   items.forEach((x,i)=>{
-    const km = haversine(loc, x).toFixed(1);
-    html += `<div class="rec-card ${x.hits.length?"foryou":""}"><div class="rec-thumb ${x.thumb?"has-img":"no-img"}" ${x.thumb?`style="background-image:url('${x.thumb}')"`:""}>${x.thumb?"":"No preview"}</div>
+    html += `<div class="rec-card ${x.hits.length?"foryou":""}${i>=FOLD?" more-card":""}"${i>=FOLD?' style="display:none"':''}><div class="rec-thumb ${x.thumb?"has-img":"no-img"}" ${x.thumb?`style="background-image:url('${x.thumb}')"`:""}>${x.thumb?"":"No preview"}</div>
       ${x.hits.length?`<div class="rec-match">${esc(x.hits[0])}</div>`:`<div class="rec-cat">${esc(wikiCategory(x.desc))}</div>`}<div class="rec-name">${esc(x.title)}</div>
+      ${x.off?`<div class="rec-off">Out of season — ${esc(x.off)}</div>`:""}
       <div class="rec-blurb">${esc(x.desc ? x.desc.charAt(0).toUpperCase()+x.desc.slice(1) : "Notable spot nearby — tap through your map app for details.")}</div>
-      <div class="rec-foot"><span class="rec-dist">${km} km away</span>
+      <div class="rec-foot"><span class="rec-dist">${x.km.toFixed(1)} km away</span>
       <button class="mini-btn" data-waddi="${i}">Add${targetDate?"":"…"}</button></div></div>`;
   });
-  el.innerHTML = html + `</div>`;
+  html += `</div>`;
+  if(items.length > FOLD) html += `<button class="mini-btn wiki-more" style="margin:2px 0 10px">Show ${items.length-FOLD} more</button>`;
+  el.innerHTML = html;
   el.querySelectorAll("[data-waddi]").forEach(b=>b.onclick=()=>{
     const x = items[+b.dataset.waddi];
     const d = targetDate || state.selectedDate || state.trip.start;
     addRecommendation({ name:x.title, lat:x.lat, lng:x.lng, cat:wikiCategory(x.desc) }, d);
   });
+  const more = el.querySelector(".wiki-more");
+  if(more) more.onclick = ()=>{ el.querySelectorAll(".more-card").forEach(c=>c.style.display=""); more.remove(); };
 }
 
 function wireExplore(wrap){
