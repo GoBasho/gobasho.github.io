@@ -27,7 +27,7 @@ window.MERIDIAN_CONFIG = {
   //   3. Authentication → Settings → Authorized domains → add the domain the
   //      site runs on (e.g. zbelohlavek.github.io).
   // Leave as "" to keep invisible per-browser identities only.
-  googleClientId: "",
+  googleClientId: "957666197172-807mvh5u6397th803l06s2viudkagvuc.apps.googleusercontent.com",
 
   // A name that keeps your trip's data separate from anything else in the
   // database. Change it if you ever want to start a fresh trip.
