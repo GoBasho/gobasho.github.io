@@ -207,6 +207,13 @@ async function setupProfile(page, name) {
       r.fireworksJulyTrip = seasonCheck("Lake Toya fireworks");
       state.trip = {start:"2027-11-01", end:"2027-11-04"};
       r.fireworksNovTrip = seasonCheck("Lake Toya fireworks");
+      // maybes: excluded from costs and conflict warnings until committed
+      state.trip = {start:"2026-09-07", end:"2026-09-09", currency:"$"};
+      const mp = {name:"M", stays:[], activities:[
+        {id:"c1", title:"Sumo", date:"2026-09-08", time:"14:00", durationH:"2", cost:1000, location:{lat:35.69,lng:139.79}},
+        {id:"m1", title:"Sky deck", date:"2026-09-08", time:"15:00", cost:5000, maybe:true, location:{lat:35.66,lng:139.70}}]};
+      r.maybeCost = dayCost(mp, "2026-09-08").v;
+      r.maybeConflicts = timeConflicts(mp).length;
       return r;
     });
     check("haversine Tokyo→Kyoto ≈ 366km", Math.abs(u.haversineTokyoKyoto - 366) < 12, u.haversineTokyoKyoto);
@@ -242,6 +249,8 @@ async function setupProfile(page, name) {
     check("ski hill fine in January", u.skiInJanuary === null);
     check("beach flagged in January", /beach season/.test(u.beachInJanuary), u.beachInJanuary);
     check("trip months decide when no date given", u.fireworksJulyTrip === null && /fireworks/.test(u.fireworksNovTrip));
+    check("maybes don't count toward day cost", u.maybeCost === 1000, u.maybeCost);
+    check("maybes don't trigger time-conflict warnings", u.maybeConflicts === 0);
     await page.context().close();
   }
 
@@ -853,6 +862,52 @@ async function setupProfile(page, name) {
     check("welcome dates land in the shared trip", await w.evaluate(() =>
       state.trip.start === "2027-03-01" && state.trip.end === "2027-03-08"));
     await w.context().close();
+  }
+
+  console.log("\n== e2e: maybe plans (\"if there's time\") ==");
+  {
+    db["/trips/maybe-test/trip%3Ameta"] = JSON.stringify({ title: "Tokyo Week", start: "2026-12-13", end: "2026-12-19", home: "JP", countries: ["JP"] });
+    const page = await newPage(browser, "maybe-test", { shared: true });
+    await page.goto("http://localhost:18899/", { waitUntil: "domcontentloaded" });
+    await setupProfile(page, "Zach");
+    // one committed plan, then a maybe through the real form
+    await page.evaluate(async () => {
+      state.people.Zach.activities = [{ id: "c1", title: "Senso-ji", date: "2026-12-13", category: "Culture", location: { lat: 35.71, lng: 139.79 } }];
+      await saveMe(); render();
+      openItem("activity");
+      state.pendingLoc = { lat: 35.658, lng: 139.702, label: "Shibuya Sky" };
+      document.getElementById("itemName").value = "Shibuya Sky";
+      setFlexMode("range");
+      document.getElementById("actRangeStart").value = "2026-12-14";
+      document.getElementById("actRangeEnd").value = "2026-12-18";
+      document.getElementById("actMaybe").checked = true;
+    });
+    await page.click("#itemSave");
+    await page.waitForTimeout(400);
+    check("maybe saved unscheduled with its flag", await page.evaluate(() => {
+      const a = state.people.Zach.activities.find(x => x.title === "Shibuya Sky");
+      return !!a && a.maybe === true && !a.date;
+    }));
+    check("save announces the maybe path", /Saved as a maybe/.test(await page.textContent("#notice")));
+    const rail = await page.textContent("#railList");
+    check("rail marks it Maybe and dims it", /Maybe · Flexible/.test(rail) && !!(await page.$(".item.dim")));
+    check("glance counts plans and maybes separately", /1 plan/.test(await page.textContent(".trip-glance")) && /1 maybe/.test(await page.textContent(".trip-glance")));
+    // prep: its own tray
+    await page.evaluate(() => setView("prep"));
+    await page.waitForTimeout(200);
+    check("prep shows an If-there's-time tray", /If there's time/.test(await page.textContent("#prepInner")) && /Maybe · /.test(await page.textContent("#prepInner")));
+    // itinerary: the empty stretch offers it as a one-tap fill
+    await page.evaluate(() => setView("itinerary"));
+    await page.waitForTimeout(200);
+    check("empty days offer the maybe as a fill", !!(await page.$("[data-slotmaybe]")));
+    await page.click("[data-slotmaybe]");
+    await page.waitForTimeout(400);
+    check("tapping slots it onto the first open day, still tentative", await page.evaluate(() => {
+      const a = state.people.Zach.activities.find(x => x.title === "Shibuya Sky");
+      return !!a && a.date === "2026-12-14" && a.maybe === true;
+    }));
+    check("scheduled maybe wears an if-time tag in the itinerary", !!(await page.$("#itineraryInner .maybe-tag")));
+    await page.context().close();
   }
 
   console.log("\n== e2e: food spots ==");

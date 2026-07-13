@@ -459,6 +459,12 @@
   [data-theme="dark"] .rec-off { color: #d9a45b; }
   .acct-line { font-size: 12.5px; color: var(--ink-soft); line-height: 1.5; }
   .gsi-mount { margin-top: 8px; min-height: 32px; }
+  .maybe-check { display: flex; align-items: center; gap: 8px; font-size: 12.5px !important; color: var(--ink) !important; text-transform: none !important; letter-spacing: 0 !important; font-weight: 500 !important; cursor: pointer; }
+  .maybe-check input { width: auto; }
+  .item.dim { opacity: .62; }
+  .maybe-tag { font-size: 9.5px; letter-spacing: .08em; text-transform: uppercase; font-weight: 700; color: #a8712c; border: 1px solid currentColor; border-radius: 5px; padding: 0 5px; vertical-align: 1px; }
+  [data-theme="dark"] .maybe-tag { color: #d9a45b; }
+  .maybe-fill { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; font-size: 12px; color: var(--ink-soft); padding: 8px 0 2px; }
   .rec-note a { color: var(--indigo); }
 
   .chip-pick { display: flex; flex-wrap: wrap; gap: 7px; }
@@ -910,6 +916,9 @@
             <select id="actBook"><option value="">No booking needed</option><option value="needed">Needs booking</option><option value="booked">Booked</option></select>
           </div>
           <div class="field" id="fldBookRef" style="display:none;"><label>Confirmation (optional)</label><input type="text" id="actBookRef" maxlength="40" placeholder="e.g. #TL-88421"></div>
+        </div>
+        <div class="field"><label class="maybe-check"><input type="checkbox" id="actMaybe"> Just a maybe — only if there's time</label>
+          <div class="field-hint">Maybes stay dimmed, wait in their own Prep list, and don't count toward costs. Empty itinerary days will offer them as one-tap fills.</div>
         </div>
         <div class="field"><label>Notes (optional)</label><textarea id="actNotes" placeholder="Reservations, who's keen, alternatives..."></textarea></div>
       </div>
@@ -1749,12 +1758,14 @@ function renderRailList(){
   {
     const cd = tripCountdown();
     const nPeople = Object.keys(state.people).length;
-    const nPlans = Object.values(state.people).reduce((n,p)=>n+(p.activities||[]).length,0);
+    const nPlans = Object.values(state.people).reduce((n,p)=>n+(p.activities||[]).filter(a=>!a.maybe).length,0);
+    const nMaybe = Object.values(state.people).reduce((n,p)=>n+(p.activities||[]).filter(a=>a.maybe).length,0);
     const tot = visiblePeople().reduce((s,p)=>{ const t=tripTotalCost(p); return {v:s.v+t.v, est:s.est||t.est}; },{v:0,est:false});
     const bits = [];
     if(cd) bits.push(`<b>${esc(cd)}</b>`);
     if(nPeople) bits.push(nPeople+" traveler"+(nPeople!==1?"s":""));
     bits.push(nPlans+" plan"+(nPlans!==1?"s":""));
+    if(nMaybe) bits.push(nMaybe+" maybe"+(nMaybe!==1?"s":""));
     if(tot.v>0) bits.push((tot.est?"~":"")+fmtYen(tot.v)+approxDisp(tot.v));
     if(bits.length>1 || cd){
       const sm=document.createElement("div");
@@ -1854,8 +1865,8 @@ function renderRailList(){
     const joiners = joinersOf(a.person, a.id);
     const cmts = actComments(a.person, a.id).length;
     wrap.appendChild(itemRow({
-      color: a.color, title: a.title, tick: a.color,
-      sub: (a.status==="done"?'✓ ':a.status==="skipped"?'✗ ':'') + (a.date
+      color: a.color, title: a.title, tick: a.color, dim: !!a.maybe,
+      sub: (a.maybe?'Maybe · ':'') + (a.status==="done"?'✓ ':a.status==="skipped"?'✗ ':'') + (a.date
         ? `${a.time?a.time+' · ':''}${a.transit?('Transit'+(a.from||a.to?` · ${a.from||'…'} → ${a.to||'…'}`:'')):(a.category||'Activity')}${state.selectedDate?'':' · '+shortDate(a.date)} · ${a.person}`
         : `Flexible · ${flexLabel(a)} · ${a.person}`) + (joiners.length?` · ${joiners.length} in`:'') + (a.booking==="needed"?' · needs booking':''),
       onDel: canEdit(a.person) ? () => removeItem("activity", a.person, a.id) : null,
@@ -1882,9 +1893,9 @@ function firstSteps(){
   return steps.every(s=>s[1]) ? null : steps;
 }
 
-function itemRow({color,title,sub,tick,onDel,onClick,onEdit,onJoin,joined,onComment,commentCount}){
+function itemRow({color,title,sub,tick,onDel,onClick,onEdit,onJoin,joined,onComment,commentCount,dim}){
   const el = document.createElement("div");
-  el.className = "item";
+  el.className = "item" + (dim ? " dim" : "");
   el.innerHTML = `<span class="tick" style="background:${tick}"></span>
     <div class="ibody"><div class="ititle">${esc(title)}</div><div class="isub">${esc(sub)}</div></div>
     ${onJoin?`<button class="ijoin ${joined?'on':''}" title="${joined?"You're in — tap to leave":"I'm in!"}">${joined?'&#10003;':'+'}</button>`:''}
@@ -2018,6 +2029,7 @@ function dayCost(p, date, plan){
   const jpy = curSym()==="¥";
   let v = 0, est = false;
   for(const a of plan.acts){
+    if(a.maybe) continue;  // "if there's time" plans don't count until committed
     if(hasCost(a)) v += +a.cost;
     else if(jpy){ const d = CAT_COST[a.category] || 0; v += d; if(d) est = true; }
   }
@@ -2062,7 +2074,7 @@ function stayOverlaps(p){
 function timeConflicts(p){
   const mins=t=>{ const x=String(t).split(":"); return (+x[0])*60+(+x[1]||0); };
   const byDay={};
-  for(const a of (p.activities||[])) if(a.date&&a.time&&a.status!=="skipped") (byDay[a.date]=byDay[a.date]||[]).push(a);
+  for(const a of (p.activities||[])) if(a.date&&a.time&&a.status!=="skipped"&&!a.maybe) (byDay[a.date]=byDay[a.date]||[]).push(a);
   const out=[];
   for(const day of Object.keys(byDay)){
     const list=byDay[day].sort((a,b)=>a.time.localeCompare(b.time));
@@ -2177,7 +2189,18 @@ function dayBlocksHtml(datesArr, people, showLegTag){
   let body = "", hadDays = false, emptyRun = null;
   const flushEmpty = ()=>{
     if(!emptyRun) return;
-    body += `<div class="day-block empty-day"><div class="day-head"><span class="dh-num">${emptyRun.start===emptyRun.end?prettyDate(emptyRun.start):esc(shortDate(emptyRun.start)+" – "+shortDate(emptyRun.end))}</span><span class="dh-dow">Nothing planned yet</span><button class="mini-btn" data-explore style="margin-left:auto">Find ideas nearby</button></div></div>`;
+    // offer the viewer's own "if there's time" maybes that fit this open stretch
+    let fills = "";
+    const mine = state.me && state.people[state.me.name];
+    if(mine){
+      const run = emptyRun;
+      const cands = (mine.activities||[]).filter(a=>a.maybe && !a.date)
+        .filter(a=>{ const w=actWindow(a); return !w.length || w.some(d=>d>=run.start && d<=run.end); })
+        .slice(0,3);
+      if(cands.length) fills = `<div class="maybe-fill">If there's time: ${cands.map(a=>
+        `<button class="chip" data-slotmaybe="${esc(a.id)}" data-slotdate="${run.start}">${esc(a.title)}</button>`).join("")}</div>`;
+    }
+    body += `<div class="day-block empty-day"><div class="day-head"><span class="dh-num">${emptyRun.start===emptyRun.end?prettyDate(emptyRun.start):esc(shortDate(emptyRun.start)+" – "+shortDate(emptyRun.end))}</span><span class="dh-dow">Nothing planned yet</span><button class="mini-btn" data-explore style="margin-left:auto">Find ideas nearby</button></div>${fills}</div>`;
     emptyRun = null;
   };
   for(const date of datesArr){
@@ -2237,6 +2260,14 @@ function wireSuggestions(wrap){
     setView("explore");
   });
   wrap.querySelectorAll("[data-toggleleg]").forEach(b=> b.onclick=()=>toggleLeg(b.dataset.toggleleg));
+  wrap.querySelectorAll("[data-slotmaybe]").forEach(b=> b.onclick=async()=>{
+    const me=state.me && state.people[state.me.name];
+    const a=me && (me.activities||[]).find(x=>x.id===b.dataset.slotmaybe);
+    if(!a) return;
+    a.date=b.dataset.slotdate;
+    await saveMe(); render();
+    toast("Penciled in for "+shortDate(a.date)+" — still tagged \"if time\" until you edit it");
+  });
   const ics=wrap.querySelector("#icsBtn");
   if(ics) ics.onclick=exportICS;
   const pr=wrap.querySelector("#printBtn");
@@ -2273,7 +2304,7 @@ function renderPersonDay(p, date, plan){
     const badge = s.act && s.act.booking==="needed" ? ` <span title="Needs booking">${icon("ticket",12)}</span>` : "";
     const doneStyle = s.act && s.act.status==="done" ? ' style="text-decoration:line-through;opacity:.6"' : "";
     html += `<div class="leg"><div class="rail-dot"><span class="rd ${s.anchor?'anchor':''} ${tr?'transit':''}"></span>${last?'':'<span class="rline"></span>'}</div>
-      <div class="stop"><div class="sname"${doneStyle}>${tr?'<span class="mode-tag mode-local">Transit</span> ':''}${esc(s.name)}${badge}${s.anchor?' <span style="color:var(--ink-faint);font-weight:400">· base</span>':''}${who}</div>${tr?(trMeta?`<div class="stime">${esc(trMeta)}</div>`:''):(s.time?`<div class="stime">${esc(s.time)}</div>`:'')}</div></div>`;
+      <div class="stop"><div class="sname"${doneStyle}>${tr?'<span class="mode-tag mode-local">Transit</span> ':''}${esc(s.name)}${s.act&&s.act.maybe?' <span class="maybe-tag">if time</span>':''}${badge}${s.anchor?' <span style="color:var(--ink-faint);font-weight:400">· base</span>':''}${who}</div>${tr?(trMeta?`<div class="stime">${esc(trMeta)}</div>`:''):(s.time?`<div class="stime">${esc(s.time)}</div>`:'')}</div></div>`;
     if(!last){
       const lg = legs[i];
       html += `<div class="leg-travel"><span class="mode-tag ${lg.cls}">${lg.label}</span>${lg.km.toFixed(1)} km · ~${fmtMin(lg.min)}${lg.cost&&curSym()==="¥"?` · ~${fmtYen(lg.cost)}`:""}</div>`;
@@ -3714,10 +3745,16 @@ function renderPrep(){
   }
   legsBar+=`</div>`;
 
-  let tray=`<div class="eyebrow">To schedule <span class="count">${unsched.length}</span></div><div class="prep-tray">`;
-  if(!unsched.length) tray+='<div class="list-empty">Nothing waiting. Add an activity with "A few options" or "Date range" and it lands here.</div>';
-  for(const a of unsched) tray+=`<button class="prep-chip ${state.prepSel===a.id?"sel":""}" data-psel="${a.id}"><b>${esc(a.title)}</b><span>${esc(flexLabel(a)||"any day")}</span></button>`;
+  const firm=unsched.filter(a=>!a.maybe), maybes=unsched.filter(a=>a.maybe);
+  let tray=`<div class="eyebrow">To schedule <span class="count">${firm.length}</span></div><div class="prep-tray">`;
+  if(!firm.length) tray+='<div class="list-empty">Nothing waiting. Add an activity with "A few options" or "Date range" and it lands here.</div>';
+  for(const a of firm) tray+=`<button class="prep-chip ${state.prepSel===a.id?"sel":""}" data-psel="${a.id}"><b>${esc(a.title)}</b><span>${esc(flexLabel(a)||"any day")}</span></button>`;
   tray+=`</div>`;
+  if(maybes.length){
+    tray+=`<div class="eyebrow">If there's time <span class="count">${maybes.length}</span></div><div class="prep-tray">`;
+    for(const a of maybes) tray+=`<button class="prep-chip ${state.prepSel===a.id?"sel":""}" data-psel="${a.id}" style="opacity:.75"><b>${esc(a.title)}</b><span>Maybe · ${esc(flexLabel(a)||"any day")}</span></button>`;
+    tray+=`</div>`;
+  }
 
   const selAct = state.prepSel ? (me.activities||[]).find(a=>a.id===state.prepSel) : null;
   // a scheduled plan can move anywhere; an unscheduled one only inside its window
@@ -4312,6 +4349,7 @@ function openItem(kind, existing){
   }
   document.getElementById("actBook").value = existing && !isStay ? (existing.booking||"") : "";
   document.getElementById("actBookRef").value = existing && !isStay ? (existing.bookRef||"") : "";
+  document.getElementById("actMaybe").checked = !!(existing && !isStay && existing.maybe);
   document.getElementById("fldBookRef").style.display = (existing && existing.booking==="booked") ? "" : "none";
   document.getElementById("lblActCost").textContent = "Est. cost "+curSym()+" (optional)";
   document.getElementById("lblStayCost").textContent = "Cost per night "+curSym()+" (optional)";
@@ -4438,13 +4476,14 @@ async function saveItem(){
     }
     a.booking=document.getElementById("actBook").value;
     a.bookRef=document.getElementById("actBookRef").value.trim();
+    if(document.getElementById("actMaybe").checked) a.maybe=true;
     if(editId && state.editing && state.editing.id===editId){
       const prev=rec.activities.find(x=>x.id===editId);
       if(prev && prev.status) a.status=prev.status;  // keep done/skipped through edits
     }
     if(editId){ const i=rec.activities.findIndex(x=>x.id===editId); if(i>=0) rec.activities[i]=a; else rec.activities.push(a); }
     else rec.activities.push(a);
-    if(!date){ await saveMe(); document.getElementById("itemScrim").classList.remove("show"); state._didFit=false; render(); if(state.sharedOK) toast("Added — pick its day on the Prep board"); return; }
+    if(!date){ await saveMe(); document.getElementById("itemScrim").classList.remove("show"); state._didFit=false; render(); if(state.sharedOK) toast(a.maybe ? "Saved as a maybe — it waits in Prep's \"If there's time\" list" : "Added — pick its day on the Prep board"); return; }
   }
   await saveMe();
   document.getElementById("itemScrim").classList.remove("show");
