@@ -165,6 +165,24 @@ async function setupProfile(page, name) {
         {id:"y", date:"2026-09-10", location:{lat:35.66,lng:139.70}, time:""}]} };
       const s = mergeSuggestions(state.people.A);
       r.sugg = s.length===1 && mergeDirection(s[0])==="d1";  // keep the timed one anchored
+      // planning intelligence: coverage, overlaps, conflicts, countdown
+      state.trip = {title:"T", start:"2026-09-07", end:"2026-09-12"};
+      r.nights = nightsBetween("2026-09-07","2026-09-10");
+      const cov = {name:"C", stays:[{start:"2026-09-07",end:"2026-09-09"},{start:"2026-09-10",end:"2026-09-12"}]};
+      r.gaps = stayGaps(cov).map(g=>g.start+"/"+g.end).join(";");     // the night of Sep 9 only
+      r.gapsQuietWhenNoStays = stayGaps({name:"D", stays:[]}).length; // no nagging a blank slate
+      r.overlap = stayOverlaps({stays:[{start:"2026-09-07",end:"2026-09-10",city:"A"},{start:"2026-09-09",end:"2026-09-12",city:"B"}]}).length;
+      r.backToBackOk = stayOverlaps({stays:[{start:"2026-09-07",end:"2026-09-09"},{start:"2026-09-09",end:"2026-09-12"}]}).length;
+      const cfl = timeConflicts({activities:[
+        {date:"2026-09-08", time:"14:00", durationH:"2", title:"teamLab"},
+        {date:"2026-09-08", time:"15:00", title:"Sumo"},
+        {date:"2026-09-08", time:"19:00", title:"Dinner"}]});
+      r.conflicts = cfl.length===1 && cfl[0][0].title==="teamLab" && cfl[0][1].title==="Sumo";
+      const fut = new Date(); fut.setDate(fut.getDate()+10);
+      state.trip = {start: iso(fut), end: iso(fut)};
+      r.countdownAhead = tripCountdown();
+      state.trip = {start: iso(new Date()), end: iso(new Date())};
+      r.countdownDuring = tripCountdown();
       return r;
     });
     check("haversine Tokyo→Kyoto ≈ 366km", Math.abs(u.haversineTokyoKyoto - 366) < 12, u.haversineTokyoKyoto);
@@ -187,6 +205,14 @@ async function setupProfile(page, name) {
     check("wikiMatches ignores non-matches", u.wikiMiss === 0);
     check("Event category has a default cost", u.eventCost === true);
     check("notes linkify is safe", u.linkified === true);
+    check("nightsBetween counts stay length", u.nights === 3, u.nights);
+    check("stayGaps flags the uncovered night", u.gaps === "2026-09-09/2026-09-09", u.gaps);
+    check("stayGaps is quiet before any stay exists", u.gapsQuietWhenNoStays === 0);
+    check("stayOverlaps catches double-booked dates", u.overlap === 1);
+    check("back-to-back checkout/checkin is not an overlap", u.backToBackOk === 0);
+    check("timeConflicts flags the colliding pair only", u.conflicts === true);
+    check("countdown before the trip", u.countdownAhead === "10 days to go", u.countdownAhead);
+    check("countdown during the trip", u.countdownDuring === "Day 1 of 1", u.countdownDuring);
     await page.context().close();
   }
 
@@ -741,6 +767,63 @@ async function setupProfile(page, name) {
     await page.waitForTimeout(500);
     check("new-trip activity lands in the record", await page.evaluate(() => state.people.Mom.activities.length === 1));
     await page.context().close();
+  }
+
+  console.log("\n== e2e: planning intelligence & polish upgrade ==");
+  {
+    // trip five days out, so the glance shows a countdown
+    const day = n => { const d = new Date(); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
+    const [d0, d1, d2, d4, d5] = [day(5), day(6), day(7), day(9), day(10)];
+    // d5 has no stay and no plans — the itinerary should nudge toward Explore there
+    db["/trips/upg-test/trip%3Ameta"] = JSON.stringify({ title: "Upgrade", start: d0, end: d5, home: "JP", countries: ["JP"] });
+    const page = await newPage(browser, "upg-test", { shared: true });
+    await page.goto("http://localhost:18899/", { waitUntil: "domcontentloaded" });
+    await setupProfile(page, "Zach");
+    await page.evaluate(([d0, d1, d2, d4]) => {
+      const me = state.people.Zach;
+      me.stays = [
+        { id: "s1", city: "Tokyo", hotelName: "Tokyo Inn", location: { lat: 35.68, lng: 139.76 }, start: d0, end: d1, cost: 12000 },
+        { id: "s2", city: "Kyoto", hotelName: "Kyoto Inn", location: { lat: 35.01, lng: 135.77 }, start: d2, end: d4, cost: 15000 }];
+      me.activities = [
+        { id: "a1", title: "teamLab", date: d0, time: "14:00", durationH: "2", category: "Culture", location: { lat: 35.65, lng: 139.79 } },
+        { id: "a2", title: "Sumo", date: d0, time: "15:00", category: "Event / show", location: { lat: 35.70, lng: 139.79 } }];
+      return saveMe().then(() => render());
+    }, [d0, d1, d2, d4]);
+    const glance = await page.textContent(".trip-glance");
+    check("glance: countdown + headcount + cost", /5 days to go/.test(glance) && /1 traveler/.test(glance) && /2 plans/.test(glance) && /~/.test(glance), glance);
+    const rail = await page.textContent("#railList");
+    check("stay gap hint names the uncovered night", /No stay booked the night of/.test(rail), rail.slice(0, 400));
+    check("time conflict hint names both plans", /teamLab \(14:00\) overlaps Sumo \(15:00\)/.test(rail));
+    check("stay rows show nights and total", /1 night · ~/.test(rail) && /2 nights · ~/.test(rail));
+    // tapping the gap hint opens the stay form pre-filled with the gap
+    await page.evaluate(() => [...document.querySelectorAll(".rail-hint")].find(h => /No stay booked/.test(h.textContent)).click());
+    check("gap hint pre-fills the stay form", await page.evaluate(([d1, d2]) =>
+      document.getElementById("itemScrim").classList.contains("show") &&
+      document.getElementById("stayStart").value === d1 &&
+      document.getElementById("stayEnd").value === d2, [d1, d2]));
+    // Escape closes the modal
+    await page.keyboard.press("Escape");
+    check("Escape closes the open modal", !(await page.$eval("#itemScrim", el => el.classList.contains("show"))));
+    // itinerary: the empty day between stays gets a nudge toward Explore
+    await page.evaluate(() => setView("itinerary"));
+    await page.waitForTimeout(300);
+    const itin = await page.textContent("#itineraryInner");
+    check("empty day gets a nudge", /Nothing planned yet/.test(itin));
+    await page.click("[data-explore]");
+    check("nudge jumps to Explore", await page.evaluate(() => state.view === "explore"));
+    await page.context().close();
+    // welcome screen writes real trip dates into the new trip
+    const w = await newPage(browser, "our-japan-trip", { shared: true, firstRun: true });
+    await w.goto("http://localhost:18899/", { waitUntil: "domcontentloaded" });
+    await w.waitForTimeout(600);
+    await w.fill("#wName", "Dated Trip");
+    await w.fill("#wStart", "2027-03-01");
+    await w.fill("#wEnd", "2027-03-08");
+    await w.click("#wCreate");
+    await w.waitForTimeout(1200);
+    check("welcome dates land in the shared trip", await w.evaluate(() =>
+      state.trip.start === "2027-03-01" && state.trip.end === "2027-03-08"));
+    await w.context().close();
   }
 
   console.log("\n== e2e: a refused write is kept and retried, not lost ==");

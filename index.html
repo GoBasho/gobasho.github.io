@@ -285,7 +285,7 @@
   .pop { font-family: var(--sans); }
   .pop h4 { margin: 0 0 3px; font-size: 13.5px; font-family: var(--serif); }
   .pop .pmeta { font-size: 11.5px; color: var(--ink-faint); }
-  .pop .who { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; margin-top: 5px; }
+  .pop .who { display: flex; align-items: center; gap: 5px; font-size: 11px; margin-top: 5px; min-width: 150px; }
 
   /* ---------- panel views (itinerary / coordination) ---------- */
   .panel { flex: 1; overflow-y: auto; padding: 26px 32px; }
@@ -297,6 +297,7 @@
 
   .day-block { margin-bottom: 30px; }
   .day-head { display: flex; align-items: baseline; gap: 12px; padding-bottom: 8px; border-bottom: 1.5px solid var(--ink); margin-bottom: 4px; }
+  .day-block.empty-day .day-head { border-bottom-style: dashed; border-bottom-color: var(--line-strong); opacity: .8; align-items: center; }
   .dh-wx { margin-left: auto; font-size: 12px; color: var(--ink-soft); }
   .day-head .dh-num { font-family: var(--serif); font-size: 20px; }
   .day-head .dh-dow { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-faint); }
@@ -585,6 +586,12 @@
     background: var(--sky); color: var(--ink-soft); font-size: 12px; padding: 8px 11px; margin-bottom: 8px;
   }
   .rail-hint:hover { border-color: var(--indigo); color: var(--ink); }
+  .trip-glance {
+    display: flex; align-items: center; gap: 8px; width: 100%;
+    border: 1px solid var(--line); border-radius: 8px; background: var(--surface);
+    color: var(--ink-soft); font-size: 12px; padding: 8px 11px; margin-bottom: 8px;
+  }
+  .trip-glance b { color: var(--ink); }
 
   /* scrollbars */
   ::-webkit-scrollbar { width: 9px; height: 9px; }
@@ -901,6 +908,10 @@
     <div class="modal-body">
       <div class="field"><label>Trip name</label><input type="text" id="wName" placeholder="e.g. Japan 2027, Family Reunion" maxlength="48"></div>
       <div class="field"><label>Where to</label><select id="wHome"></select></div>
+      <div class="field-row">
+        <div class="field"><label>First day (optional)</label><input type="date" id="wStart"></div>
+        <div class="field"><label>Last day</label><input type="date" id="wEnd"></div>
+      </div>
       <button class="btn primary wide" id="wCreate">Create the trip</button>
       <div class="field-hint" style="text-align:center; margin:12px 0 10px;">— or —</div>
       <div class="field"><label>Got an invite?</label>
@@ -1703,6 +1714,24 @@ function renderRailList(){
     return;
   }
   wrap.innerHTML = "";
+  // the trip at a glance: countdown, headcount, plans, estimated cost
+  {
+    const cd = tripCountdown();
+    const nPeople = Object.keys(state.people).length;
+    const nPlans = Object.values(state.people).reduce((n,p)=>n+(p.activities||[]).length,0);
+    const tot = visiblePeople().reduce((s,p)=>{ const t=tripTotalCost(p); return {v:s.v+t.v, est:s.est||t.est}; },{v:0,est:false});
+    const bits = [];
+    if(cd) bits.push(`<b>${esc(cd)}</b>`);
+    if(nPeople) bits.push(nPeople+" traveler"+(nPeople!==1?"s":""));
+    bits.push(nPlans+" plan"+(nPlans!==1?"s":""));
+    if(tot.v>0) bits.push((tot.est?"~":"")+fmtYen(tot.v)+approxDisp(tot.v));
+    if(bits.length>1 || cd){
+      const sm=document.createElement("div");
+      sm.className="trip-glance";
+      sm.innerHTML=`<span>${icon("clock",13)}</span><span>`+bits.join(" · ")+`</span>`;
+      wrap.appendChild(sm);
+    }
+  }
   // demo banner
   if(isDemo()){
     const db = document.createElement("div");
@@ -1756,11 +1785,35 @@ function renderRailList(){
       hint.onclick = ()=>{ document.querySelectorAll(".tab").forEach(t=>t.classList.toggle("active", t.dataset.view==="itinerary")); setView("itinerary"); };
       wrap.appendChild(hint);
     }
+    // nights with nowhere to sleep — tap to add a stay pre-filled with the gap
+    for(const g of stayGaps(me).slice(0,2)){
+      const gp=document.createElement("button");
+      gp.className="rail-hint";
+      gp.innerHTML=`<span>${icon("home")}</span> No stay booked ${g.start===g.end?("the night of "+shortDate(g.start)):(shortDate(g.start)+" – "+shortDate(addDaysIso(g.end,1)))} — tap to add one`;
+      gp.onclick=()=>{ openItem("stay"); document.getElementById("stayStart").value=g.start; document.getElementById("stayEnd").value=addDaysIso(g.end,1); };
+      wrap.appendChild(gp);
+    }
+    for(const [s1,s2] of stayOverlaps(me).slice(0,1)){
+      const ov=document.createElement("div");
+      ov.className="rail-hint"; ov.style.cursor="default";
+      ov.innerHTML=`<span>${icon("home")}</span> Two of your stays overlap: ${esc(s1.hotelName||s1.city)} and ${esc(s2.hotelName||s2.city)} — check the dates`;
+      wrap.appendChild(ov);
+    }
+    // two timed plans that collide — tap to inspect that day
+    for(const [a1,a2] of timeConflicts(me).slice(0,2)){
+      const cf=document.createElement("button");
+      cf.className="rail-hint";
+      cf.innerHTML=`<span>${icon("clock")}</span> ${esc(shortDate(a1.date))}: ${esc(a1.title)} (${esc(a1.time)}) overlaps ${esc(a2.title)} (${esc(a2.time)})`;
+      cf.onclick=()=>{ state.selectedDate=a1.date; render(); };
+      wrap.appendChild(cf);
+    }
   }
   for(const s of stays){
+    const nights = nightsBetween(s.start, s.end);
+    const stayTot = nights && hasCost(s) ? ` · ~${fmtYen(+s.cost*nights)}` : "";
     wrap.appendChild(itemRow({
       color: s.color, title: s.hotelName || s.city, tick: s.color,
-      sub: `Stay · ${s.city} · ${shortRange(s.start,s.end)} · ${s.person}`,
+      sub: `Stay · ${s.city} · ${shortRange(s.start,s.end)}${nights?` · ${nights} night${nights>1?"s":""}`:""}${stayTot} · ${s.person}`,
       onDel: canEdit(s.person) ? () => removeItem("stay", s.person, s.id) : null,
       onEdit: canEdit(s.person) ? () => openEdit("stay", s.person, s.id) : null,
       onClick: () => flyTo(s.location)
@@ -1850,14 +1903,17 @@ function renderMarkers(){
     if(!s.location) continue;
     if(!inHomeBox(s.location.lat, s.location.lng)){ hiddenFar++; continue; }
     const m = L.marker([s.location.lat,s.location.lng], {icon:pinIcon(s.color,true)});
-    m.bindPopup(`<div class="pop"><h4>${esc(s.hotelName||s.city)}</h4><div class="pmeta">Stay · ${esc(s.city)} · ${shortRange(s.start,s.end)}</div><div class="who"><span class="dot" style="background:${s.color}"></span>${esc(s.person)}</div></div>`);
+    const nights = nightsBetween(s.start, s.end);
+    m.bindPopup(`<div class="pop"><h4>${esc(s.hotelName||s.city)}</h4><div class="pmeta">Stay · ${esc(s.city)} · ${shortRange(s.start,s.end)}${nights?` · ${nights} night${nights>1?"s":""}`:""}${nights&&hasCost(s)?` · ~${fmtYen(+s.cost*nights)}`:""}</div><div class="who"><span class="dot" style="background:${s.color}"></span>${esc(s.person)}${canEdit(s.person)?'<button class="mini-btn pop-edit" style="margin-left:auto">Edit</button>':''}</div></div>`);
+    if(canEdit(s.person)) m.on("popupopen", ()=>{ const b=document.querySelector(".leaflet-popup .pop-edit"); if(b) b.onclick=()=>{ map.closePopup(); openEdit("stay", s.person, s.id); }; });
     markerLayer.addLayer(m); pts.push([s.location.lat,s.location.lng]);
   }
   for(const a of acts){
     if(!a.location) continue;
     if(!inHomeBox(a.location.lat, a.location.lng)){ hiddenFar++; continue; }
     const m = L.marker([a.location.lat,a.location.lng], {icon:pinIcon(a.color,false)});
-    m.bindPopup(`<div class="pop"><h4>${esc(a.title)}</h4><div class="pmeta">${a.time?esc(a.time)+' · ':''}${esc(a.category||'Activity')} · ${a.date?esc(shortDate(a.date)):esc(flexLabel(a)||"flexible")}</div>${a.notes?'<div class="pmeta" style="margin-top:4px">'+linkify(esc(a.notes))+'</div>':''}<div class="who"><span class="dot" style="background:${a.color}"></span>${esc(a.person)}</div></div>`);
+    m.bindPopup(`<div class="pop"><h4>${esc(a.title)}</h4><div class="pmeta">${a.time?esc(a.time)+' · ':''}${esc(a.category||'Activity')} · ${a.date?esc(shortDate(a.date)):esc(flexLabel(a)||"flexible")}${hasCost(a)?` · ${fmtYen(+a.cost)}`:""}</div>${a.notes?'<div class="pmeta" style="margin-top:4px">'+linkify(esc(a.notes))+'</div>':''}<div class="who"><span class="dot" style="background:${a.color}"></span>${esc(a.person)}${canEdit(a.person)?'<button class="mini-btn pop-edit" style="margin-left:auto">Edit</button>':''}</div></div>`);
+    if(canEdit(a.person)) m.on("popupopen", ()=>{ const b=document.querySelector(".leaflet-popup .pop-edit"); if(b) b.onclick=()=>{ map.closePopup(); openEdit("activity", a.person, a.id); }; });
     markerLayer.addLayer(m); pts.push([a.location.lat,a.location.lng]);
   }
   // live positions from meet-up mode (fresh within 15 min, not expired)
@@ -1949,6 +2005,56 @@ function tripTotalCost(p){
   return { v, est };
 }
 
+/* ---------- planning intelligence: coverage, conflicts, countdown ---------- */
+function nightsBetween(a,b){ return a&&b ? Math.max(0, Math.round((parseISO(b)-parseISO(a))/86400000)) : 0; }
+function addDaysIso(d,n){ const x=parseISO(d); x.setDate(x.getDate()+n); return iso(x); }
+/* trip nights this person has no stay covering — runs of night-dates.
+   Quiet until they've added at least one stay (no nagging a blank slate). */
+function stayGaps(p){
+  const dates=tripDates();
+  if(dates.length<2 || !(p.stays||[]).some(s=>s.start&&s.end)) return [];
+  const out=[]; let run=null;
+  for(const d of dates.slice(0,-1)){        // each entry is the night d → d+1
+    if((p.stays||[]).some(s=>s.start&&s.end&&d>=s.start&&d<s.end)){ run=null; continue; }
+    if(run) run.end=d; else out.push(run={start:d,end:d});
+  }
+  return out;
+}
+/* stays whose date ranges overlap (checking out and in on the same day is fine) */
+function stayOverlaps(p){
+  const ss=(p.stays||[]).filter(s=>s.start&&s.end).slice().sort((a,b)=>a.start.localeCompare(b.start));
+  const out=[];
+  for(let i=1;i<ss.length;i++) if(ss[i].start<ss[i-1].end) out.push([ss[i-1],ss[i]]);
+  return out;
+}
+/* timed plans that collide on the same day (default length 90 min) */
+function timeConflicts(p){
+  const mins=t=>{ const x=String(t).split(":"); return (+x[0])*60+(+x[1]||0); };
+  const byDay={};
+  for(const a of (p.activities||[])) if(a.date&&a.time&&a.status!=="skipped") (byDay[a.date]=byDay[a.date]||[]).push(a);
+  const out=[];
+  for(const day of Object.keys(byDay)){
+    const list=byDay[day].sort((a,b)=>a.time.localeCompare(b.time));
+    for(let i=1;i<list.length;i++){
+      const prev=list[i-1];
+      if(mins(list[i].time) < mins(prev.time)+(+prev.durationH||1.5)*60) out.push([prev, list[i]]);
+    }
+  }
+  return out;
+}
+/* "42 days to go" / "Day 3 of 10" — empty once the trip is over */
+function tripCountdown(){
+  if(!state.trip.start) return "";
+  const today=iso(new Date());
+  if(today<state.trip.start){
+    const n=Math.round((parseISO(state.trip.start)-parseISO(today))/86400000);
+    return n===1 ? "Leaving tomorrow" : n+" days to go";
+  }
+  const end=state.trip.end||state.trip.start;
+  if(today<=end) return "Day "+(Math.round((parseISO(today)-parseISO(state.trip.start))/86400000)+1)+" of "+tripDates().length;
+  return "";
+}
+
 /* the shape of one person's day: hotel anchor, ordered stops, and travel legs.
    Skipped plans drop out of the route (Today mode lists them separately). */
 function dayPlan(p, date){
@@ -2003,7 +2109,13 @@ function renderItinerary(){
   if(!dates.length){ wrap.innerHTML = head + '<div class="list-empty">Set your trip dates in the header to build the day-by-day itinerary.</div>'; wireSuggestions(wrap); return; }
   const people = visiblePeople();
   const shownDates = state.selectedDate ? [state.selectedDate] : dates;
-  let body = "";
+  let body = "", hadDays = false, emptyRun = null;
+  // consecutive unplanned days collapse into one gentle nudge toward Explore
+  const flushEmpty = ()=>{
+    if(!emptyRun) return;
+    body += `<div class="day-block empty-day"><div class="day-head"><span class="dh-num">${emptyRun.start===emptyRun.end?prettyDate(emptyRun.start):esc(shortDate(emptyRun.start)+" – "+shortDate(emptyRun.end))}</span><span class="dh-dow">Nothing planned yet</span><button class="mini-btn" data-explore style="margin-left:auto">Find ideas nearby</button></div></div>`;
+    emptyRun = null;
+  };
   for(const date of shownDates){
     let dayHtml = "";
     for(const p of people){
@@ -2012,11 +2124,18 @@ function renderItinerary(){
       if(!plan.sequence.filter(s=>!s.anchor).length && !plan.stay && !trip) continue;
       dayHtml += renderPersonDay(p, date, plan);
     }
-    if(!dayHtml) continue;
+    if(!dayHtml){
+      if(!state.selectedDate){ if(emptyRun) emptyRun.end=date; else emptyRun={start:date, end:date}; }
+      continue;
+    }
+    flushEmpty();
+    hadDays = true;
     const leg = legForDate(date);
     const w = wxFor(date);
     body += `<div class="day-block"><div class="day-head"><span class="dh-num">${prettyDate(date)}</span><span class="dh-dow">${leg?`${FLAGS[leg.country]||""} ${esc(leg.name||leg.country)}`:"Day"}</span>${w?`<span class="dh-wx">${WX_ICON(w.code)} ${w.tmax}° / ${w.tmin}°</span>`:""}</div>${dayHtml}</div>`;
   }
+  flushEmpty();
+  if(!hadDays) body = "";  // a fully empty trip keeps the single friendly empty state
   wrap.innerHTML = head + (body || '<div class="list-empty">No plans on the selected day(s) yet.</div>');
   wireSuggestions(wrap);
 }
@@ -2024,6 +2143,10 @@ function wireSuggestions(wrap){
   wrap.querySelectorAll("[data-merge]").forEach(b=> b.onclick=()=>applyMergeSuggestion(b.dataset.merge, b.dataset.target));
   wrap.querySelectorAll("[data-dayidea]").forEach(b=> b.onclick=()=>applyDayIdea(b.dataset.dayidea, b.dataset.target));
   wrap.querySelectorAll("[data-dismisssug]").forEach(b=> b.onclick=()=>dismissSuggestion(b.dataset.dismisssug));
+  wrap.querySelectorAll("[data-explore]").forEach(b=> b.onclick=()=>{
+    document.querySelectorAll(".tab").forEach(t=>t.classList.toggle("active", t.dataset.view==="explore"));
+    setView("explore");
+  });
   const ics=wrap.querySelector("#icsBtn");
   if(ics) ics.onclick=exportICS;
   const pr=wrap.querySelector("#printBtn");
@@ -3147,10 +3270,10 @@ function switchTrip(id){
   window.storage.switchTrip(id);
   location.reload();
 }
-async function createNewTrip(name, home){
+async function createNewTrip(name, home, start, end){
   // new trips get an unguessable id — shared via the invite link
   const id=slugTrip(name)+"-"+Math.random().toString(36).slice(2,7);
-  const meta={title:name, start:"", end:"", home};
+  const meta={title:name, start:start||"", end:end||"", home};
   if(window.storage.uid) meta.ownerUid=window.storage.uid;  // lets the creator tidy up travelers
   if(COUNTRIES.some(c=>c[0]===home)) meta.countries=[home];
   await window.storage.putIn(id, "trip:meta", JSON.stringify(meta));
@@ -4358,8 +4481,10 @@ function wire(){
   document.getElementById("wDemo").onclick = enterDemo;
   document.getElementById("wCreate").onclick = async()=>{
     const name=document.getElementById("wName").value.trim();
-    if(!name){ toast("Give the trip a name"); return; }
-    try { await createNewTrip(name, document.getElementById("wHome").value); }
+    if(!name){ flagField("wName"); toast("Give the trip a name"); return; }
+    const ws=document.getElementById("wStart").value, we=document.getElementById("wEnd").value;
+    if(ws && we && we<ws){ flagField("wStart"); flagField("wEnd"); toast("The trip ends before it starts — check the dates"); return; }
+    try { await createNewTrip(name, document.getElementById("wHome").value, ws, we||ws); }
     catch(e){ toast(/\(40[13]\)/.test(String(e&&e.message))
       ? "The database refused the new trip — Anonymous sign-in may be off, or this network blocks Google sign-in."
       : "Couldn't reach the shared database"); }
@@ -4383,6 +4508,21 @@ function wire(){
   // scrim backdrop closes profile only (item modal has explicit buttons)
   document.getElementById("profileScrim").addEventListener("click", e=>{
     if(e.target.id==="profileScrim" && state.me) e.currentTarget.classList.remove("show");
+  });
+  // Escape backs out of whatever's open, top-most first
+  document.addEventListener("keydown", e=>{
+    if(e.key!=="Escape") return;
+    const tm=document.getElementById("tripsMenu");
+    if(tm.classList.contains("show")) return tm.classList.remove("show");
+    const sug=document.getElementById("locSuggest");
+    if(sug.classList.contains("show")) return sug.classList.remove("show");
+    for(const id of ["itemScrim","commentScrim","profileScrim"]){
+      const el=document.getElementById(id);
+      if(el.classList.contains("show")){
+        if(id==="profileScrim" && !state.me) return;  // first-time setup must finish
+        return el.classList.remove("show");
+      }
+    }
   });
 
   // trip header edits (debounced save)
