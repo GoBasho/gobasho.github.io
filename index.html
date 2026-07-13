@@ -1498,7 +1498,15 @@ async function loadEveryone(){
   const fresh = {};
   for(const k of Object.keys(all)){
     if(!k.startsWith("person:")) continue;
-    try { const p = JSON.parse(all[k]); if(!p.deleted) fresh[p.name] = p; } catch {}
+    try {
+      const p = JSON.parse(all[k]);
+      if(p.deleted) continue;
+      // Firebase drops empty arrays entirely — a traveler with no plans yet
+      // comes back without these fields, and adding their first stay would
+      // crash. Restore the containers every load.
+      p.stays = p.stays || []; p.activities = p.activities || [];
+      fresh[p.name] = p;
+    } catch {}
   }
   // repair reversed stay dates (older records could be saved with depart before arrive)
   for(const p of Object.values(fresh)) for(const s of (p.stays||[]))

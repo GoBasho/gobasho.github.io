@@ -30,6 +30,17 @@ const site = http.createServer((req, res) => {
 // minimal Firebase Realtime DB REST mock
 const db = {};
 let denyWrites = false;  // simulates security rules refusing writes (401)
+// real Firebase stores no empty arrays/objects — they simply vanish.
+// Mimic that, or bugs like "fresh traveler record has no stays array" hide.
+function prune(v) {
+  if (Array.isArray(v)) { const a = v.map(prune).filter(x => x !== undefined); return a.length ? a : undefined; }
+  if (v && typeof v === "object") {
+    const o = {};
+    for (const k of Object.keys(v)) { const p = prune(v[k]); if (p !== undefined) o[k] = p; }
+    return Object.keys(o).length ? o : undefined;
+  }
+  return v;
+}
 const fb = http.createServer((req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET,PUT,OPTIONS");
@@ -41,7 +52,11 @@ const fb = http.createServer((req, res) => {
   if (req.method === "PUT") {
     if (denyWrites) { res.statusCode = 401; return res.end('{"error":"Permission denied"}'); }
     let body = ""; req.on("data", c => body += c);
-    req.on("end", () => { db[path] = JSON.parse(body); res.end(JSON.stringify(db[path])); });
+    req.on("end", () => {
+      const v = prune(JSON.parse(body));
+      if (v === undefined) delete db[path]; else db[path] = v;
+      res.end(JSON.stringify(v === undefined ? null : v));
+    });
   } else if (u.searchParams.get("shallow") === "true") {
     const kids = {};
     for (const k of Object.keys(db)) if (k.startsWith(path + "/")) kids[k.slice(path.length + 1).split("/")[0]] = true;
@@ -838,6 +853,38 @@ async function setupProfile(page, name) {
     check("welcome dates land in the shared trip", await w.evaluate(() =>
       state.trip.start === "2027-03-01" && state.trip.end === "2027-03-08"));
     await w.context().close();
+  }
+
+  console.log("\n== e2e: first stay after a reload (Firebase drops empty arrays) ==");
+  {
+    // profile-only record → reload → the record returns without stays/activities
+    // keys (Firebase prunes empty arrays) → first Save must still work
+    db["/trips/fresh-rec/trip%3Ameta"] = JSON.stringify({ title: "Japan 2026", start: "2026-12-13", end: "2027-01-13", home: "JP", countries: ["JP"] });
+    const page = await newPage(browser, "fresh-rec", { shared: true });
+    await page.goto("http://localhost:18899/", { waitUntil: "domcontentloaded" });
+    await setupProfile(page, "Zach");
+    check("mock mimics Firebase: empty arrays vanish from the stored record", await (async () => {
+      const res = await fetch("http://localhost:18898/trips/fresh-rec/person%3AZach.json");
+      const p = await res.json(); return !!p && !("stays" in p) && !("activities" in p);
+    })());
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(800);
+    await page.evaluate(() => {
+      openItem("stay");
+      state.pendingLoc = { lat: 43.06, lng: 141.35, label: "Sapporo Grand Hotel" };
+      document.getElementById("locInput").value = "Sapporo Grand Hotel";
+      document.getElementById("stayStart").value = "2026-12-14";
+      document.getElementById("stayEnd").value = "2026-12-18";
+    });
+    await page.click("#itemSave");
+    await page.waitForTimeout(400);
+    check("first stay saves after a reload", await page.evaluate(() => state.people.Zach.stays.length === 1));
+    check("save confirms with a toast, not silence", /Stay added/.test(await page.textContent("#notice")));
+    check("explore quick-add works on a plan-less record", await page.evaluate(async () => {
+      await addRecommendation({ name: "Odori Park", lat: 43.06, lng: 141.35, cat: "Nature" }, "2026-12-15");
+      return state.people.Zach.activities.length === 1;
+    }));
+    await page.context().close();
   }
 
   console.log("\n== e2e: expanded Explore — radius rings, more results, seasons ==");
