@@ -99,7 +99,10 @@ the same map, connect a free Firebase database:
    The last clause lets a trip's creator remove stray travelers (the ✕ next
    to names in the sidebar). It only activates on trips created after the
    ownership feature, and requires the trip settings to have been saved in
-   the new object format.
+   the new object format. Trips with no recorded owner (older trips, or
+   local-only mode) show the ✕ to everyone; with these locked rules the
+   database still refuses the write unless it comes from the trip's creator,
+   and the app says so instead of pretending it worked.
 
    What these enforce: a trip is reachable only with its exact ID (no
    listing the database), only the app's signed-in visitors can read or
