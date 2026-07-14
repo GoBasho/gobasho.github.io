@@ -469,6 +469,8 @@
   [data-theme="dark"] .rec-off { color: #d9a45b; }
   .acct-line { font-size: 12.5px; color: var(--ink-soft); line-height: 1.5; }
   .gsi-mount { margin-top: 8px; min-height: 32px; }
+  .w-trip-list { margin-top: 10px; border: 1px solid var(--line); border-radius: 8px; overflow-y: auto; max-height: 190px; }
+  .w-trip-list .tm-item:last-child { border-bottom: none; }
   .maybe-check { display: flex; align-items: center; gap: 8px; font-size: 12.5px !important; color: var(--ink) !important; text-transform: none !important; letter-spacing: 0 !important; font-weight: 500 !important; cursor: pointer; }
   .maybe-check input { width: auto; }
   .item.dim { opacity: .62; }
@@ -958,6 +960,7 @@
       <p>Make your own trip, or hop into one you've been invited to. Everything is free.</p>
     </div>
     <div class="modal-body">
+      <div class="field" id="wAccount" style="display:none"></div>
       <div class="field"><label>Trip name</label><input type="text" id="wName" placeholder="e.g. Japan 2027, Family Reunion" maxlength="48"></div>
       <div class="field"><label>Where to</label><select id="wHome"></select></div>
       <div class="field-row">
@@ -3546,6 +3549,51 @@ function openWelcome(){
   const sel=document.getElementById("wHome");
   sel.innerHTML=HOMES.map(h=>`<option value="${h[0]}" ${h[0]==="WORLD"?"selected":""}>${h[1]}</option>`).join("");
   document.getElementById("welcomeScrim").classList.add("show");
+  renderWelcomeAccount();
+}
+/* the welcome screen's account corner: sign in with Google right away, and
+   the trips already saved to that account become one-tap entrances */
+function renderWelcomeAccount(){
+  const box=document.getElementById("wAccount");
+  if(!googleClientId() || window.storage.mode!=="shared"){ box.style.display="none"; return; }
+  box.style.display="block";
+  if(window.storage.authEmail){
+    box.innerHTML=`<label>Your trips</label><div class="acct-line">Signed in as <b>${esc(window.storage.authEmail)}</b> — pick a trip to continue, or start a new one below.</div>
+      <div class="w-trip-list" id="wTripList"><div class="field-hint" style="padding:8px 12px">Looking for your trips&hellip;</div></div>
+      <div class="field-hint" style="text-align:center;margin-top:12px">— or start fresh —</div>`;
+    loadWelcomeTrips();
+  } else {
+    box.innerHTML=`<label>Been here before?</label><div class="acct-line">Sign in with Google to pick up the trips saved to your account.</div>
+      <div class="gsi-mount" id="wGsiMount"></div>
+      <div class="field-hint" style="text-align:center;margin-top:12px">— or start fresh —</div>`;
+    mountGoogleButton(document.getElementById("wGsiMount"));
+  }
+}
+async function loadWelcomeTrips(){
+  let trips=[];
+  try { trips=(await window.storage.accountTrips()).slice(0,8); } catch {}
+  const list=document.getElementById("wTripList");
+  if(!list) return;
+  if(!trips.length){
+    list.innerHTML='<div class="field-hint" style="padding:8px 12px">No trips on this account yet — create one below and it will follow your sign-in to any device.</div>';
+    return;
+  }
+  // fill in titles the account record doesn't know yet
+  for(const t of trips) if(!t.title){
+    try { const m=await window.storage.getFrom(t.id, "trip:meta"); if(m && m.value) t.title=JSON.parse(m.value).title || ""; } catch {}
+  }
+  list.innerHTML=trips.map(t=>`<button type="button" class="tm-item" data-wtrip="${esc(t.id)}"><span>${esc(t.title||t.id)}</span><span class="tm-id">${esc(t.id)}</span></button>`).join("");
+  list.querySelectorAll("[data-wtrip]").forEach(b=>b.onclick=()=>switchTrip(b.dataset.wtrip));
+}
+/* pull the signed-in account's trips into this browser's Trips menu */
+async function adoptAccountTrips(){
+  const trips=await window.storage.accountTrips();
+  try {
+    const known=JSON.parse(localStorage.getItem("meridian:known-trips")||"[]");
+    for(const t of trips) if(!known.includes(t.id)) known.push(t.id);
+    localStorage.setItem("meridian:known-trips", JSON.stringify(known));
+  } catch {}
+  return trips.length;
 }
 
 /* ---------- take your data with you ---------- */
@@ -4284,13 +4332,25 @@ async function mountGoogleButton(el){
 async function handleGoogleCredential(resp){
   try {
     const r = await window.storage.signInWithGoogle(resp.credential);
-    if(r.linked){
-      toast("Signed in as "+(r.email||"your Google account")+" — use the same account on your other devices to edit anywhere");
-    } else {
-      toast("Signed in as "+(r.email||"your Google account")+". Plans made earlier in this browser belong to its old identity — edit those from the device that made them.");
-    }
     if(state.me) await saveMe();  // stamp the record with the (possibly new) uid
+    // sync trip lists both ways: this browser's trips attach to the account,
+    // and the account's trips from other devices land in the Trips menu
+    let n=0;
+    try {
+      const known=JSON.parse(localStorage.getItem("meridian:known-trips")||"[]");
+      if(state.me && !known.includes(window.storage.tripId)) known.push(window.storage.tripId);
+      for(const tid of known) window.storage.rememberTrip(tid, tid===window.storage.tripId?state.trip.title:"");
+      n = await adoptAccountTrips();
+    } catch {}
+    const who = r.email || "your Google account";
+    const found = n>1 ? ` ${n} trips from this account are in your Trips menu.` : "";
+    if(r.linked){
+      toast("Signed in as "+who+" — use the same account on your other devices to edit anywhere."+found);
+    } else {
+      toast("Signed in as "+who+". Plans made earlier in this browser belong to its old identity — edit those from the device that made them."+found);
+    }
     renderAccountBox();
+    if(document.getElementById("welcomeScrim").classList.contains("show")) renderWelcomeAccount();
     render();
   } catch {
     toast("Google sign-in didn't complete — try again");
@@ -4357,7 +4417,10 @@ async function saveProfile(){
     if(theirs && ours && theirs !== ours){
       toast('"'+name+'" belongs to someone else on this trip — pick a different name'); return;
     }
-    if(!confirm('"'+name+'" is already a traveler on this trip. Continue only if that is you — otherwise pick a different name.')) return;
+    // matching uid proves it's the same identity (Google sign-in or device
+    // link) — only ask when we can't be sure
+    if(!(theirs && ours && theirs === ours) &&
+       !confirm('"'+name+'" is already a traveler on this trip. Continue only if that is you — otherwise pick a different name.')) return;
   }
   if(oldName && oldName!==name){
     // rename: migrate the record and clear the old key
@@ -5025,6 +5088,18 @@ async function boot(){
     await loadEveryone();
     // announce yourself only when this trip didn't know you yet
     if(state._justJoined){ state._justJoined=false; await saveMe(); }
+    // Google-signed-in traveler on a device this trip doesn't know: their
+    // record carries their uid, so pick up where they left off — no profile
+    // prompt. Only for real sign-ins; anonymous uids stay per-browser.
+    if(!state.me && window.storage.mode==="shared"){
+      const ours = await window.storage.whenAuthed();
+      const mine = ours && window.storage.authEmail && Object.values(state.people).find(p=>p.uid===ours);
+      if(mine){
+        state.me={name:mine.name, color:mine.color};
+        await sSet("me", JSON.stringify(state.me), false);
+        try { localStorage.setItem("meridian:last-me", JSON.stringify(state.me)); } catch {}
+      }
+    }
     // digest: who changed things since this browser last looked
     try {
       const dk="meridian:"+window.storage.tripId+":last-seen";
@@ -5033,6 +5108,15 @@ async function boot(){
       if(last && changed.length) state._digest="Since your last visit: "+changed.map(p=>p.name).join(", ")+" updated their plans.";
       localStorage.setItem(dk, String(Date.now()));
     } catch {}
+    // pin this trip to the signed-in identity so it follows the account to
+    // other devices, and pull in trips the account picked up elsewhere
+    window.storage.whenAuthed().then(()=>{
+      if(isDemo()) return;
+      let known=[]; try { known=JSON.parse(localStorage.getItem("meridian:known-trips")||"[]"); } catch {}
+      if(state.me || known.includes(window.storage.tripId))
+        window.storage.rememberTrip(window.storage.tripId, state.trip.title);
+      if(window.storage.authEmail) adoptAccountTrips().catch(()=>{});
+    });
   }
   loadFx().then(()=>{ if(fxRates) render(); });  // second-currency rates, async
   loadWeather().then(()=>{ if(state._wx) render(); });

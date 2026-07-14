@@ -194,14 +194,47 @@
         if (!known.includes(id)) { known.push(id); localStorage.setItem("meridian:known-trips", JSON.stringify(known)); }
       } catch {}
     },
-    /* trips this browser knows, plus whatever the database will enumerate
-       (with locked-down rules the root listing is denied — invite links
-       and the known-trips list carry the load instead) */
+    /* ---- trips pinned to the signed-in identity ----
+       users/<uid>/trips/<tripId> = { t: title, at: last-opened } lets a
+       Google sign-in carry its trip list to any device. Needs the "users"
+       rules block from README.md on locked databases; failures are silent,
+       so the feature degrades to the per-browser known-trips list. */
+    async rememberTrip(tid, title) {
+      await ready;
+      if (mode !== "shared" || String(tid).startsWith("demo-")) return false;
+      if (!(await ensureAuth())) return false;
+      const url = dbUrl + "/users/" + encodeKey(authUid) + "/trips/" + encodeKey(tid) + ".json";
+      try {
+        let prev = null;   // keep a title an earlier visit recorded
+        try { const r = await fetch(await authed(url)); if (r.ok) prev = await r.json(); } catch {}
+        const res = await fetch(await authed(url), { method: "PUT",
+          body: JSON.stringify({ t: title || (prev && prev.t) || "", at: Date.now() }) });
+        return res.ok;
+      } catch { return false; }
+    },
+    /* every trip pinned to this identity, most recently opened first */
+    async accountTrips() {
+      await ready;
+      if (mode !== "shared") return [];
+      if (!(await ensureAuth())) return [];
+      try {
+        const res = await fetch(await authed(dbUrl + "/users/" + encodeKey(authUid) + "/trips.json"));
+        if (!res.ok) return [];
+        const obj = (await res.json()) || {};
+        return Object.keys(obj)
+          .map(k => ({ id: decodeKey(k), title: (obj[k] && obj[k].t) || "", at: +(obj[k] && obj[k].at) || 0 }))
+          .sort((a, b) => b.at - a.at);
+      } catch { return []; }
+    },
+    /* trips this browser knows, plus the signed-in account's own list, plus
+       whatever the database will enumerate (with locked-down rules the root
+       listing is denied — invite links and the other two carry the load) */
     async listTrips() {
       await ready;
       const ids = new Set([tripId]);
       try { JSON.parse(localStorage.getItem("meridian:known-trips") || "[]").forEach(x => ids.add(x)); } catch {}
       if (mode === "shared") {
+        try { (await window.storage.accountTrips()).forEach(t => ids.add(t.id)); } catch {}
         try {
           const res = await fetch(await authed(dbUrl + "/trips.json?shallow=true"));
           if (res.ok) Object.keys((await res.json()) || {}).forEach(k => ids.add(decodeKey(k)));
