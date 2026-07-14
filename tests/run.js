@@ -218,6 +218,13 @@ async function setupProfile(page, name) {
       state.trip = {start:"2026-09-07", end:"2026-09-09"};
       r.tripWindow = actWindow({date:"", flex:{type:"trip"}}).join(",");
       r.tripLabel = flexLabel({flex:{type:"trip"}});
+      // Google Maps paste parsing + address simplification
+      r.gmPlace = parseGmapsInput("https://www.google.com/maps/place/Shibuya+Sky/@35.658,139.7016,17z/data=!3m1!4b1!4m6!3m5!8m2!3d35.6595!4d139.7005");
+      r.gmCoords = parseGmapsInput("35.6595, 139.7005");
+      r.gmText = parseGmapsInput("fushimi inari taisha");
+      r.gmShort = parseGmapsInput("https://maps.app.goo.gl/AbCd12");
+      r.gmView = parseGmapsInput("https://www.google.com/maps/@35.01,135.76,12z");
+      r.addrFb = addressFallbacks("2 Chome-24-12 Shibuya, Shibuya City, Tokyo 150-0002, Japan");
       return r;
     });
     check("haversine Tokyo→Kyoto ≈ 366km", Math.abs(u.haversineTokyoKyoto - 366) < 12, u.haversineTokyoKyoto);
@@ -257,6 +264,14 @@ async function setupProfile(page, name) {
     check("maybes don't trigger time-conflict warnings", u.maybeConflicts === 0);
     check("during-the-trip window spans the whole trip", u.tripWindow === "2026-09-07,2026-09-08,2026-09-09", u.tripWindow);
     check("during-the-trip label", u.tripLabel === "during the trip", u.tripLabel);
+    check("gmaps place link: the pin's own coords + name win over the viewport",
+      !!u.gmPlace && Math.abs(u.gmPlace.lat - 35.6595) < 1e-9 && Math.abs(u.gmPlace.lng - 139.7005) < 1e-9 && u.gmPlace.name === "Shibuya Sky", u.gmPlace);
+    check("bare coordinates parse", !!u.gmCoords && u.gmCoords.lat === 35.6595 && u.gmCoords.lng === 139.7005, u.gmCoords);
+    check("plain text is not mistaken for coordinates", u.gmText === null);
+    check("shortened share links flagged (no coords in the URL)", !!u.gmShort && u.gmShort.short === true, u.gmShort);
+    check("viewport-only gmaps link still yields coords", !!u.gmView && Math.abs(u.gmView.lng - 135.76) < 1e-9, u.gmView);
+    check("address fallbacks drop postcode + country, then simplify",
+      u.addrFb.length >= 2 && !/150-0002/.test(u.addrFb[0]) && !/Japan/i.test(u.addrFb[0]) && u.addrFb.some(s => /^Shibuya, Tokyo$/.test(s)), u.addrFb);
     await page.context().close();
   }
 
@@ -959,6 +974,109 @@ async function setupProfile(page, name) {
     const saved = await page.evaluate(() => state.people.Zach.activities[0]);
     check("food spot saved as a Food & drink plan", !!saved && saved.title === "Ichiran Shibuya" && saved.category === "Food & drink", saved);
     check("confirmation names the food spot", /Food spot added/.test(await page.textContent("#notice")));
+    await page.context().close();
+  }
+
+  console.log("\n== e2e: place kinds, gmaps paste, category view, traveler removal ==");
+  {
+    // no ownerUid in the meta: an ownerless (older / local) trip
+    db["/trips/vb-test/trip%3Ameta"] = JSON.stringify({ title: "Kinds", start: "2026-12-13", end: "2026-12-19", home: "JP", countries: ["JP"] });
+    const page = await newPage(browser, "vb-test", { shared: true });
+    await page.route("https://photon.komoot.io/**", r => r.fulfill({ contentType: "application/json", body: JSON.stringify({ features: [
+      { properties: { name: "Railway Museum", city: "Saitama", osm_key: "tourism", osm_value: "museum" }, geometry: { coordinates: [139.6489, 35.9214] } }
+    ] }) }));
+    await page.route("https://nominatim.openstreetmap.org/**", r => {
+      if (/\/reverse/.test(r.request().url())) return r.fulfill({ contentType: "application/json",
+        body: JSON.stringify({ name: "Shibuya Sky", display_name: "Shibuya Sky, Shibuya, Tokyo, Japan" }) });
+      r.fulfill({ contentType: "application/json", body: "[]" });
+    });
+    await page.goto("http://localhost:18899/", { waitUntil: "domcontentloaded" });
+    await setupProfile(page, "Zach");
+    // picking a place applies the place's own kind
+    await page.click("#addActivity");
+    await page.fill("#locInput", "zzz railway museum");
+    await page.waitForSelector(".loc-suggest .loc-opt", { timeout: 5000 });
+    await page.click(".loc-suggest .loc-opt");
+    check("place kind sets the coarse category", await page.$eval("#actCat", el => el.value) === "Culture");
+    check("picked-location line shows the kind", /Museum/.test(await page.textContent("#locPicked")));
+    await page.fill("#actDate", "2026-12-14");
+    await page.click("#itemSave");
+    await page.waitForTimeout(400);
+    check("kind saved on the plan", await page.evaluate(() => state.people.Zach.activities[0].catLabel === "Museum"));
+    check("rail shows the kind instead of the broad category", /Museum/.test(await page.textContent("#railList")));
+    // picking a category by hand overrides the kind
+    await page.evaluate(() => {
+      openItem("activity", state.people.Zach.activities[0]);
+      const c = document.getElementById("actCat");
+      c.value = "Shopping"; c.dispatchEvent(new Event("change"));
+    });
+    await page.click("#itemSave");
+    await page.waitForTimeout(400);
+    check("hand-picked category overrides the kind", await page.evaluate(() => {
+      const a = state.people.Zach.activities[0]; return a.category === "Shopping" && !a.catLabel;
+    }));
+    // pasted coordinates become an exact pin, named by reverse geocoding
+    await page.click("#addActivity");
+    await page.fill("#locInput", "35.6595, 139.7005");
+    await page.waitForSelector(".loc-suggest .loc-opt", { timeout: 5000 });
+    await page.waitForTimeout(200);
+    check("pasted coordinates offer a pin", /Shibuya Sky|Pinned spot/.test(await page.textContent("#locSuggest")));
+    await page.click(".loc-suggest .loc-opt");
+    check("coordinate pin lands exactly, with no invented kind", await page.evaluate(() =>
+      Math.abs(state.pendingLoc.lat - 35.6595) < 1e-9 && Math.abs(state.pendingLoc.lng - 139.7005) < 1e-9 && !state.pendingCatLabel));
+    // a pasted Google Maps place link offers the named pin without geocoding
+    await page.fill("#locInput", "https://www.google.com/maps/place/Shibuya+Sky/@35.658,139.7,17z/data=!4m6!3d35.6595!4d139.7005");
+    await page.waitForTimeout(150);
+    check("gmaps place link offers the named pin", /Shibuya Sky/.test(await page.textContent("#locSuggest")));
+    await page.fill("#locInput", "https://maps.app.goo.gl/AbCd12");
+    await page.waitForTimeout(150);
+    check("shortened links get an explanation, not silence", /shortened Google Maps link/.test(await page.textContent("#locSuggest")));
+    await page.click("#itemCancel");
+    // categories view: legend seg recolors and groups
+    await page.click("#legendViewSeg [data-vb=cat]");
+    await page.waitForTimeout(300);
+    check("legend lists the categories on the map", /Shopping/.test(await page.textContent("#legendPeople")));
+    check("rail groups plans under category headings", /Shopping/.test(await page.textContent(".rail-group")));
+    const nBefore = await page.evaluate(() => markerLayer.getLayers().length);
+    await page.click(".legvis[data-cat='Shopping']");
+    await page.waitForTimeout(300);
+    const nAfter = await page.evaluate(() => markerLayer.getLayers().length);
+    check("hiding a category clears its pins", nBefore === 1 && nAfter === 0, { nBefore, nAfter });
+    await page.click(".legvis[data-cat='Shopping']");
+    await page.click("#legendViewSeg [data-vb=person]");
+    await page.waitForTimeout(200);
+    check("travelers view returns to people in the legend", /Zach/.test(await page.textContent("#legendPeople")));
+    // map label language: English switches the base tiles to Esri
+    await page.click("#legendLabelSeg [data-ml=en]");
+    check("English labels use the Esri street map", await page.evaluate(() => baseTiles._url.includes("arcgisonline")));
+    await page.click("#legendLabelSeg [data-ml=local]");
+    check("Local labels return to Carto", await page.evaluate(() => baseTiles._url.includes("cartocdn")));
+    // traveler removal: an ownerless trip lets anyone tidy up
+    await page.evaluate(async () => {
+      await sSet("person:Ghost", JSON.stringify({ name: "Ghost", color: "#2e5e7e", stays: [], activities: [], updated: Date.now() }), true);
+      await loadEveryone(); render();
+    });
+    await page.waitForTimeout(200);
+    check("other travelers offer a remove button", !!(await page.$(".person .prem")));
+    page.on("dialog", d => d.accept());
+    await page.click(".person .prem");
+    await page.waitForTimeout(400);
+    check("removed traveler disappears", await page.evaluate(() => !state.people.Ghost && !/Ghost/.test(document.getElementById("peopleList").textContent)));
+    check("removal leaves a tombstone so they stay gone on refresh", await page.evaluate(async () => {
+      const r = await window.storage.get("person:Ghost", true);
+      return !!r && JSON.parse(r.value).deleted === true;
+    }));
+    // a locked database refusing the tombstone must not fake success
+    await page.evaluate(async () => {
+      await sSet("person:Ghost2", JSON.stringify({ name: "Ghost2", color: "#4e7a5e", stays: [], activities: [], updated: Date.now() }), true);
+      await loadEveryone(); render();
+    });
+    await fetch("http://localhost:18898/__deny?w=1");
+    await page.click(".person .prem");
+    await page.waitForTimeout(400);
+    check("refused removal keeps the traveler and explains why",
+      await page.evaluate(() => !!state.people.Ghost2) && /refused the removal/.test(await page.textContent("#notice")));
+    await fetch("http://localhost:18898/__deny?w=0");
     await page.context().close();
   }
 

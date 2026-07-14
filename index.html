@@ -273,6 +273,16 @@
   .legrow { display: flex; align-items: center; gap: 8px; font-size: 12px; padding: 2px 0; }
   .legrow .dot { width: 9px; height: 9px; }
   .legrow.type { color: var(--ink-soft); }
+  .leg-seg { display: flex; align-items: center; gap: 2px; margin: 0 0 8px; background: var(--paper); border: 1px solid var(--line); border-radius: 6px; padding: 2px; }
+  .leg-seg span { font-size: 10.5px; color: var(--ink-faint); padding: 0 5px; }
+  .leg-seg button { flex: 1; border: none; background: transparent; color: var(--ink-soft); font-size: 11px; padding: 3px 6px; border-radius: 4px; }
+  .leg-seg button.on { background: var(--surface); color: var(--ink); box-shadow: var(--shadow); }
+  #legendLabelSeg { margin: 8px 0 0; }
+  .legrow .legvis { border: none; background: transparent; color: var(--ink-faint); padding: 0 2px; margin-left: auto; cursor: pointer; line-height: 0; }
+  .legrow .legvis:hover { color: var(--ink); }
+  .rail-group { display: flex; align-items: center; gap: 7px; font-size: 11px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--ink-soft); margin: 12px 2px 4px; }
+  .rail-group .dot { width: 9px; height: 9px; }
+  .rail-group .count { font-weight: 500; color: var(--ink-faint); letter-spacing: 0; text-transform: none; }
   .marker-pin {
     width: 24px; height: 24px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg);
     border: 2px solid #fff; box-shadow: 0 2px 5px rgba(0,0,0,.3);
@@ -759,11 +769,17 @@
       </div>
       <div class="map-legend" id="legend">
         <div class="eyebrow">Legend</div>
+        <div class="leg-seg" id="legendViewSeg" title="Color the map by who added each plan, or by what kind of plan it is">
+          <button type="button" data-vb="person" class="on">Travelers</button><button type="button" data-vb="cat">Categories</button>
+        </div>
         <div id="legendPeople"></div>
         <div style="height:8px"></div>
         <div class="legrow type"><span class="marker-pin" style="width:14px;height:14px;background:#9aa0ab"><span></span></span> Activity</div>
         <div class="legrow type"><span class="marker-pin stay" style="width:13px;height:13px;background:#9aa0ab"><span></span></span> Hotel / stay</div>
         <div class="legrow type" id="legendFar" style="display:none;"></div>
+        <div class="leg-seg" id="legendLabelSeg" title="English keeps place names readable at every zoom (street-map style); Local matches the app's look but shows local scripts up close">
+          <span>Labels</span><button type="button" data-ml="local" class="on">Local</button><button type="button" data-ml="en">English</button>
+        </div>
       </div>
     </div>
 
@@ -841,7 +857,7 @@
       <div class="field">
         <label>Location</label>
         <div class="loc-box">
-          <input type="text" id="locInput" placeholder="Search a place, or click the map">
+          <input type="text" id="locInput" placeholder="Search, paste a Google Maps link, or click the map">
           <div class="loc-suggest" id="locSuggest"></div>
         </div>
         <div class="loc-actions">
@@ -1444,9 +1460,11 @@ const state = {
   trip: { title: "Our Japan Trip", start: "", end: "" },
   view: "map",
   hidden: {},             // name -> true when filtered out
+  hiddenCats: {},         // category -> true when filtered out (Categories view)
   selectedDate: null,
   editing: null,          // item being edited { kind, id }
   pendingLoc: null,       // { lat, lng, label } chosen in the form
+  pendingCatLabel: null,  // the place's own kind ("Museum", "Ryokan"…) from the picked location
   picking: false,
   prepSel: null,          // activity id selected on the Prep board
   sharedOK: true
@@ -1465,7 +1483,7 @@ function applyTheme(t){
   if(btn) btn.innerHTML = t==="dark" ? ICON_SUN : ICON_MOON;
   const meta = document.querySelector('meta[name="theme-color"]');
   if(meta) meta.content = t==="dark" ? "#13161d" : "#f4f5f2";
-  if(baseTiles) baseTiles.setUrl("https://{s}.basemaps.cartocdn.com/"+(t==="dark"?"dark_all":"light_all")+"/{z}/{x}/{y}{r}.png");
+  if(map && baseTiles) setBaseTiles();
 }
 
 /* ---------- storage helpers (shared across all viewers) ---------- */
@@ -1626,6 +1644,16 @@ function flexLabel(a){
   return "sometime "+shortDate(a.flex.start)+"–"+shortDate(a.flex.end);
 }
 
+/* ---------- viewing by traveler vs. by category ---------- */
+const CAT_ORDER = ["Stay","Sightseeing","Food & drink","Culture","Nature","Shopping","Nightlife","Event / show","Travel","Other"];
+const CAT_COLORS = {"Stay":"#2f4858","Sightseeing":"#c8483c","Food & drink":"#8a6d3b","Culture":"#6e4b7a",
+  "Nature":"#4e7a5e","Shopping":"#2e5e7e","Nightlife":"#a85c4a","Event / show":"#3f6e73","Travel":"#566173","Other":"#8b909c"};
+function viewBy(){ try { return localStorage.getItem("meridian:view-by") || "person"; } catch { return "person"; } }
+function catColor(c){ return CAT_COLORS[c] || "#8b909c"; }
+function actCatKey(a){ return a.transit ? "Travel" : (a.category || "Other"); }
+/* which raster labels the base map uses: local scripts (Carto) or English (Esri) */
+function mapLabels(){ try { return localStorage.getItem("meridian:map-labels") || "local"; } catch { return "local"; } }
+
 /* ---------- collecting items ---------- */
 function visiblePeople(){ return Object.values(state.people).filter(p => !state.hidden[p.name]); }
 function allActivities(){
@@ -1694,29 +1722,57 @@ function renderPeople(){
     const acts = (p.activities||[]).length, stays = (p.stays||[]).length;
     const ints = (p.interests||[]).slice(0,3).map(interestLabel).join(" · ");
     const iAmOwner = state.trip.ownerUid && window.storage.uid === state.trip.ownerUid;
+    // the trip's creator can remove travelers; trips without a recorded owner
+    // (older trips, local mode) let anyone tidy up — it's a shared plan anyway
+    const canRemove = !isMe && (iAmOwner || !state.trip.ownerUid);
     const row = document.createElement("div");
     row.className = "person" + (hidden ? " hidden" : "");
     row.innerHTML = `
       <span class="swatch" style="background:${p.color}"></span>
       <div class="pcol"><div class="pname">${esc(p.name)} ${isMe?'<span class="you-tag">You</span>':''}</div>${ints?`<div class="pinterests">${esc(ints)}</div>`:''}</div>
       <span class="pmeta">${acts} plan${acts!==1?'s':''}</span>
-      ${iAmOwner && !isMe ? '<button class="vis prem" title="Remove this traveler from the trip">&times;</button>' : ''}
+      ${canRemove ? '<button class="vis prem" title="Remove this traveler from the trip">&times;</button>' : ''}
       <button class="vis" title="Toggle on map">${hidden?eyeOff():eyeOn()}</button>`;
     row.querySelector(".vis:not(.prem)").onclick = () => { state.hidden[p.name] = !state.hidden[p.name]; render(); };
     const rm = row.querySelector(".prem");
     if(rm) rm.onclick = async () => {
       if(!confirm("Remove "+p.name+" and all their plans from this trip? They can rejoin with the invite link.")) return;
-      await sSet("person:"+p.name, JSON.stringify({name:p.name, deleted:true, removedBy:window.storage.uid}), true);
+      const ok = await sSet("person:"+p.name, JSON.stringify({name:p.name, deleted:true, removedBy:window.storage.uid}), true);
+      // locked-down databases only let the trip's creator overwrite someone
+      // else's record — a refused removal must not vanish-then-reappear
+      if(!ok && window.storage.mode === "shared"){
+        toast("The database refused the removal — with locked rules only the trip's creator can remove travelers.");
+        return;
+      }
       delete state.people[p.name];
       render(); toast(p.name+" removed");
     };
     wrap.appendChild(row);
   }
-  // legend mirrors visible travelers
+  renderLegend();
+}
+
+/* the map legend: traveler colors, or category colors with show/hide eyes */
+function renderLegend(){
+  document.querySelectorAll("#legendViewSeg button").forEach(b=>b.classList.toggle("on", b.dataset.vb===viewBy()));
+  document.querySelectorAll("#legendLabelSeg button").forEach(b=>b.classList.toggle("on", b.dataset.ml===mapLabels()));
   const leg = document.getElementById("legendPeople");
-  leg.innerHTML = visiblePeople().map(p =>
-    `<div class="legrow"><span class="dot" style="background:${p.color}"></span>${esc(p.name)}</div>`).join("")
-    || '<div class="legrow" style="color:var(--ink-faint)">No one visible</div>';
+  if(viewBy()==="cat"){
+    const ord = c => { const i = CAT_ORDER.indexOf(c); return i<0 ? 99 : i; };
+    const cats = [...new Set([...(allStays().length?["Stay"]:[]), ...allActivities().map(actCatKey)])]
+      .sort((a,b)=>ord(a)-ord(b));
+    leg.innerHTML = cats.map(c =>
+      `<div class="legrow" style="${state.hiddenCats[c]?'opacity:.45':''}"><span class="dot" style="background:${catColor(c)}"></span><span style="flex:1">${esc(c)}</span><button class="legvis" data-cat="${esc(c)}" title="Show / hide this category">${state.hiddenCats[c]?eyeOff():eyeOn()}</button></div>`).join("")
+      || '<div class="legrow" style="color:var(--ink-faint)">No plans yet</div>';
+    leg.querySelectorAll(".legvis").forEach(b=>b.onclick=()=>{
+      state.hiddenCats[b.dataset.cat] = !state.hiddenCats[b.dataset.cat];
+      render();
+    });
+  } else {
+    leg.innerHTML = visiblePeople().map(p =>
+      `<div class="legrow"><span class="dot" style="background:${p.color}"></span>${esc(p.name)}</div>`).join("")
+      || '<div class="legrow" style="color:var(--ink-faint)">No one visible</div>';
+  }
 }
 
 function renderDateStrip(){
@@ -1754,6 +1810,10 @@ function renderRailList(){
     stays = stays.filter(s => stayCoversDate(s, state.selectedDate));
   }
   acts.sort((a,b)=> ((a.date||"9999")+(a.time||"99")).localeCompare((b.date||"9999")+(b.time||"99")));
+  if(viewBy()==="cat"){
+    acts = acts.filter(a => !state.hiddenCats[actCatKey(a)]);
+    if(state.hiddenCats["Stay"]) stays = [];
+  }
   document.getElementById("railCount").textContent = acts.length + stays.length;
   if(!acts.length && !stays.length){
     wrap.innerHTML = '<div class="list-empty">Nothing here yet. Use <b>Activity</b> to add a place you want to visit, or <b>Stay</b> to note where you\'re based.</div>';
@@ -1856,24 +1916,24 @@ function renderRailList(){
       wrap.appendChild(cf);
     }
   }
-  for(const s of stays){
+  const stayRow = s => {
     const nights = nightsBetween(s.start, s.end);
     const stayTot = nights && hasCost(s) ? ` · ~${fmtYen(+s.cost*nights)}` : "";
-    wrap.appendChild(itemRow({
+    return itemRow({
       color: s.color, title: s.hotelName || s.city, tick: s.color,
       sub: `Stay · ${s.city} · ${shortRange(s.start,s.end)}${nights?` · ${nights} night${nights>1?"s":""}`:""}${stayTot} · ${s.person}`,
       onDel: canEdit(s.person) ? () => removeItem("stay", s.person, s.id) : null,
       onEdit: canEdit(s.person) ? () => openEdit("stay", s.person, s.id) : null,
       onClick: () => flyTo(s.location)
-    }));
-  }
-  for(const a of acts){
+    });
+  };
+  const actRow = a => {
     const joiners = joinersOf(a.person, a.id);
     const cmts = actComments(a.person, a.id).length;
-    wrap.appendChild(itemRow({
+    return itemRow({
       color: a.color, title: a.title, tick: a.color, dim: !!a.maybe,
       sub: (a.maybe?'Maybe · ':'') + (a.status==="done"?'✓ ':a.status==="skipped"?'✗ ':'') + (a.date
-        ? `${a.time?a.time+' · ':''}${a.transit?('Transit'+(a.from||a.to?` · ${a.from||'…'} → ${a.to||'…'}`:'')):(a.category||'Activity')}${state.selectedDate?'':' · '+shortDate(a.date)} · ${a.person}`
+        ? `${a.time?a.time+' · ':''}${a.transit?('Transit'+(a.from||a.to?` · ${a.from||'…'} → ${a.to||'…'}`:'')):(a.catLabel||a.category||'Activity')}${state.selectedDate?'':' · '+shortDate(a.date)} · ${a.person}`
         : `Flexible · ${flexLabel(a)} · ${a.person}`) + (joiners.length?` · ${joiners.length} in`:'') + (a.booking==="needed"?' · needs booking':''),
       onDel: canEdit(a.person) ? () => removeItem("activity", a.person, a.id) : null,
       onEdit: canEdit(a.person) ? () => openEdit("activity", a.person, a.id) : null,
@@ -1882,7 +1942,28 @@ function renderRailList(){
       onComment: state.me ? () => openComments(a.person, a.id, a.title) : null,
       commentCount: cmts,
       onClick: () => flyTo(a.location)
-    }));
+    });
+  };
+  if(viewBy()==="cat"){
+    // group under category headings, colored to match the map pins
+    const ord = c => { const i = CAT_ORDER.indexOf(c); return i<0 ? 99 : i; };
+    const groups = new Map();
+    if(stays.length) groups.set("Stay", stays.map(stayRow));
+    for(const a of acts){
+      const k = actCatKey(a);
+      if(!groups.has(k)) groups.set(k, []);
+      groups.get(k).push(actRow(a));
+    }
+    for(const k of [...groups.keys()].sort((a,b)=>ord(a)-ord(b))){
+      const h = document.createElement("div");
+      h.className = "rail-group";
+      h.innerHTML = `<span class="dot" style="background:${catColor(k)}"></span>${esc(k)} <span class="count">${groups.get(k).length}</span>`;
+      wrap.appendChild(h);
+      for(const r of groups.get(k)) wrap.appendChild(r);
+    }
+  } else {
+    for(const s of stays) wrap.appendChild(stayRow(s));
+    for(const a of acts) wrap.appendChild(actRow(a));
   }
 }
 
@@ -1924,11 +2005,24 @@ function openEdit(kind, person, id){
 }
 
 /* ---------- map ---------- */
+/* Carto matches the app's look but labels streets and districts in the local
+   script once you zoom in; Esri's street map keeps English/romanized names at
+   every zoom, so it's offered as the "English" label option */
+function baseTileLayer(){
+  if(mapLabels()==="en") return L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}", {
+    attribution:"&copy; Esri &mdash; Esri, HERE, Garmin, OpenStreetMap contributors", maxZoom:19
+  });
+  return L.tileLayer("https://{s}.basemaps.cartocdn.com/"+(isDark()?"dark_all":"light_all")+"/{z}/{x}/{y}{r}.png", {
+    attribution:'&copy; OpenStreetMap &copy; CARTO', subdomains:"abcd", maxZoom:19
+  });
+}
+function setBaseTiles(){
+  if(baseTiles) map.removeLayer(baseTiles);
+  baseTiles = baseTileLayer().addTo(map);
+}
 function initMap(){
   map = L.map("map", { zoomControl:true, attributionControl:true, worldCopyJump:true }).setView([34,55], 3);
-  baseTiles = L.tileLayer("https://{s}.basemaps.cartocdn.com/"+(isDark()?"dark_all":"light_all")+"/{z}/{x}/{y}{r}.png", {
-    attribution:'&copy; OpenStreetMap &copy; CARTO', subdomains:"abcd", maxZoom:19
-  }).addTo(map);
+  setBaseTiles();
   markerLayer = L.layerGroup().addTo(map);
 }
 function pinIcon(color, isStay){
@@ -1946,11 +2040,13 @@ function renderMarkers(){
     stays = stays.filter(s=>stayCoversDate(s,state.selectedDate));
   }
   const pts = [];
+  const byCat = viewBy()==="cat";
   let hiddenFar = 0;  // pins outside the trip's home region stay off this map
   for(const s of stays){
     if(!s.location) continue;
+    if(byCat && state.hiddenCats["Stay"]) continue;
     if(!inHomeBox(s.location.lat, s.location.lng)){ hiddenFar++; continue; }
-    const m = L.marker([s.location.lat,s.location.lng], {icon:pinIcon(s.color,true)});
+    const m = L.marker([s.location.lat,s.location.lng], {icon:pinIcon(byCat?catColor("Stay"):s.color,true)});
     const nights = nightsBetween(s.start, s.end);
     m.bindPopup(`<div class="pop"><h4>${esc(s.hotelName||s.city)}</h4><div class="pmeta">Stay · ${esc(s.city)} · ${shortRange(s.start,s.end)}${nights?` · ${nights} night${nights>1?"s":""}`:""}${nights&&hasCost(s)?` · ~${fmtYen(+s.cost*nights)}`:""}</div><div class="who"><span class="dot" style="background:${s.color}"></span>${esc(s.person)}${canEdit(s.person)?'<button class="mini-btn pop-edit" style="margin-left:auto">Edit</button>':''}</div></div>`);
     if(canEdit(s.person)) m.on("popupopen", ()=>{ const b=document.querySelector(".leaflet-popup .pop-edit"); if(b) b.onclick=()=>{ map.closePopup(); openEdit("stay", s.person, s.id); }; });
@@ -1958,9 +2054,10 @@ function renderMarkers(){
   }
   for(const a of acts){
     if(!a.location) continue;
+    if(byCat && state.hiddenCats[actCatKey(a)]) continue;
     if(!inHomeBox(a.location.lat, a.location.lng)){ hiddenFar++; continue; }
-    const m = L.marker([a.location.lat,a.location.lng], {icon:pinIcon(a.color,false)});
-    m.bindPopup(`<div class="pop"><h4>${esc(a.title)}</h4><div class="pmeta">${a.time?esc(a.time)+' · ':''}${esc(a.category||'Activity')} · ${a.date?esc(shortDate(a.date)):esc(flexLabel(a)||"flexible")}${hasCost(a)?` · ${fmtYen(+a.cost)}`:""}</div>${a.notes?'<div class="pmeta" style="margin-top:4px">'+linkify(esc(a.notes))+'</div>':''}<div class="who"><span class="dot" style="background:${a.color}"></span>${esc(a.person)}${canEdit(a.person)?'<button class="mini-btn pop-edit" style="margin-left:auto">Edit</button>':''}</div></div>`);
+    const m = L.marker([a.location.lat,a.location.lng], {icon:pinIcon(byCat?catColor(actCatKey(a)):a.color,false)});
+    m.bindPopup(`<div class="pop"><h4>${esc(a.title)}</h4><div class="pmeta">${a.time?esc(a.time)+' · ':''}${esc(a.catLabel||a.category||'Activity')} · ${a.date?esc(shortDate(a.date)):esc(flexLabel(a)||"flexible")}${hasCost(a)?` · ${fmtYen(+a.cost)}`:""}</div>${a.notes?'<div class="pmeta" style="margin-top:4px">'+linkify(esc(a.notes))+'</div>':''}<div class="who"><span class="dot" style="background:${a.color}"></span>${esc(a.person)}${canEdit(a.person)?'<button class="mini-btn pop-edit" style="margin-left:auto">Edit</button>':''}</div></div>`);
     if(canEdit(a.person)) m.on("popupopen", ()=>{ const b=document.querySelector(".leaflet-popup .pop-edit"); if(b) b.onclick=()=>{ map.closePopup(); openEdit("activity", a.person, a.id); }; });
     markerLayer.addLayer(m); pts.push([a.location.lat,a.location.lng]);
   }
@@ -4306,6 +4403,7 @@ function openItem(kind, existing){
   if(!state.me){ openProfile(); return; }
   state.editing = {kind, id: existing ? existing.id : null};
   state.pendingLoc = existing ? existing.location : null;
+  state.pendingCatLabel = existing ? (existing.catLabel || null) : null;
   const isStay = kind==="stay";
   const isTransit = kind==="transit";
   const isFood = kind==="food";
@@ -4326,7 +4424,7 @@ function openItem(kind, existing){
   document.getElementById("fldTitle").style.display = isStay?"none":"block";
   document.getElementById("lblTitle").textContent = isTransit?"Line / train / bus":"What is it";
   document.getElementById("itemName").placeholder = isTransit?"e.g. Nozomi 24, JR Yamanote, Airport Limousine":isFood?"e.g. Ichiran Ramen, Nishiki Market stall":"e.g. Fushimi Inari Shrine";
-  document.getElementById("locInput").placeholder = isTransit?"Arrival station or stop":isFood?"Search restaurants, cafés, markets":"Search a place, or click the map";
+  document.getElementById("locInput").placeholder = isTransit?"Arrival station or stop":isFood?"Search restaurants, cafés, markets":"Search, paste a Google Maps link, or click the map";
   document.getElementById("transFrom").value = existing && existing.from ? existing.from : "";
   document.getElementById("transTo").value = existing && existing.to ? existing.to : "";
   document.getElementById("transTimes").style.display = "none";
@@ -4367,7 +4465,7 @@ function updatePickedLabel(){
   const el=document.getElementById("locPicked");
   if(state.pendingLoc){
     el.className="loc-picked";
-    el.innerHTML=`<span class="dotcoord">Set</span> ${esc(state.pendingLoc.label||"Custom location")} · ${state.pendingLoc.lat.toFixed(4)}, ${state.pendingLoc.lng.toFixed(4)}`;
+    el.innerHTML=`<span class="dotcoord">Set</span> ${esc(state.pendingLoc.label||"Custom location")}${state.pendingCatLabel?` · ${esc(state.pendingCatLabel)}`:""} · ${state.pendingLoc.lat.toFixed(4)}, ${state.pendingLoc.lng.toFixed(4)}`;
   } else {
     el.className="loc-picked none"; el.textContent="No location set";
   }
@@ -4478,6 +4576,9 @@ async function saveItem(){
       time, durationH:document.getElementById("actDur").value,
       category:isTransit?"Travel":document.getElementById("actCat").value, notes:document.getElementById("actNotes").value.trim(),
       cost: parseCost(document.getElementById("actCost").value) };
+    // the place's own kind ("Museum", "Onsen / sento"…) reads better than a broad
+    // category — keep it for display; the coarse category still drives costs
+    if(!isTransit && state.pendingCatLabel) a.catLabel = state.pendingCatLabel;
     if(isTransit){
       a.transit=true;
       a.from=document.getElementById("transFrom").value.trim();
@@ -4519,18 +4620,61 @@ function curatedMatches(q){
   return (local.length?local:all).slice(0,6)
     .map(p=>({label:p.name, lat:p.lat, lng:p.lng, city:p.city, kind:p.cat, cat:p.cat==="Pokémon"||p.cat==="Photography"?"Sightseeing":p.cat, src:"list"}));
 }
+/* recognize pasted Google Maps links and raw coordinates:
+   /maps/place/Name/@35.65,139.70,17z, …!3d35.65!4d139.70 (the pin itself),
+   ?q=35.65,139.70, or a bare "35.6595, 139.7005" from "copy coordinates" */
+function parseGmapsInput(q){
+  if(/^https?:\/\//i.test(q)){
+    if(!/google\.[a-z.]+\/maps|maps\.google|goo\.gl\/maps|maps\.app\.goo\.gl/i.test(q)) return null;
+    let name=null;
+    const pm=q.match(/\/maps\/place\/([^\/@?]+)/i);
+    if(pm){ try { name=decodeURIComponent(pm[1]).replace(/\+/g," ").trim(); } catch { name=pm[1].replace(/\+/g," ").trim(); } }
+    // !3d…!4d… is the place's own pin — prefer it over @…, which is just the viewport
+    const c = q.match(/!3d(-?\d{1,2}\.\d+)!4d(-?\d{1,3}\.\d+)/)
+      || q.match(/[?&](?:q|query|ll|center|destination)=(-?\d{1,2}\.\d+)\s*,\s*(-?\d{1,3}\.\d+)/)
+      || q.match(/@(-?\d{1,2}\.\d+),(-?\d{1,3}\.\d+)/);
+    if(c) return {lat:+c[1], lng:+c[2], name};
+    if(name) return {name};
+    return {short:true};  // shortened share link — coordinates aren't in the URL
+  }
+  const m=q.match(/^(-?\d{1,2}\.\d+)\s*[, ]\s*(-?\d{1,3}\.\d+)$/);
+  if(m && Math.abs(+m[1])<=90 && Math.abs(+m[2])<=180) return {lat:+m[1], lng:+m[2]};
+  return null;
+}
 function onLocInput(){
   const q=document.getElementById("locInput").value.trim();
   const box=document.getElementById("locSuggest");
+  clearTimeout(searchTimer);
   if(q.length<2){ box.classList.remove("show"); return; }
   const kind=state.editing && state.editing.kind;
+  const g=parseGmapsInput(q);
+  if(g){
+    if(g.short){
+      box.innerHTML='<div class="loc-opt" style="cursor:default;color:var(--ink-faint)">That\'s a shortened Google Maps link — open it there and copy the place\'s name, address, or coordinates instead.</div>';
+      box.classList.add("show");
+      return;
+    }
+    if(g.lat!=null){
+      const it={label:g.name||`Pinned spot (${g.lat.toFixed(4)}, ${g.lng.toFixed(4)})`, lat:g.lat, lng:g.lng,
+        kind:g.name?"Google Maps pin":"Coordinates", noCat:true, src:"map"};
+      renderSuggest([it], false);
+      // name a bare coordinate pin via reverse geocoding, if the service answers
+      if(!g.name) nominatimReverse(g.lat, g.lng).then(r=>{
+        if(!r || document.getElementById("locInput").value.trim()!==q || !box.classList.contains("show")) return;
+        renderSuggest([{...it, label:r.label, sub:r.sub}], false);
+      }).catch(()=>{});
+      return;
+    }
+    // a place link without embedded coordinates: search for the place's name
+    searchTimer=setTimeout(()=>geocode(g.name, [], kind), 200);
+    return;
+  }
   // curated places are attractions — only offer them for activities,
   // and only the edible ones when adding a food spot
   let curated = (kind==="stay"||kind==="transit") ? [] : curatedMatches(q);
   if(kind==="food") curated = curated.filter(x=>/food|restaurant|market|caf/i.test((x.kind||"")+" "+(x.cat||"")));
   renderSuggest(curated, true);
   // debounced geocoder for anything else
-  clearTimeout(searchTimer);
   searchTimer=setTimeout(()=>geocode(q, curated, kind), 450);
 }
 /* map OSM tags to a readable type and one of the app's categories */
@@ -4541,7 +4685,8 @@ const OSM_KIND = { restaurant:"Restaurant", cafe:"Café", fast_food:"Quick eats"
   aquarium:"Aquarium", zoo:"Zoo", theme_park:"Theme park", mall:"Mall", department_store:"Dept. store",
   winter_sports:"Ski area", public_bath:"Onsen / sento", beach:"Beach", waterfall:"Waterfall", memorial:"Memorial", monument:"Monument" };
 function osmKind(key, value){
-  return OSM_KIND[value] || (value ? value.replace(/_/g," ").replace(/^./,c=>c.toUpperCase()) : "");
+  if(!value || value==="yes") return "";
+  return OSM_KIND[value] || value.replace(/_/g," ").replace(/^./,c=>c.toUpperCase());
 }
 function osmCategory(key, value){
   if(key==="amenity" && ["restaurant","cafe","fast_food","bar","pub","food_court","ice_cream"].includes(value)) return "Food & drink";
@@ -4590,13 +4735,38 @@ async function photonSearch(q, kind){
 }
 async function nominatimSearch(q){
   const bb=homeBbox();
-  const url="https://nominatim.openstreetmap.org/search?format=json&limit=5"
+  // Nominatim reads addresses in any language; accept-language keeps the
+  // returned names readable when a local-script address is pasted in
+  const url="https://nominatim.openstreetmap.org/search?format=json&limit=5&accept-language=en"
     +(bb?`&viewbox=${bb[0]},${bb[3]},${bb[2]},${bb[1]}&bounded=1`:"")
     +"&q="+encodeURIComponent(q);
   const res=await fetch(url,{headers:{"Accept":"application/json"}});
   if(!res.ok) throw 0;
   const data=await res.json();
   return data.map(d=>({label:d.display_name.split(",")[0], sub:d.display_name.split(",").slice(1,3).join(","), lat:+d.lat, lng:+d.lon, src:"map"}));
+}
+async function nominatimReverse(lat, lng){
+  const res=await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&zoom=18&accept-language=en`,
+    {headers:{"Accept":"application/json"}});
+  if(!res.ok) return null;
+  const d=await res.json();
+  if(!d || !d.display_name) return null;
+  return { label: d.name || d.display_name.split(",")[0], sub: d.display_name.split(",").slice(1,3).join(",").trim() };
+}
+/* Google Maps addresses ("2 Chome-24-12 Shibuya, Shibuya City, Tokyo 150-0002,
+   Japan" — often in another language) rarely match the geocoders verbatim.
+   Offer progressively simpler variants: without postal code and country,
+   without the lot number, then just district + city. */
+function addressFallbacks(q){
+  const out=[];
+  const cleaned=q.replace(/〒?\s*\d{3}[-‐−]\d{4}/g," ")
+    .replace(/,?\s*(japan|日本|south korea|한국|대한민국|taiwan|台灣|china|中国|thailand|ประเทศไทย)\s*$/i,"")
+    .replace(/\s{2,}/g," ").replace(/\s*,\s*/g,", ").replace(/^[,\s]+|[,\s]+$/g,"");
+  if(cleaned && cleaned!==q) out.push(cleaned);
+  const parts=(cleaned||q).split(/[,、]/).map(s=>s.trim()).filter(Boolean);
+  if(parts.length>2) out.push(parts.slice(1).join(", "));
+  if(parts.length>1) out.push(parts.slice(-2).join(", ").replace(/\b(City|Ward)\b/g,"").replace(/\s+,/g,",").replace(/\s{2,}/g," ").trim());
+  return [...new Set(out)].filter(s=>s.length>3 && s!==q).slice(0,3);
 }
 async function geocode(q, curated, kind){
   if(kind==="stay"){
@@ -4612,7 +4782,12 @@ async function geocode(q, curated, kind){
     }catch{ /* fall through to Nominatim */ }
   }
   try{
-    renderSuggest([...curated, ...await nominatimSearch(q)], false);
+    let nm=await nominatimSearch(q);
+    for(const alt of nm.length ? [] : addressFallbacks(q)){
+      nm=await nominatimSearch(alt).catch(()=>[]);
+      if(nm.length) break;
+    }
+    renderSuggest([...curated, ...nm], false);
   }catch{ /* keep curated results; geocoders may be rate-limited */ }
 }
 function renderSuggest(items, partial){
@@ -4627,8 +4802,10 @@ function renderSuggest(items, partial){
     row.onclick=()=>{
       clearTimeout(searchTimer);  // stop a pending geocode from reopening the box
       state.pendingLoc={lat:it.lat, lng:it.lng, label:it.label};
+      // the place describes itself: keep its kind for display, set the coarse category
+      state.pendingCatLabel = (!it.noCat && it.kind) ? it.kind : null;
       if(!document.getElementById("itemName").value) document.getElementById("itemName").value=it.label;
-      if(state.editing.kind==="activity" && it.cat) document.getElementById("actCat").value=it.cat;
+      if((state.editing.kind==="activity"||state.editing.kind==="food") && it.cat) document.getElementById("actCat").value=it.cat;
       if(state.editing.kind==="stay" && !document.getElementById("stayCity").value)
         document.getElementById("stayCity").value = it.city || it.sub || nearestCity(state.pendingLoc);
       document.getElementById("locInput").value=it.label;
@@ -4648,6 +4825,7 @@ function startMapPick(){
   map.getContainer().style.cursor="crosshair";
   pickHandler=(e)=>{
     state.pendingLoc={lat:e.latlng.lat, lng:e.latlng.lng, label:document.getElementById("locInput").value.trim()||"Custom location"};
+    state.pendingCatLabel=null;  // a hand-placed pin says nothing about what it is
     endMapPick();
     document.getElementById("itemScrim").classList.add("show");
     updatePickedLabel();
@@ -4740,6 +4918,19 @@ function wire(){
   document.getElementById("actBook").onchange = e=>{
     document.getElementById("fldBookRef").style.display = e.target.value==="booked" ? "" : "none";
   };
+  // picking a category by hand overrides the one the location brought along
+  document.getElementById("actCat").addEventListener("change", ()=>{ state.pendingCatLabel=null; updatePickedLabel(); });
+  document.getElementById("legendViewSeg").addEventListener("click", e=>{
+    const b=e.target.closest("button"); if(!b) return;
+    try { localStorage.setItem("meridian:view-by", b.dataset.vb); } catch {}
+    render();
+  });
+  document.getElementById("legendLabelSeg").addEventListener("click", e=>{
+    const b=e.target.closest("button"); if(!b) return;
+    try { localStorage.setItem("meridian:map-labels", b.dataset.ml); } catch {}
+    setBaseTiles();
+    renderLegend();
+  });
   document.getElementById("optAddBtn").onclick = ()=>{
     const v=document.getElementById("optAdd").value;
     if(v && !flexDays.includes(v)){ flexDays.push(v); renderOptDays(); }
