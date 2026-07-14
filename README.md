@@ -91,10 +91,23 @@ the same map, connect a free Firebase database:
              ".write": "auth != null && (!data.exists() || !data.child('uid').exists() || data.child('uid').val() === auth.uid || root.child('trips').child($trip).child('trip%3Ameta').child('ownerUid').val() === auth.uid)"
            }
          }
+       },
+       "users": {
+         "$user": {
+           ".read": "auth != null && auth.uid === $user",
+           ".write": "auth != null && auth.uid === $user"
+         }
        }
      }
    }
    ```
+
+   The `users` block backs the account trip list: every trip you open is
+   pinned to your identity at `users/<uid>/trips`, so signing in with
+   Google on a new device brings your whole trip list with you (shown on
+   the welcome screen and in the Trips menu). Each account can only read
+   and write its own list. Without this block the app still works — the
+   trip list just stays per-browser.
 
    The last clause lets a trip's creator remove stray travelers (the ✕ next
    to names in the sidebar). It only activates on trips created after the

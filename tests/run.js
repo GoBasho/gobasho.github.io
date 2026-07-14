@@ -123,6 +123,15 @@ async function setupProfile(page, name) {
   await page.waitForTimeout(300);
 }
 
+/* real browsers each mint a DISTINCT anonymous uid; newPage's default mock
+   answers every signUp with "uid-test", which would make separate test
+   browsers look like the same signed-in identity (and the app would sign
+   them into each other's traveler records). Give a second browser its own. */
+async function anonUid(page, uid) {
+  await page.route("**/accounts:signUp*", r => r.fulfill({ contentType: "application/json",
+    body: JSON.stringify({ idToken: "tok-" + uid, refreshToken: "ref-" + uid, localId: uid, expiresIn: "3600" }) }));
+}
+
 (async () => {
   await new Promise(r => site.listen(18899, r));
   await new Promise(r => fb.listen(18898, r));
@@ -765,6 +774,7 @@ async function setupProfile(page, name) {
     await a.goto("http://localhost:18899/", { waitUntil: "domcontentloaded" });
     await setupProfile(a, "Zach");
     const b = await newPage(browser, "sync-test", { shared: true });
+    await anonUid(b, "uid-alex");
     await b.goto("http://localhost:18899/", { waitUntil: "domcontentloaded" });
     await setupProfile(b, "Alex");
     await b.waitForTimeout(600);
@@ -1120,6 +1130,7 @@ async function setupProfile(page, name) {
     // so linking is refused and this browser adopts the other uid — with a warning
     const p2 = await newPage(browser, "gauth-test", { shared: true });
     await gauthConfig(p2, "uid-other");
+    await anonUid(p2, "uid-kae");
     await p2.goto("http://localhost:18899/", { waitUntil: "domcontentloaded" });
     await setupProfile(p2, "Kae");
     const warn = await p2.evaluate(async () => {
@@ -1129,6 +1140,54 @@ async function setupProfile(page, name) {
     check("unlinked sign-in adopts the account's uid", await p2.evaluate(() => window.storage.uid === "uid-other"));
     check("and warns that older plans stay with the old identity", /old identity/.test(warn), warn);
     await p2.context().close();
+  }
+
+  console.log("\n== e2e: account trip list & welcome sign-in ==");
+  {
+    // an account that already owns two trips, seen from a brand-new browser
+    db["/trips/tokyo-x/trip%3Ameta"] = JSON.stringify({ title: "Tokyo Spring", start: "", end: "" });
+    db["/trips/tokyo-x/person%3AZachary"] = { name: "Zachary", color: "#c8483c", uid: "uid-g", updated: 1, activities: [], stays: [] };
+    db["/trips/osaka-y/trip%3Ameta"] = JSON.stringify({ title: "Osaka Food Run", start: "", end: "" });
+    db["/users/uid-g/trips/tokyo-x"] = { t: "Tokyo Spring", at: 2000 };
+    db["/users/uid-g/trips/osaka-y"] = { t: "", at: 1000 };
+    const page = await newPage(browser, "our-japan-trip", { shared: true, firstRun: true });
+    await page.route("**/config.js", r => r.fulfill({ contentType: "application/javascript",
+      body: 'window.MERIDIAN_CONFIG={firebaseUrl:"https://mock-rtdb.firebaseio.com",tripId:"our-japan-trip",apiKey:"AIza-test",googleClientId:"cid-test.apps.googleusercontent.com"};' }));
+    await page.route("**/accounts:signInWithIdp*", r => r.fulfill({ contentType: "application/json",
+      body: JSON.stringify({ idToken: "tok-g", refreshToken: "ref-g", localId: "uid-g", email: "zach@example.com", expiresIn: "3600" }) }));
+    await page.route("https://securetoken.googleapis.com/**", r => r.fulfill({ contentType: "application/json",
+      body: JSON.stringify({ id_token: "tok-g", refresh_token: "ref-g", user_id: "uid-g", expires_in: "3600" }) }));
+    await page.route("https://accounts.google.com/**", r => r.fulfill({ contentType: "application/javascript", body: "" }));
+    await page.goto("http://localhost:18899/", { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(700);
+    check("welcome offers Google sign-in up front", await page.$eval("#wAccount", el =>
+      el.style.display !== "none" && /Sign in with Google/i.test(el.textContent)));
+    // the GIS popup can't run headless — feed its callback directly
+    await page.evaluate(() => handleGoogleCredential({ credential: "fake-google-jwt" }));
+    await page.waitForTimeout(800);
+    check("sign-in toast counts the account's trips", /2 trips from this account/.test(await page.textContent("#notice")));
+    check("welcome swaps to the account's trip list", /Tokyo Spring/.test(await page.textContent("#wTripList")));
+    check("blank titles backfilled from trip meta", /Osaka Food Run/.test(await page.textContent("#wTripList")));
+    check("most recently opened trip listed first", await page.$$eval("#wTripList .tm-item", els => /Tokyo Spring/.test(els[0].textContent)));
+    check("account trips land in this browser's known list", await page.evaluate(() => {
+      const k = JSON.parse(localStorage.getItem("meridian:known-trips") || "[]");
+      return k.includes("tokyo-x") && k.includes("osaka-y");
+    }));
+    check("listTrips merges the account's trips", await page.evaluate(async () =>
+      (await window.storage.listTrips()).includes("osaka-y")));
+    // tapping a trip opens it (full reload)
+    await page.click("#wTripList [data-wtrip='tokyo-x']");
+    await page.waitForTimeout(1500);
+    check("picking a trip opens it", await page.evaluate(() => window.storage.tripId === "tokyo-x"));
+    check("uid match signs you into the trip as yourself — no profile prompt", await page.evaluate(() =>
+      state.me && state.me.name === "Zachary" &&
+      !document.getElementById("profileScrim").classList.contains("show") &&
+      !document.getElementById("welcomeScrim").classList.contains("show")));
+    check("opening a trip refreshes its pin on the account", await (async () => {
+      const res = await fetch("http://localhost:18898/users/uid-g/trips/tokyo-x");
+      const v = await res.json(); return !!v && v.t === "Tokyo Spring" && v.at > 2000;
+    })());
+    await page.context().close();
   }
 
   console.log("\n== e2e: itinerary legs as collapsible chapters ==");
