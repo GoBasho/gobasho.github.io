@@ -281,6 +281,8 @@ async function anonUid(page, uid) {
     check("viewport-only gmaps link still yields coords", !!u.gmView && Math.abs(u.gmView.lng - 135.76) < 1e-9, u.gmView);
     check("address fallbacks drop postcode + country, then simplify",
       u.addrFb.length >= 2 && !/150-0002/.test(u.addrFb[0]) && !/Japan/i.test(u.addrFb[0]) && u.addrFb.some(s => /^Shibuya, Tokyo$/.test(s)), u.addrFb);
+    check("address fallbacks rewrite the block the way OSM names it",
+      u.addrFb.some(s => /^Shibuya 2 Chome, Shibuya City, Tokyo$/.test(s)) && u.addrFb.some(s => /^Shibuya, Shibuya City, Tokyo$/.test(s)), u.addrFb);
     await page.context().close();
   }
 
@@ -992,13 +994,21 @@ async function anonUid(page, uid) {
     // no ownerUid in the meta: an ownerless (older / local) trip
     db["/trips/vb-test/trip%3Ameta"] = JSON.stringify({ title: "Kinds", start: "2026-12-13", end: "2026-12-19", home: "JP", countries: ["JP"] });
     const page = await newPage(browser, "vb-test", { shared: true });
-    await page.route("https://photon.komoot.io/**", r => r.fulfill({ contentType: "application/json", body: JSON.stringify({ features: [
-      { properties: { name: "Railway Museum", city: "Saitama", osm_key: "tourism", osm_value: "museum" }, geometry: { coordinates: [139.6489, 35.9214] } }
-    ] }) }));
+    await page.route("https://photon.komoot.io/**", r => {
+      const q = new URL(r.request().url()).searchParams.get("q") || "";
+      r.fulfill({ contentType: "application/json", body: JSON.stringify({ features: /museum/i.test(q) ? [
+        { properties: { name: "Railway Museum", city: "Saitama", osm_key: "tourism", osm_value: "museum" }, geometry: { coordinates: [139.6489, 35.9214] } }
+      ] : [] }) });
+    });
     await page.route("https://nominatim.openstreetmap.org/**", r => {
-      if (/\/reverse/.test(r.request().url())) return r.fulfill({ contentType: "application/json",
+      const u = new URL(r.request().url());
+      if (/\/reverse/.test(u.pathname)) return r.fulfill({ contentType: "application/json",
         body: JSON.stringify({ name: "Shibuya Sky", display_name: "Shibuya Sky, Shibuya, Tokyo, Japan" }) });
-      r.fulfill({ contentType: "application/json", body: "[]" });
+      // only the OSM-style block name matches, like the real index would
+      const q = u.searchParams.get("q") || "";
+      r.fulfill({ contentType: "application/json", body: /Koenjikita 3 Chome/i.test(q)
+        ? JSON.stringify([{ display_name: "3 Koenjikita, Suginami, Tokyo, Japan", lat: "35.7056", lon: "139.6492" }])
+        : "[]" });
     });
     await page.goto("http://localhost:18899/", { waitUntil: "domcontentloaded" });
     await setupProfile(page, "Zach");
@@ -1041,6 +1051,13 @@ async function anonUid(page, uid) {
     await page.fill("#locInput", "https://maps.app.goo.gl/AbCd12");
     await page.waitForTimeout(150);
     check("shortened links get an explanation, not silence", /shortened Google Maps link/.test(await page.textContent("#locSuggest")));
+    // a full Google-format Japanese address ladders down to the block it names
+    await page.fill("#locInput", "3 Chome-1-11 Koenjikita, Suginami City, Tokyo 166-0002, Japan");
+    await page.waitForSelector(".loc-suggest .loc-opt", { timeout: 8000 });
+    check("Google-format address resolves via the fallback ladder", /3 Koenjikita/.test(await page.textContent("#locSuggest")));
+    await page.click(".loc-suggest .loc-opt");
+    check("address pin lands on the block", await page.evaluate(() =>
+      Math.abs(state.pendingLoc.lat - 35.7056) < 1e-6 && Math.abs(state.pendingLoc.lng - 139.6492) < 1e-6));
     await page.click("#itemCancel");
     // categories view: legend seg recolors and groups
     await page.click("#legendViewSeg [data-vb=cat]");
@@ -1087,6 +1104,14 @@ async function anonUid(page, uid) {
     check("refused removal keeps the traveler and explains why",
       await page.evaluate(() => !!state.people.Ghost2) && /refused the removal/.test(await page.textContent("#notice")));
     await fetch("http://localhost:18898/__deny?w=0");
+    // trips menu must stay fully on screen even in a narrow window
+    await page.setViewportSize({ width: 500, height: 700 });
+    await page.click("#tripsBtn");
+    await page.waitForSelector("#tripsMenu .tm-new", { timeout: 8000 });
+    check("trips menu stays fully on screen in a narrow window", await page.$eval("#tripsMenu", el => {
+      const r = el.getBoundingClientRect();
+      return r.right <= window.innerWidth + 1 && r.left >= 0 && r.width >= 300;
+    }));
     await page.context().close();
   }
 
