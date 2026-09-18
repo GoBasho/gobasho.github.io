@@ -30,6 +30,24 @@ invite link and nobody else, so share links only with your group and keep
 sensitive numbers (passports, bookings) out of notes. Anyone can download
 their trip as JSON from the Trips menu.
 
+## Trains
+
+The **Trains** tab plans the rail legs between your bases:
+
+- **Journeys your stays imply** — every move from one base to the next (plus
+  day trips) is worked out from your stays and listed with its distance and a
+  rough travel time. Each one shows whether a train is already on the
+  itinerary, and the sidebar nudges you about the ones that aren't.
+- **Connection lookup** — search any two stations for a day, either "depart
+  after" or "arrive by". Results show departure and arrival, duration, how
+  many changes, and the trains by name, with high-speed services highlighted.
+  One tap adds a connection to your itinerary as a transit plan, pinned to the
+  arrival station.
+- **No timetable data?** Departures come from [Transitous](https://transitous.org),
+  a free community service over open GTFS feeds — coverage is strong in Japan,
+  Korea, and Europe and patchier elsewhere. Where there's none, the tab offers
+  a distance-based estimate you can still block into the day.
+
 ## Trips and legs
 
 - **Separate trips** — the **Trips** button in the header switches between
