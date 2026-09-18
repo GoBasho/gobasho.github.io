@@ -234,6 +234,25 @@ async function anonUid(page, uid) {
       r.gmShort = parseGmapsInput("https://maps.app.goo.gl/AbCd12");
       r.gmView = parseGmapsInput("https://www.google.com/maps/@35.01,135.76,12z");
       r.addrFb = addressFallbacks("2 Chome-24-12 Shibuya, Shibuya City, Tokyo 150-0002, Japan");
+      // train scheduler: journeys implied by the stays, and day trips
+      state.trip = {start:"2026-12-13", end:"2026-12-22"};
+      const rp = {name:"R", dayTrips:{"2026-12-15":"Nara"}, activities:[], stays:[
+        {id:"s1", city:"Tokyo",  location:{lat:35.68,lng:139.76}, start:"2026-12-13", end:"2026-12-16"},
+        {id:"s2", city:"Kyoto",  location:{lat:35.01,lng:135.77}, start:"2026-12-16", end:"2026-12-19"},
+        {id:"s3", city:"Kyoto2", location:{lat:35.02,lng:135.78}, start:"2026-12-19", end:"2026-12-22"}]};
+      const jr = railJourneys(rp);
+      r.railCount = jr.length;                                  // Tokyo→Kyoto + the Nara day trip
+      r.railFirst = jr.map(j=>j.from+">"+j.to).join(",");
+      r.railDated = jr.map(j=>j.date).join(",");                // sorted by day
+      r.railDayTrip = jr.some(j=>j.dayTrip);
+      r.railPlannedNo = journeyPlanned(rp, jr.find(j=>j.to==="Kyoto"));
+      rp.activities.push({id:"t1", transit:true, date:"2026-12-16", to:"Kyoto Station", location:{lat:34.98,lng:135.75}});
+      r.railPlannedYes = journeyPlanned(rp, jr.find(j=>j.to==="Kyoto"));
+      // itinerary helpers read the timetable's own wall clock, not the local zone
+      r.wall = wallClock("2026-12-16T09:12:00+09:00");
+      r.mins = itinMinutes({startTime:"2026-12-16T09:12:00Z", endTime:"2026-12-16T11:25:00Z"});
+      r.rides = ridingLegs({legs:[{mode:"WALK"},{mode:"HIGHSPEED_RAIL"},{mode:"WALK"}]}).length;
+      r.modeLbl = railModeLabel("HIGHSPEED_RAIL") + "/" + railModeLabel("REGIONAL_RAIL");
       return r;
     });
     check("haversine Tokyo→Kyoto ≈ 366km", Math.abs(u.haversineTokyoKyoto - 366) < 12, u.haversineTokyoKyoto);
@@ -283,6 +302,16 @@ async function anonUid(page, uid) {
       u.addrFb.length >= 2 && !/150-0002/.test(u.addrFb[0]) && !/Japan/i.test(u.addrFb[0]) && u.addrFb.some(s => /^Shibuya, Tokyo$/.test(s)), u.addrFb);
     check("address fallbacks rewrite the block the way OSM names it",
       u.addrFb.some(s => /^Shibuya 2 Chome, Shibuya City, Tokyo$/.test(s)) && u.addrFb.some(s => /^Shibuya, Shibuya City, Tokyo$/.test(s)), u.addrFb);
+    check("rail journeys: one base move + one day trip, near-identical bases ignored",
+      u.railCount === 2 && u.railFirst === "Tokyo>Nara,Tokyo>Kyoto", { n: u.railCount, r: u.railFirst });
+    check("rail journeys sorted by day", u.railDated === "2026-12-15,2026-12-16", u.railDated);
+    check("day trips are flagged as such", u.railDayTrip === true);
+    check("a journey counts as planned only once a transit leg covers it",
+      u.railPlannedNo === false && u.railPlannedYes === true, { before: u.railPlannedNo, after: u.railPlannedYes });
+    check("wallClock keeps the timetable's own time", u.wall === "09:12", u.wall);
+    check("itinMinutes spans the journey", u.mins === 133, u.mins);
+    check("walking legs don't count as rides", u.rides === 1, u.rides);
+    check("rail modes read in plain words", u.modeLbl === "Shinkansen/Regional", u.modeLbl);
     await page.context().close();
   }
 
@@ -760,14 +789,33 @@ async function anonUid(page, uid) {
     check("no horizontal overflow on phone", mob.noHScroll);
     check("Trips + theme buttons visible on phone", mob.tripsVisible && mob.themeVisible);
     check("map has sensible phone height", mob.mapHeight >= 300);
-    await m.click("#addActivity");
-    await m.waitForTimeout(300);
+    await m.click("#addActivity");    await m.waitForTimeout(300);
     const sheet = await m.evaluate(() => {
       const r = document.querySelector("#itemScrim .modal").getBoundingClientRect();
       return { width: r.width, bottom: Math.round(r.bottom), vh: window.innerHeight };
     });
     check("modal is a full-width bottom sheet", sheet.width >= 388 && Math.abs(sheet.bottom - sheet.vh) < 3, sheet);
     await ctx.close();
+
+    // the header must not crush the Trips button at any laptop width
+    for (const width of [1440, 1366, 1280, 1100]) {
+      const c = await browser.newContext({ viewport: { width, height: 900 } });
+      const p = await c.newPage();
+      await p.route("**/config.js", r => r.fulfill({ contentType: "application/javascript",
+        body: 'window.MERIDIAN_CONFIG={firebaseUrl:"",tripId:"hdr-test"};' }));
+      await p.addInitScript(() => localStorage.setItem("meridian:active-trip", "hdr-test"));
+      await p.route("https://open.er-api.com/**", r => r.fulfill({ contentType: "application/json", body: '{"rates":{}}' }));
+      await p.goto("http://localhost:18899/", { waitUntil: "domcontentloaded" });
+      await setupProfile(p, "Zach");
+      const hdr = await p.evaluate(() => {
+        const b = document.getElementById("tripsBtn").getBoundingClientRect();
+        const w = document.getElementById("storageWarn");
+        return { oneLine: b.height < 30, warnFits: !w.firstChild || w.scrollWidth <= w.clientWidth + 1,
+                 noHScroll: document.documentElement.scrollWidth <= window.innerWidth + 1 };
+      });
+      check(`header holds together at ${width}px`, hdr.oneLine && hdr.warnFits && hdr.noHScroll, hdr);
+      await c.close();
+    }
   }
 
   console.log("\n== e2e: two-user sync ==");
@@ -1212,6 +1260,101 @@ async function anonUid(page, uid) {
       const res = await fetch("http://localhost:18898/users/uid-g/trips/tokyo-x");
       const v = await res.json(); return !!v && v.t === "Tokyo Spring" && v.at > 2000;
     })());
+    await page.context().close();
+  }
+
+  console.log("\n== e2e: train scheduler ==");
+  {
+    db["/trips/rail-test/trip%3Ameta"] = JSON.stringify({ title: "Rail", start: "2026-12-13", end: "2026-12-22", home: "JP", countries: ["JP"] });
+    const page = await newPage(browser, "rail-test", { shared: true });
+    let planURL = "";
+    await page.route("https://photon.komoot.io/**", r => {
+      const q = (new URL(r.request().url()).searchParams.get("q") || "").toLowerCase();
+      const hit = (name, lat, lng) => ({ properties: { name, city: "JP", osm_key: "railway", osm_value: "station" }, geometry: { coordinates: [lng, lat] } });
+      const f = /kyoto/.test(q) ? [hit("Kyoto Station", 34.9855, 135.7581)]
+              : /tokyo/.test(q) ? [hit("Tokyo Station", 35.6812, 139.7671)]
+              : /hiroshima/.test(q) ? [hit("Hiroshima Station", 34.3978, 132.4757)] : [];
+      r.fulfill({ contentType: "application/json", body: JSON.stringify({ features: f }) });
+    });
+    await page.route("https://api.transitous.org/**", r => {
+      planURL = r.request().url();
+      // a direct Nozomi, and a slower one with a change — plus a walk-only decoy
+      r.fulfill({ contentType: "application/json", body: JSON.stringify({ itineraries: [
+        { startTime: "2026-12-16T09:12:00+09:00", endTime: "2026-12-16T11:25:00+09:00",
+          legs: [{ mode: "WALK" }, { mode: "HIGHSPEED_RAIL", routeShortName: "Nozomi 24" }, { mode: "WALK" }] },
+        { startTime: "2026-12-16T09:40:00+09:00", endTime: "2026-12-16T12:50:00+09:00",
+          legs: [{ mode: "REGIONAL_RAIL", routeShortName: "Kodama 715" }, { mode: "REGIONAL_RAIL", routeShortName: "Hikari 508" }] },
+        { startTime: "2026-12-16T09:50:00+09:00", endTime: "2026-12-16T09:58:00+09:00", legs: [{ mode: "WALK" }] }
+      ] }) });
+    });
+    await page.goto("http://localhost:18899/", { waitUntil: "domcontentloaded" });
+    await setupProfile(page, "Zach");
+    await page.evaluate(() => {
+      const me = state.people.Zach;
+      me.stays = [
+        { id: "s1", city: "Tokyo", hotelName: "Tokyo Inn", location: { lat: 35.68, lng: 139.76 }, start: "2026-12-13", end: "2026-12-16" },
+        { id: "s2", city: "Kyoto", hotelName: "Kyoto Inn", location: { lat: 35.01, lng: 135.77 }, start: "2026-12-16", end: "2026-12-22" }];
+      return saveMe().then(() => render());
+    });
+    await page.waitForTimeout(300);
+    check("sidebar nudges about the unplanned journey", /Tokyo → Kyoto on Dec 16 has no train yet/.test(await page.textContent("#railList")));
+    await page.click(".rail-hint:has-text('no train yet')");
+    await page.waitForTimeout(400);
+    check("the nudge opens the Trains tab", await page.evaluate(() => state.view === "trains"));
+    const need = await page.textContent(".rail-need");
+    check("the journey is listed with distance and an estimate", /Tokyo → Kyoto/.test(need) && /Dec 16/.test(need) && /km/.test(need), need);
+    check("it counts as still to plan", /1 still to plan/.test(await page.textContent("#trainsInner")));
+    // one tap fills the search and runs it
+    await page.click("[data-railfind='0']");
+    await page.waitForSelector(".rail-opt", { timeout: 8000 });
+    check("search is prefilled from the journey", await page.evaluate(() =>
+      document.getElementById("railFrom").value === "Tokyo" &&
+      document.getElementById("railTo").value === "Kyoto" &&
+      document.getElementById("railDate").value === "2026-12-16"));
+    check("stations, not hotels, are routed between",
+      /fromPlace=35\.6812,139\.7671/.test(planURL) && /toPlace=34\.9855,135\.7581/.test(planURL), planURL);
+    const opts = await page.$$eval(".rail-opt", els => els.map(e => e.textContent.replace(/\s+/g, " ").trim()));
+    check("walk-only itineraries are dropped", opts.length === 2, opts.length);
+    check("direct run shows its train and duration", /09:12 → 11:25/.test(opts[0]) && /2h 13m/.test(opts[0]) && /direct/.test(opts[0]) && /Nozomi 24/.test(opts[0]), opts[0]);
+    check("the two-leg run counts its change", /1 change/.test(opts[1]) && /Kodama 715/.test(opts[1]) && /Hikari 508/.test(opts[1]), opts[1]);
+    check("fast trains are marked", await page.$eval(".rail-opt .rail-chip.fast", el => /Nozomi/.test(el.textContent)));
+    // add it to the plan
+    await page.click("[data-railadd='0']");
+    await page.waitForTimeout(500);
+    const saved = await page.evaluate(() => state.people.Zach.activities.find(a => a.transit));
+    check("adding writes a transit plan with time, duration and arrival pin",
+      !!saved && saved.title === "Nozomi 24" && saved.date === "2026-12-16" && saved.time === "09:12" &&
+      saved.durationH === "2.2" && Math.abs(saved.location.lat - 34.9855) < 1e-6, saved);
+    check("from/to carry the resolved station names", saved.from === "Tokyo Station" && saved.to === "Kyoto Station", saved);
+    await page.waitForTimeout(200);
+    check("the journey now reads as handled", /on the itinerary/.test(await page.textContent("#trainsInner")));
+    check("it appears in the rail plan list", /Nozomi 24/.test(await page.textContent(".rail-plan-row")));
+    check("the sidebar nudge is gone", !/no train yet/.test(await page.textContent("#railList")));
+    // undo puts it back
+    await page.click("#undoBtn");
+    await page.waitForTimeout(400);
+    check("undo removes the added train", await page.evaluate(() => !state.people.Zach.activities.some(a => a.transit)));
+    // arrive-by flips the request
+    await page.evaluate(() => { setView("trains"); });
+    await page.waitForTimeout(300);
+    await page.selectOption("#railWhen", "arrive");
+    check("the time field relabels for arrive-by", await page.$eval("#railTimeLbl", el => el.textContent === "Arrive by"));
+    await page.fill("#railFrom", "Kyoto");
+    await page.fill("#railTo", "Hiroshima");
+    await page.click("#railGo");
+    await page.waitForSelector(".rail-opt", { timeout: 8000 });
+    check("arrive-by is passed to the router", /arriveBy=true/.test(planURL), planURL);
+    // no timetable data: fall back to an estimate you can still book in
+    await page.route("https://api.transitous.org/**", r => r.fulfill({ contentType: "application/json", body: '{"itineraries":[]}' }));
+    await page.click("#railGo");
+    await page.waitForSelector("#railEst", { timeout: 8000 });
+    check("empty results explain and offer the distance estimate", /No timetable data/.test(await page.textContent(".rail-res")));
+    await page.click("#railEst");
+    await page.waitForTimeout(500);
+    check("the estimated leg is added with a duration", await page.evaluate(() => {
+      const a = state.people.Zach.activities.find(x => x.transit);
+      return !!a && a.to === "Hiroshima Station" && +a.durationH > 0;
+    }));
     await page.context().close();
   }
 

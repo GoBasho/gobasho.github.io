@@ -133,6 +133,7 @@
   .trip-title:hover { background: var(--sky); }
   .trip-title:focus { outline: 2px solid var(--indigo); background: var(--surface); }
   .trip-dates { display: flex; align-items: center; gap: 6px; color: var(--ink-faint); font-size: 12px; padding-left: 4px; }
+  .trip-dates > span:last-child { flex-shrink: 0; }
   .trip-dates input {
     border: none; background: transparent; color: var(--ink-soft); font-size: 12px;
     padding: 1px 3px; border-radius: 4px; width: 116px;
@@ -577,7 +578,7 @@
   .net-neg { color: var(--shu); font-weight: 600; }
 
   /* trip switcher */
-  .trips-btn { font-size: 11px; padding: 3px 9px; margin-left: 6px; }
+  .trips-btn { font-size: 11px; padding: 3px 9px; margin-left: 6px; white-space: nowrap; flex-shrink: 0; }
   .trips-menu {
     position: fixed; z-index: 1150; display: none; width: 360px; max-width: calc(100vw - 16px);
     background: var(--surface); border: 1px solid var(--line-strong); border-radius: 10px;
@@ -594,9 +595,37 @@
   .tm-new select, .tm-home select { border: 1px solid var(--line-strong); border-radius: 7px; padding: 6px 8px; font-size: 12px; background: var(--surface); }
   .tm-home { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 13px; font-size: 12.5px; color: var(--ink-soft); border-bottom: 1px solid var(--line); background: var(--sky); }
 
+  /* train scheduler */
+  .rail-need { display: flex; flex-wrap: wrap; align-items: center; gap: 9px; border: 1px solid var(--line); border-left: 3px solid var(--indigo); border-radius: 8px; padding: 9px 12px; margin-bottom: 7px; background: var(--surface); font-size: 13px; }
+  .rail-need.done { border-left-color: var(--line-strong); color: var(--ink-faint); }
+  .rail-need .rn-route { font-weight: 600; }
+  .rail-need.done .rn-route { font-weight: 500; }
+  .rail-need .rn-meta { font-size: 11.5px; color: var(--ink-faint); }
+  .rail-need .rn-act { margin-left: auto; display: flex; gap: 6px; }
+  .rail-form { display: flex; flex-wrap: wrap; gap: 9px; align-items: flex-end; border: 1px solid var(--line); border-radius: 10px; padding: 13px; background: var(--surface); box-shadow: var(--shadow); }
+  .rail-form .field { flex: 1 1 150px; margin: 0; }
+  .rail-form .field.narrow { flex: 0 1 130px; }
+  .rail-form input, .rail-form select { width: 100%; border: 1px solid var(--line-strong); border-radius: 7px; padding: 8px 10px; background: var(--surface); color: var(--ink); }
+  .rail-form label { display: block; font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-faint); font-weight: 600; margin-bottom: 5px; }
+  .rail-res { margin-top: 12px; }
+  .rail-opt { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin-bottom: 8px; background: var(--surface); display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; }
+  .rail-opt:hover { border-color: var(--line-strong); }
+  .rail-when { font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .rail-dur { font-size: 12px; color: var(--ink-faint); white-space: nowrap; }
+  .rail-chain { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; flex: 1 1 200px; }
+  .rail-chip { display: inline-block; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 5px; background: var(--sky); color: var(--ink-soft); border: 1px solid var(--line); white-space: nowrap; }
+  .rail-chip.fast { background: var(--shu-dim); color: var(--shu); border-color: transparent; }
+  .rail-arrow { color: var(--ink-faint); font-size: 11px; }
+  .rail-opt .rail-add { margin-left: auto; }
+  .rail-note { font-size: 11.5px; color: var(--ink-faint); margin: 8px 0 0; }
+  .rail-plan-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; border-bottom: 1px solid var(--line); padding: 9px 2px; font-size: 13px; }
+  .rail-plan-row:last-child { border-bottom: none; }
+  .rail-plan-row .rp-date { font-weight: 600; min-width: 74px; }
+  .rail-plan-row .rp-meta { font-size: 11.5px; color: var(--ink-faint); }
+  .rail-plan-row .rp-act { margin-left: auto; display: flex; gap: 4px; }
+
   /* trip legs */
-  .legs-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 16px; }
-  .leg-chip { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 5px 11px; font-size: 12.5px; }
+  .legs-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 16px; }  .leg-chip { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 5px 11px; font-size: 12.5px; }
   .leg-chip .lx { border: none; background: transparent; color: var(--ink-faint); font-size: 14px; padding: 0 1px; cursor: pointer; }
   .leg-chip .lx:hover { color: var(--shu); }
   .leg-form { display: flex; flex-wrap: wrap; gap: 7px; align-items: center; width: 100%; background: var(--sky); border: 1px solid var(--line); border-radius: 9px; padding: 9px 11px; }
@@ -669,6 +698,14 @@
     .day-block { break-inside: avoid; }
   }
 
+  /* the tab row needs its own line before the header starts crushing the
+     trip title and the Trips button */
+  @media (max-width: 1340px) {
+    header.bar { flex-wrap: wrap; row-gap: 10px; }
+    .tabs { order: 5; width: 100%; margin-left: 0; overflow-x: auto; flex-wrap: nowrap; }
+    .tab { white-space: nowrap; }
+  }
+
   @media (max-width: 860px) {
     header.bar { padding: 10px 12px; gap: 10px; flex-wrap: wrap; }
     .wordmark { font-size: 18px; padding-right: 12px; }
@@ -713,6 +750,7 @@
       <button class="tab active" data-view="map">Map</button>
       <button class="tab" data-view="today" id="todayTab" style="display:none;">Today</button>
       <button class="tab" data-view="itinerary">Itinerary</button>
+      <button class="tab" data-view="trains">Trains</button>
       <button class="tab" data-view="prep">Prep</button>
       <button class="tab" data-view="explore">Explore</button>
       <button class="tab" data-view="coord">Coordination</button>
@@ -787,6 +825,7 @@
     </div>
 
     <div class="panel" id="stageItinerary" style="display:none;"><div class="panel-inner" id="itineraryInner"></div></div>
+    <div class="panel" id="stageTrains" style="display:none;"><div class="panel-inner" id="trainsInner"></div></div>
     <div class="panel" id="stageExplore" style="display:none;"><div class="panel-inner" id="exploreInner"></div></div>
     <div class="panel" id="stageCoord" style="display:none;"><div class="panel-inner" id="coordInner"></div></div>
     <div class="panel" id="stageCheck" style="display:none;"><div class="panel-inner" id="checkInner"></div></div>
@@ -1471,6 +1510,7 @@ const state = {
   pendingCatLabel: null,  // the place's own kind ("Museum", "Ryokan"…) from the picked location
   picking: false,
   prepSel: null,          // activity id selected on the Prep board
+  rail: { from:"", to:"", date:"", time:"09:00", arriveBy:false, results:[], status:"" },
   sharedOK: true
 };
 
@@ -1681,6 +1721,7 @@ function render(){
   renderTripHeader();
   if(state.view === "map") renderMarkers();
   if(state.view === "itinerary") renderItinerary();
+  if(state.view === "trains") renderTrains();
   if(state.view === "explore") renderExplore();
   if(state.view === "coord") renderCoord();
   if(state.view === "check") renderChecklist();
@@ -1896,6 +1937,21 @@ function renderRailList(){
       hint.innerHTML = `<span>${icon("bulb")}</span> ${n===1?"There's a day-planning idea":n+" day-planning ideas"} waiting — see Itinerary`;
       hint.onclick = ()=>{ document.querySelectorAll(".tab").forEach(t=>t.classList.toggle("active", t.dataset.view==="itinerary")); setView("itinerary"); };
       wrap.appendChild(hint);
+    }
+    // moves between bases with no train booked yet — tap to schedule them
+    const unplanned = railJourneys(me).filter(j=>!journeyPlanned(me,j));
+    if(unplanned.length){
+      const rh=document.createElement("button");
+      rh.className="rail-hint";
+      const first=unplanned[0];
+      rh.innerHTML=`<span>${icon("train")}</span> ${unplanned.length===1
+        ? `${esc(first.from)} → ${esc(first.to)} on ${esc(shortDate(first.date))} has no train yet`
+        : `${unplanned.length} journeys between your bases have no train yet`} — tap to plan`;
+      rh.onclick=()=>{
+        document.querySelectorAll(".tab").forEach(t=>t.classList.toggle("active", t.dataset.view==="trains"));
+        setView("trains");
+      };
+      wrap.appendChild(rh);
     }
     // nights with nowhere to sleep — tap to add a stay pre-filled with the gap
     for(const g of stayGaps(me).slice(0,2)){
@@ -2426,6 +2482,234 @@ function dayVerdict(stopCount, cityCount, maxLeg){
   if(cityCount>1 && maxLeg>60) return {cls:"split", text:"Spans multiple areas"};
   if(maxLeg>25) return {cls:"warn", text:"Spread out — budget travel"};
   return {cls:"good", text:"Compact day"};
+}
+
+/* ============================================================
+   Trains — plan the rail legs between bases
+   ============================================================ */
+/* Transitous is a free, community-run routing service over open GTFS feeds.
+   Coverage is strong in Japan, Korea, and Europe and patchy elsewhere, so
+   every path here degrades to distance-based estimates rather than dead-ending. */
+async function transitPlan(fromLoc, toLoc, date, time, arriveBy){
+  const url="https://api.transitous.org/api/v1/plan"
+    + `?fromPlace=${fromLoc.lat},${fromLoc.lng}&toPlace=${toLoc.lat},${toLoc.lng}`
+    + `&time=${encodeURIComponent(date+"T"+(time||"09:00")+":00")}`
+    + `&arriveBy=${arriveBy?"true":"false"}&numItineraries=6`;
+  const res=await fetch(url);
+  if(!res.ok) throw new Error("transit plan "+res.status);
+  return (await res.json()).itineraries || [];
+}
+/* resolve typed text to a point: stations first, then the curated city list */
+async function railPoint(text){
+  const t=String(text||"").trim();
+  if(!t) return null;
+  try { const g=await photonSearch(t, "transit"); if(g.length) return {lat:g[0].lat, lng:g[0].lng, label:g[0].label}; } catch {}
+  const c=CITIES.find(x=>x[0].toLowerCase()===t.toLowerCase());
+  if(c) return {lat:c[1], lng:c[2], label:c[0]};
+  try { const g=await photonSearch(t); if(g.length) return {lat:g[0].lat, lng:g[0].lng, label:g[0].label}; } catch {}
+  return null;
+}
+/* show the timetable's own wall clock — never the planner's timezone */
+function wallClock(v){
+  if(typeof v==="string"){ const m=v.match(/T(\d{2}:\d{2})/); if(m) return m[1]; }
+  const d=new Date(v);
+  return String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0");
+}
+function isWalkLeg(l){ return /walk|foot/i.test((l && l.mode) || ""); }
+function isFastRail(m){ return /HIGHSPEED|LONG_DISTANCE/i.test(m||""); }
+const RAIL_MODE = { HIGHSPEED_RAIL:"Shinkansen", LONG_DISTANCE:"Express", NIGHT_RAIL:"Night train",
+  REGIONAL_FAST_RAIL:"Rapid", REGIONAL_RAIL:"Regional", RAIL:"Train", SUBWAY:"Metro", METRO:"Metro",
+  TRAM:"Tram", BUS:"Bus", COACH:"Coach", FERRY:"Ferry", AIRPLANE:"Flight" };
+function railModeLabel(m){
+  return RAIL_MODE[m] || (m ? String(m).replace(/_/g," ").toLowerCase().replace(/^./,c=>c.toUpperCase()) : "Leg");
+}
+function itinMinutes(it){
+  const v=Math.round((new Date(it.endTime)-new Date(it.startTime))/60000);
+  return isFinite(v) && v>0 ? v : 0;
+}
+function ridingLegs(it){ return (it.legs||[]).filter(l=>!isWalkLeg(l)); }
+
+/* the journeys the itinerary implies: each move between bases, plus day trips */
+function railJourneys(p){
+  const out=[];
+  const stays=(p.stays||[]).filter(s=>s.start && s.end && s.location)
+    .slice().sort((a,b)=>String(a.start).localeCompare(String(b.start)));
+  for(let i=1;i<stays.length;i++){
+    const a=stays[i-1], b=stays[i];
+    const km=haversine(a.location, b.location);
+    if(km < 15) continue;  // same area — a local hop, not a journey to schedule
+    out.push({ from:a.city||nearestCity(a.location), to:b.city||nearestCity(b.location),
+               fromLoc:a.location, toLoc:b.location, date:b.start, km });
+  }
+  for(const date of Object.keys(p.dayTrips||{})){
+    const city=p.dayTrips[date], base=hotelLocForDate(p, date), c=CITIES.find(x=>x[0]===city);
+    if(!base || !c) continue;
+    const toLoc={lat:c[1], lng:c[2]}, km=haversine(base, toLoc);
+    if(km < 15) continue;
+    out.push({ from:baseCityForDate(p,date)||nearestCity(base), to:city, fromLoc:base, toLoc, date, km, dayTrip:true });
+  }
+  return out.sort((a,b)=>String(a.date||"").localeCompare(String(b.date||"")));
+}
+/* a journey counts as handled once a transit plan lands on its day and arrives near it */
+function journeyPlanned(p, j){
+  return (p.activities||[]).some(a => a.transit && a.date===j.date && (
+    (a.location && j.toLoc && haversine(a.location, j.toLoc) < 30) ||
+    (a.to && j.to && a.to.toLowerCase().includes(String(j.to).toLowerCase()))));
+}
+
+function renderTrains(){
+  const wrap=document.getElementById("trainsInner");
+  let html=`<h2>Trains</h2><p class="lede">Every move between your bases, in one place. Live departures come from open timetable data — good across Japan, Korea, and Europe, thinner elsewhere — and where there's none, distance-based estimates stand in so you can still block out the day.</p>`;
+  const me=state.me && state.people[state.me.name];
+  if(!me){ wrap.innerHTML=html+'<div class="list-empty">Add yourself to the trip first.</div>'; return; }
+  const r=state.rail;
+
+  // 1. what the stays imply
+  const js=railJourneys(me);
+  const todo=js.filter(j=>!journeyPlanned(me,j)).length;
+  html+=`<div class="eyebrow explore-sec">Journeys your stays imply${js.length?` <span class="count">${todo} still to plan</span>`:""}</div>`;
+  html+= js.length ? js.map((j,i)=>{
+    const done=journeyPlanned(me,j), est=classifyLeg(j.km);
+    return `<div class="rail-need ${done?"done":""}">
+      <span class="rn-route">${esc(j.from)} → ${esc(j.to)}</span>
+      <span class="rn-meta">${esc(shortDate(j.date))}${j.dayTrip?" · day trip":""} · ${Math.round(j.km)} km · ~${fmtMin(est.min)}</span>
+      <span class="rn-act">${done ? '<span class="rn-meta">&#10003; on the itinerary</span>'
+        : `<button class="mini-btn" data-railfind="${i}">Find trains</button>`}</span></div>`;
+  }).join("")
+  : '<div class="list-empty">Add stays in two different cities and the legs between them show up here, ready to schedule.</div>';
+
+  // 2. the search itself
+  html+=`<div class="eyebrow explore-sec">Look up a connection</div>
+    <div class="rail-form">
+      <div class="field"><label>From</label><input type="text" id="railFrom" placeholder="e.g. Tokyo Station" value="${esc(r.from||"")}"></div>
+      <div class="field"><label>To</label><input type="text" id="railTo" placeholder="e.g. Kyoto Station" value="${esc(r.to||"")}"></div>
+      <div class="field narrow"><label>Day</label><input type="date" id="railDate" value="${esc(r.date||state.trip.start||"")}"></div>
+      <div class="field narrow"><label><span id="railTimeLbl">${r.arriveBy?"Arrive by":"Leave after"}</span></label><input type="time" id="railTime" value="${esc(r.time||"09:00")}"></div>
+      <div class="field narrow"><label>Timing</label><select id="railWhen">
+        <option value="depart"${r.arriveBy?"":" selected"}>Depart after</option>
+        <option value="arrive"${r.arriveBy?" selected":""}>Arrive by</option></select></div>
+      <button class="btn primary" id="railGo" style="flex:0 0 auto">Find trains</button>
+    </div>`;
+
+  html+=`<div class="rail-res">`;
+  if(r.status==="loading") html+='<div class="list-empty">Checking the timetables&hellip;</div>';
+  else if(r.status==="noplace") html+='<div class="list-empty">Couldn\'t find one of those stations — try the city name, or a station name like "Kyoto Station".</div>';
+  else if(r.status==="ok"){
+    const label=`${esc(r.fromLabel||r.from)} → ${esc(r.toLabel||r.to)} · ${esc(shortDate(r.date))}`;
+    // the fare estimate is for the journey, not any one train — say it once
+    const fare=(r.km && curSym()==="¥") ? ` · typically around ${fmtYen(classifyLeg(r.km).cost)}` : "";
+    html+=`<div class="rail-note" style="margin:0 0 9px">${label}${fare}</div>`;
+    html+=r.results.map((it,i)=>{
+      const rides=ridingLegs(it), mins=itinMinutes(it);
+      const changes=Math.max(0, rides.length-1);
+      const chain=rides.length ? rides.map(l=>{
+        const nm=l.routeShortName||l.tripShortName||l.routeName||railModeLabel(l.mode);
+        return `<span class="rail-chip ${isFastRail(l.mode)?"fast":""}" title="${esc(railModeLabel(l.mode))}">${esc(nm)}</span>`;
+      }).join('<span class="rail-arrow">&rsaquo;</span>') : `<span class="rail-chip">Direct</span>`;
+      return `<div class="rail-opt">
+        <span class="rail-when">${esc(wallClock(it.startTime))} → ${esc(wallClock(it.endTime))}</span>
+        <span class="rail-dur">${mins?fmtMin(mins):""} · ${changes?changes+" change"+(changes>1?"s":""):"direct"}</span>
+        <span class="rail-chain">${chain}</span>
+        <button class="mini-btn rail-add" data-railadd="${i}">Add to my plans</button></div>`;
+    }).join("");
+  }
+  else if(r.status==="none" || r.status==="error"){
+    const est=r.km ? classifyLeg(r.km) : null;
+    html+=`<div class="list-empty">${r.status==="none"
+      ? "No timetable data for that route — coverage varies by country."
+      : "Couldn't reach the timetable service just now."}
+      ${est?` The straight-line distance is ${Math.round(r.km)} km, which is about ${fmtMin(est.min)} by ${esc(est.label.toLowerCase())}.`:""}</div>
+      ${est?`<button class="mini-btn" id="railEst" style="margin-top:4px">Add the leg with that estimate</button>`:""}`;
+  }
+  html+=`</div>`;
+
+  // 3. what's already scheduled
+  const booked=(me.activities||[]).filter(a=>a.transit)
+    .sort((a,b)=>((a.date||"9999")+(a.time||"")).localeCompare((b.date||"9999")+(b.time||"")));
+  html+=`<div class="eyebrow explore-sec">Your rail plan${booked.length?` <span class="count">${booked.length}</span>`:""}</div>`;
+  html+= booked.length ? booked.map(a=>`<div class="rail-plan-row">
+      <span class="rp-date">${a.date?esc(shortDate(a.date)):"Flexible"}</span>
+      <span>${esc(a.title)}</span>
+      <span class="rp-meta">${[a.time, (a.from||a.to)?`${esc(a.from||"…")} → ${esc(a.to||"…")}`:"", a.durationH?fmtMin(Math.round(+a.durationH*60)):"", hasCost(a)?fmtYen(+a.cost):""].filter(Boolean).join(" · ")}</span>
+      <span class="rp-act"><button class="iedit" data-railedit="${esc(a.id)}" title="Edit">&#9998;</button><button class="idel" data-raildel="${esc(a.id)}" title="Remove">&times;</button></span>
+    </div>`).join("")
+  : '<div class="list-empty">Nothing booked in yet — find a connection above, or use the Transit button to add one by hand.</div>';
+
+  wrap.innerHTML=html;
+  wireTrains(wrap);
+}
+
+function wireTrains(wrap){
+  const r=state.rail;
+  const bind=(id,key)=>{ const el=wrap.querySelector("#"+id); if(el) el.oninput=()=>{ r[key]=el.value; }; };
+  bind("railFrom","from"); bind("railTo","to"); bind("railDate","date"); bind("railTime","time");
+  const when=wrap.querySelector("#railWhen");
+  if(when) when.onchange=()=>{
+    r.arriveBy = when.value==="arrive";
+    const lbl=wrap.querySelector("#railTimeLbl");
+    if(lbl) lbl.textContent = r.arriveBy ? "Arrive by" : "Leave after";
+  };
+  for(const id of ["railFrom","railTo"]){
+    const el=wrap.querySelector("#"+id);
+    if(el) el.addEventListener("keydown", e=>{ if(e.key==="Enter") searchTrains(); });
+  }
+  const go=wrap.querySelector("#railGo"); if(go) go.onclick=searchTrains;
+  wrap.querySelectorAll("[data-railfind]").forEach(b=>b.onclick=()=>{
+    const me=state.people[state.me.name];
+    const j=railJourneys(me)[+b.dataset.railfind];
+    if(!j) return;
+    Object.assign(r, {from:j.from, to:j.to, date:j.date, arriveBy:false, results:[], status:""});
+    searchTrains();
+  });
+  wrap.querySelectorAll("[data-railadd]").forEach(b=>b.onclick=()=>addTrainPlan(+b.dataset.railadd));
+  const est=wrap.querySelector("#railEst"); if(est) est.onclick=()=>addTrainPlan(-1);
+  wrap.querySelectorAll("[data-railedit]").forEach(b=>b.onclick=()=>openEdit("activity", state.me.name, b.dataset.railedit));
+  wrap.querySelectorAll("[data-raildel]").forEach(b=>b.onclick=()=>removeItem("activity", state.me.name, b.dataset.raildel));
+}
+
+async function searchTrains(){
+  const r=state.rail;
+  if(!state.me){ openProfile(); return; }
+  if(!r.from || !r.to){ toast("Fill in where you're leaving from and going to"); return; }
+  if(!r.date) r.date = state.trip.start || iso(new Date());
+  r.status="loading"; r.results=[];
+  renderTrains();
+  try {
+    const [f,t]=await Promise.all([railPoint(r.from), railPoint(r.to)]);
+    if(!f || !t){ r.status="noplace"; r.km=0; renderTrains(); return; }
+    r.fromLoc=f; r.toLoc=t; r.fromLabel=f.label; r.toLabel=t.label;
+    r.km=haversine(f,t);
+    const its=await transitPlan(f, t, r.date, r.time, r.arriveBy);
+    // drop anything with no riding leg at all (a pure walking "connection")
+    r.results=its.filter(it=>ridingLegs(it).length).slice(0,6);
+    r.status=r.results.length ? "ok" : "none";
+  } catch { r.status="error"; }
+  renderTrains();
+}
+
+/* i >= 0 adds that connection; -1 adds the distance-based estimate */
+async function addTrainPlan(i){
+  const r=state.rail, rec=state.people[state.me.name];
+  if(!rec || !r.toLoc){ toast("Search for a connection first"); return; }
+  const it = i>=0 ? (r.results||[])[i] : null;
+  if(i>=0 && !it) return;
+  const est = r.km ? classifyLeg(r.km) : null;
+  const names = it ? [...new Set(ridingLegs(it).map(l=>l.routeShortName||l.tripShortName||l.routeName).filter(Boolean))].slice(0,3).join(" + ") : "";
+  const mins = it ? itinMinutes(it) : (est?est.min:0);
+  const a={ id:uid(), title: names || `${r.fromLabel||r.from} → ${r.toLabel||r.to}`, transit:true,
+    from: r.fromLabel||r.from, to: r.toLabel||r.to, date: r.date,
+    time: it ? wallClock(it.startTime) : (r.arriveBy ? "" : (r.time||"")),
+    durationH: mins ? (mins/60).toFixed(1) : "", category:"Travel",
+    location: {lat:r.toLoc.lat, lng:r.toLoc.lng, label:r.toLabel||r.to},
+    notes:"", cost:"", booking:"" };
+  rec.activities.push(a);
+  await saveMe();
+  state._didFit=false;
+  render();
+  toast(`${a.title} added to ${shortDate(a.date)}`, async()=>{
+    rec.activities=rec.activities.filter(x=>x.id!==a.id);
+    await saveMe(); render();
+  });
 }
 
 /* ---------- explore view: day trips + area recommendations ---------- */
@@ -4261,6 +4545,7 @@ function setView(v){
   state.view = v;
   document.getElementById("stageMap").style.display = v==="map"?"block":"none";
   document.getElementById("stageItinerary").style.display = v==="itinerary"?"block":"none";
+  document.getElementById("stageTrains").style.display = v==="trains"?"block":"none";
   document.getElementById("stageExplore").style.display = v==="explore"?"block":"none";
   document.getElementById("stageCoord").style.display = v==="coord"?"block":"none";
   document.getElementById("stageCheck").style.display = v==="check"?"block":"none";
@@ -4548,25 +4833,15 @@ async function findTransitTimes(){
   box.style.display="block";
   box.innerHTML='<div class="list-empty">Looking up connections&hellip;</div>';
   try {
-    const [f,t]=await Promise.all([photonSearch(from,"transit"), photonSearch(to,"transit")]);
-    if(!f.length || !t.length) throw 0;
-    const url=`https://api.transitous.org/api/v1/plan?fromPlace=${f[0].lat},${f[0].lng}&toPlace=${t[0].lat},${t[0].lng}&time=${encodeURIComponent(date+"T"+time+":00")}&arriveBy=false&numItineraries=4`;
-    const res=await fetch(url);
-    if(!res.ok) throw 0;
-    const data=await res.json();
-    const its=(data.itineraries||[]).slice(0,4);
+    const [f,t]=await Promise.all([railPoint(from), railPoint(to)]);
+    if(!f || !t) throw 0;
+    const its=(await transitPlan(f, t, date, time, false)).filter(x=>ridingLegs(x).length).slice(0,4);
     if(!its.length) throw 0;
-    // show the timetable's own wall-clock (never the planner's timezone)
-    const hm=v=>{
-      if(typeof v==="string"){ const m=v.match(/T(\d{2}:\d{2})/); if(m) return m[1]; }
-      const d=new Date(v);
-      return String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0");
-    };
     box.innerHTML='<label>Connections on '+esc(shortDate(date))+' — tap one to fill the form</label><div class="chip-pick">'
       + its.map(it=>{
-        const names=[...new Set((it.legs||[]).map(l=>l.routeShortName||l.routeName).filter(Boolean))].slice(0,3).join(" + ");
-        const durMin=Math.max(1, Math.round((new Date(it.endTime)-new Date(it.startTime))/60000));
-        return `<button type="button" class="chip trans-opt" data-dep="${hm(it.startTime)}" data-dur="${(durMin/60).toFixed(1)}" data-names="${esc(names)}">${hm(it.startTime)} → ${hm(it.endTime)} · ${fmtMin(durMin)}${names?" · "+esc(names):""}</button>`;
+        const names=[...new Set(ridingLegs(it).map(l=>l.routeShortName||l.tripShortName||l.routeName).filter(Boolean))].slice(0,3).join(" + ");
+        const durMin=itinMinutes(it);
+        return `<button type="button" class="chip trans-opt" data-dep="${wallClock(it.startTime)}" data-dur="${(durMin/60).toFixed(1)}" data-names="${esc(names)}">${wallClock(it.startTime)} → ${wallClock(it.endTime)} · ${fmtMin(durMin)}${names?" · "+esc(names):""}</button>`;
       }).join("")+'</div>';
     box.querySelectorAll(".trans-opt").forEach(b=>b.onclick=()=>{
       document.getElementById("actTime").value=b.dataset.dep;
@@ -4576,7 +4851,7 @@ async function findTransitTimes(){
       toast("Departure filled in");
     });
   } catch {
-    box.innerHTML='<div class="list-empty">No timetable data for that route (coverage varies by country) — set the time manually.</div>';
+    box.innerHTML='<div class="list-empty">No timetable data for that route (coverage varies by country) — set the time manually, or try the Trains tab for the whole journey.</div>';
   }
 }
 
@@ -4595,7 +4870,7 @@ async function saveItem(){
   if(kind==="transit" && !state.pendingLoc){
     const to=document.getElementById("transTo").value.trim();
     if(to){
-      try { const g=await photonSearch(to, "transit"); if(g.length) state.pendingLoc={lat:g[0].lat, lng:g[0].lng, label:g[0].label}; } catch {}
+      try { const g=await railPoint(to); if(g) state.pendingLoc={lat:g.lat, lng:g.lng, label:g.label||to}; } catch {}
     }
   }
   if(!state.pendingLoc){ toast(kind==="transit"?"Fill in To (or set a pin) first":"Set a location first"); return; }
